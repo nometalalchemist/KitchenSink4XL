@@ -378,6 +378,59 @@ def transpose_formula(formula: str, edit: RefEdit,
     return lead + "".join(out)
 
 
+def _offset_match(m: re.Match, dr: int, dc: int) -> str:
+    prefix = m.group("sheet") or ""
+    c1 = m.group("c1")
+    c2 = m.group("c2")
+
+    def shift(tok: str) -> str | None:
+        ep = _parse_cell(tok)
+        if ep is None:
+            return tok
+        row = ep.row if ep.row_abs else ep.row + dr
+        col = ep.col if ep.col_abs else ep.col + dc
+        if row < 1 or col < 1 or row > MAX_ROW or col > MAX_COL:
+            return None
+        return _render_cell(_Endpoint(ep.col_abs, col, ep.row_abs, row))
+
+    s1 = shift(c1)
+    if s1 is None:
+        return prefix + REF_ERROR
+    if c2 is None:
+        return prefix + s1
+    s2 = shift(c2)
+    if s2 is None:
+        return prefix + REF_ERROR
+    return prefix + s1 + ":" + s2
+
+
+def offset_formula(formula: str, dr: int, dc: int,
+                   formula_sheet: str | None = None) -> str:
+    """Shift the RELATIVE (non-$) references in a formula by (dr, dc), Excel's
+    copy/paste semantics: a copied formula's relative refs move with the paste
+    offset, absolute ($) anchors stay put, and a reference that would move off
+    the grid becomes #REF!. Sheet-qualified refs keep their qualifier; string
+    literals are never touched. Used by copy_range when replicating formulas."""
+    if not formula or (dr == 0 and dc == 0):
+        return formula
+    lead = ""
+    body = formula
+    if body.startswith("="):
+        lead, body = "=", body[1:]
+    out: list[str] = []
+    pos = 0
+    for sm in _STRING_RE.finditer(body):
+        if sm.start() > pos:
+            out.append(_REF_RE.sub(
+                lambda m: _offset_match(m, dr, dc), body[pos:sm.start()]))
+        out.append(sm.group(0))
+        pos = sm.end()
+    if pos < len(body):
+        out.append(_REF_RE.sub(
+            lambda m: _offset_match(m, dr, dc), body[pos:]))
+    return lead + "".join(out)
+
+
 def transpose_ref(ref: str, edit: RefEdit,
                   ref_sheet: str | None = None) -> str | None:
     """Rewrite a bare reference string (no leading '='), e.g. a defined-name
@@ -579,7 +632,7 @@ def rewrite_workbook(wb, edit: RefEdit) -> RewriteReport:
 
 __all__ = [
     "RefEdit", "RewriteReport", "rewrite_workbook",
-    "transpose_formula", "transpose_ref",
+    "transpose_formula", "transpose_ref", "offset_formula",
     "INSERT_ROWS", "DELETE_ROWS", "INSERT_COLS", "DELETE_COLS", "MOVE",
     "REF_ERROR",
 ]

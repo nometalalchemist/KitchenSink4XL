@@ -64,6 +64,82 @@ def test_charts_and_pivots_degrade_not_drop():
     assert set(h.severity for h in r.hazards) <= {hazard.SEV_DEGRADES}
 
 
+# ------------------------------------------- chart-vs-shape drawing refinement
+
+
+@pytest.mark.skipif(not (CORPUS / "chart.xlsx").exists(),
+                    reason="corpus not built")
+def test_chart_only_drawing_is_not_shape_loss():
+    """Phase 2 over-refusal fix: a workbook whose ONLY drawing is a chart anchor
+    must NOT be flagged as SEV_DROPS shape loss. The chart part survives an
+    openpyxl round-trip (charts degrade, they do not drop), and the chart's
+    anchor drawing round-trips with it; only genuine shapes are lost."""
+    r = hazard.scan_path(str(CORPUS / "chart.xlsx"))
+    keys = [h.key for h in r.hazards]
+    assert "drawings" not in keys, (
+        "a chart-only drawing was misflagged as shape loss")
+    assert "charts" in keys
+    assert r.would_lose is False
+
+
+@pytest.mark.skipif(not (CORPUS / "shape.xlsx").exists(),
+                    reason="corpus not built")
+def test_real_shape_drawing_still_flagged():
+    """The refinement must not go too far: a genuine shape drawing (an inline
+    textbox/rectangle with no chart relationship) is still a real drop."""
+    r = hazard.scan_path(str(CORPUS / "shape.xlsx"))
+    assert "drawings" in [h.key for h in r.hazards]
+    assert r.would_lose is True
+
+
+@pytest.mark.skipif(not (CORPUS / "image.xlsx").exists(),
+                    reason="corpus not built")
+def test_image_drawing_still_flagged():
+    """A picture drawing (a /image relationship, not /chart) stays flagged:
+    media survival is Pillow- and authorship-dependent, so it is conservative
+    to keep it in the drop set."""
+    r = hazard.scan_path(str(CORPUS / "image.xlsx"))
+    assert "drawings" in [h.key for h in r.hazards]
+
+
+def test_chart_only_via_rels_reader():
+    """Unit-level proof of the heuristic without a file: a drawing whose rels
+    part contains only a chart relationship is chart-only; scan_names stays
+    conservative (keeps the drop) when no rels reader is supplied."""
+    names = ["xl/drawings/drawing1.xml",
+             "xl/drawings/_rels/drawing1.xml.rels",
+             "xl/charts/chart1.xml"]
+    chart_rel = (b'<Relationships><Relationship Type="http://schemas.'
+                 b'openxmlformats.org/officeDocument/2006/relationships/'
+                 b'chart" Target="/xl/charts/chart1.xml" Id="rId1"/>'
+                 b'</Relationships>')
+
+    def reader(member):
+        return chart_rel
+
+    r = hazard.scan_names(names, rels_reader=reader)
+    assert "drawings" not in [h.key for h in r.hazards]
+    assert "charts" in [h.key for h in r.hazards]
+    # No reader: cannot see rels content, so it stays conservatively flagged.
+    r2 = hazard.scan_names(names)
+    assert "drawings" in [h.key for h in r2.hazards]
+
+
+def test_mixed_chart_and_shape_drawing_is_a_drop():
+    """A drawing that mixes a chart with a picture is NOT chart-only, so it
+    stays a shape-loss drop."""
+    names = ["xl/drawings/drawing1.xml",
+             "xl/drawings/_rels/drawing1.xml.rels"]
+    mixed = (b'<Relationships>'
+             b'<Relationship Type="http://x/relationships/chart" '
+             b'Target="/xl/charts/chart1.xml" Id="rId1"/>'
+             b'<Relationship Type="http://x/relationships/image" '
+             b'Target="/xl/media/image1.png" Id="rId2"/>'
+             b'</Relationships>')
+    r = hazard.scan_names(names, rels_reader=lambda m: mixed)
+    assert "drawings" in [h.key for h in r.hazards]
+
+
 def test_bad_zip_refuses():
     r = hazard.scan_names([])  # empty namelist is clean; error path is scan_path
     assert r.clean is True

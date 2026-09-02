@@ -18,9 +18,10 @@ raw/COM route; a false negative silently destroys user content).
 
 from __future__ import annotations
 
+import re
 import zipfile
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Callable, Iterable
 
 # ------------------------------------------------------------ routing verbs
 
@@ -206,10 +207,112 @@ class HazardReport:
         }
 
 
-def scan_names(names: Iterable[str], path: str = "<names>") -> HazardReport:
+# --------------------------------------------------- chart-vs-shape drawings
+#
+# The Phase 2 flagged over-refusal: every part under xl/drawings/ matched the
+# SEV_DROPS "drawings" (shape-loss) spec, so a workbook whose ONLY drawing is a
+# chart was treated as unrecoverable shape loss and refused. But a chart's
+# drawing is just its anchor: openpyxl re-models charts and round-trips both the
+# chart part and its anchor drawing byte-for-byte (Phase 1 fidelity table +
+# empirically re-confirmed here: chart.xlsx loses NO parts on an openpyxl
+# round-trip). Only genuine shapes (textboxes, rectangles, form/ActiveX
+# controls) and pictures are dropped.
+#
+# THE HEURISTIC (cheap, and honest about its limits): a drawing part is a pure
+# chart anchor iff its relationship part (xl/drawings/_rels/drawingN.xml.rels)
+# exists and EVERY relationship in it targets a chart (Type ending "/chart").
+#   - No rels part at all  -> inline shapes (textbox/rectangle), a real drop
+#     (this is exactly shape.xlsx: xl/drawings/drawing1.xml with no rels).
+#   - rels present, all chart -> chart anchor, NOT a shape-loss drop; chart
+#     fidelity is already tracked by the separate SEV_DEGRADES "charts" spec.
+#   - rels present with any image / oleObject / control target -> a drop
+#     (this is image.xlsx: a /image relationship; media survival is Pillow- and
+#     authorship-dependent per Phase 1, so it stays conservatively flagged).
+#
+# LIMITS: the classification needs to read the tiny rels part, so it is not
+# decidable from the central-directory namelist ALONE. scan_path supplies a
+# reader (one extra small-part read only when drawings are present, still
+# milliseconds); scan_names WITHOUT a reader cannot see rels content and so
+# stays CONSERVATIVE, keeping every drawing flagged as a potential drop (a false
+# positive costs a needless raw/COM route, never silent loss). A drawing that
+# mixes a chart with a shape is (correctly) treated as a drop. A chart drawn
+# with no relationship part (not produced by Excel or openpyxl in practice)
+# would be conservatively flagged.
+
+_CHART_REL_SUFFIX = "/chart"
+_TYPE_RE = re.compile(r'Type="([^"]+)"')
+
+
+def _drawing_rels_for(drawing_part: str) -> str:
+    head, base = drawing_part.rsplit("/", 1)
+    return f"{head}/_rels/{base}.rels"
+
+
+def _drawing_is_chart_only(
+    drawing_part: str, nameset: set[str],
+    rels_reader: Callable[[str], bytes] | None,
+) -> bool | None:
+    """True: pure chart anchor (survives). False: shape/picture/control drawing
+    (drops). None: cannot tell without reading the rels (namelist-only path)."""
+    rels = _drawing_rels_for(drawing_part)
+    if rels not in nameset:
+        return False  # no rels: inline shapes, a genuine shape-loss drop
+    if rels_reader is None:
+        return None   # rels exists but its content is not readable here
+    try:
+        data = rels_reader(rels)
+    except Exception:
+        return None
+    if not data:
+        return None
+    types = _TYPE_RE.findall(data.decode("utf-8", "replace"))
+    if not types:
+        return False
+    return all(t.rstrip("/").lower().endswith(_CHART_REL_SUFFIX) for t in types)
+
+
+def _refine_drawings(
+    found: dict[str, "Hazard"], nameset: set[str],
+    rels_reader: Callable[[str], bytes] | None,
+) -> None:
+    """Drop pure chart-anchor drawings from the SEV_DROPS drawings hazard.
+    Chart fidelity is covered by the separate SEV_DEGRADES charts spec, so a
+    chart-only workbook must not be treated as shape loss."""
+    hz = found.get("drawings")
+    if hz is None:
+        return
+    drawing_xmls = [
+        p for p in hz.parts
+        if p.lower().startswith("xl/drawings/")
+        and "/_rels/" not in p.lower()
+        and p.lower().endswith(".xml")
+    ]
+    if not drawing_xmls:
+        return
+    shape_drawings = [
+        d for d in drawing_xmls
+        if _drawing_is_chart_only(d, nameset, rels_reader) is not True
+    ]
+    if not shape_drawings:
+        del found["drawings"]  # every drawing is a pure chart anchor
+        return
+    keep: set[str] = set()
+    for d in shape_drawings:
+        keep.add(d)
+        rels = _drawing_rels_for(d)
+        if rels in nameset:
+            keep.add(rels)
+    hz.parts = [p for p in hz.parts if p in keep]
+
+
+def scan_names(names: Iterable[str], path: str = "<names>", *,
+               rels_reader: Callable[[str], bytes] | None = None) -> HazardReport:
     """Classify a pre-listed set of archive member names. Split out so the
-    detection logic is testable without a real file on disk."""
+    detection logic is testable without a real file on disk. `rels_reader`,
+    when supplied (scan_path does), reads a drawing's tiny rels part so a
+    chart-only drawing is not misflagged as shape loss (chart-vs-shape fix)."""
     names = list(names)
+    nameset = set(names)
     found: dict[str, Hazard] = {}
     for name in names:
         for spec in HAZARD_SPECS:
@@ -222,6 +325,7 @@ def scan_names(names: Iterable[str], path: str = "<names>") -> HazardReport:
                     )
                     found[spec.key] = h
                 h.parts.append(name)
+    _refine_drawings(found, nameset, rels_reader)
     ordered = [found[s.key] for s in HAZARD_SPECS if s.key in found]
     return HazardReport(path=path, parts=names, hazards=ordered)
 
@@ -232,14 +336,26 @@ def scan_path(path: str) -> HazardReport:
     try:
         with zipfile.ZipFile(path) as zf:
             names = zf.namelist()
+            has_drawings = any(
+                n.lower().startswith("xl/drawings/") for n in names)
+            reader = None
+            if has_drawings:
+                cache: dict[str, bytes] = {}
+
+                def reader(member: str, _zf=zf, _cache=cache) -> bytes:
+                    if member not in _cache:
+                        _cache[member] = _zf.read(member)
+                    return _cache[member]
+
+                rep = scan_names(names, path=path, rels_reader=reader)
+                return rep
     except zipfile.BadZipFile:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="not a valid zip / OOXML package")
     except FileNotFoundError:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="file not found")
-    rep = scan_names(names, path=path)
-    return rep
+    return scan_names(names, path=path)
 
 
 def route(

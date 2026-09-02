@@ -1,0 +1,569 @@
+"""ops/cells.py: cell and range read / write / copy / move, plus the
+token-shaped read (query_range), the headline capability.
+
+Reads (read_range, query_range) load the workbook directly and never mutate.
+Writes (set_cell, write_range, clear_range, copy_range, move_range) route their
+mutation through WorkbookPackage, so the hazard gate, the backup, and
+verify-after-write run automatically. Formula writes are normalized through the
+_xlfn shim and flag fullCalcOnLoad, so a modern function does not land as
+#NAME? and the next Excel open recalculates.
+
+query_range is the context-safety answer (DESIGN 1.5, demand D1): rather than
+pull a whole sheet into the agent's context, it filters rows, projects a column
+subset, sorts, paginates, and aggregates SERVER-SIDE, returning only the slice
+or summary the caller asked for.
+"""
+
+from __future__ import annotations
+
+from copy import copy as _copy
+from typing import Any
+
+from ..core import refs as _refs
+from ..core.errors import RangeOutOfBounds, XlMcpError
+from ..core.package import WorkbookPackage
+from . import gridio
+
+CLEAR_WHAT = ("contents", "formats", "all")
+COPY_WHAT = ("all", "values", "formulas", "formats")
+
+
+# ------------------------------------------------------------------- reads
+
+
+def read_range(path: str, location: Any, values: str = "cached",
+               sheet: str | None = None) -> dict:
+    """Read a cell or range. values='cached' returns last calculated values,
+    'formula' the formula strings, 'both' pairs each cell with its label."""
+    if values not in gridio.VALUE_MODES:
+        raise XlMcpError(
+            f"values must be one of {gridio.VALUE_MODES}, got {values!r}")
+    formula_wb = gridio.open_wb(path, data_only=False) \
+        if values in ("formula", "both") else None
+    cached_wb = gridio.open_wb(path, data_only=True) \
+        if values in ("cached", "both") else None
+    try:
+        base = formula_wb if formula_wb is not None else cached_wb
+        grid = gridio.resolve(base, location, default_sheet=sheet)
+        if grid.empty:
+            return {"sheet": grid.sheet, "range": grid.a1, "empty": True,
+                    "values": [], "value_mode": values}
+        gridio.guard_cell_count(grid)
+        vals, labels, has_formula = gridio.read_matrix(
+            grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
+        vals = [[gridio.compact_value(v) for v in row] for row in vals]
+        out: dict[str, Any] = {
+            "sheet": grid.sheet, "range": grid.a1,
+            "rows": len(vals), "cols": len(vals[0]) if vals else 0,
+            "value_mode": values, "values": vals,
+        }
+        if has_formula and values != "formula":
+            out["labels"] = labels
+            if any("absent" in row for row in labels):
+                out["warning"] = (
+                    "some cells hold formulas with no cached value (label "
+                    "'absent'); run recalculate or open in Excel to populate "
+                    "them")
+        return out
+    finally:
+        for wb in (formula_wb, cached_wb):
+            if wb is not None:
+                wb.close()
+
+
+# --------------------------------------------------------------- basic writes
+
+
+def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
+             allow_loss: bool = False, backup: bool = True) -> dict:
+    """Write ONE cell. A string beginning with '=' is stored as a formula
+    (normalized); anything else is a literal. One backup + one verified save."""
+    pkg = WorkbookPackage.open(path)
+    grid = pkg.resolve(location, default_sheet=sheet)
+    if not grid.is_single:
+        raise XlMcpError(
+            f"set_cell needs a single cell; {grid.a1} is a range. Use "
+            "write_range for a block.")
+    pkg.set_cell(grid.sheet, gridio.a1(grid.min_row, grid.min_col), value)
+    return pkg.save(allow_loss=allow_loss, backup=backup)
+
+
+def write_range(path: str, location: Any, data: list[list[Any]],
+                sheet: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Write a 2D block of values/formulas anchored at the location's top-left.
+    Formula strings ('=...') are normalized. One backup + one verified save."""
+    if not isinstance(data, list) or (data and not all(
+            isinstance(r, list) for r in data)):
+        raise XlMcpError("data must be a 2D array (list of row lists)")
+    pkg = WorkbookPackage.open(path)
+    grid = pkg.resolve(location, default_sheet=sheet)
+    rows = len(data)
+    cols = max((len(r) for r in data), default=0)
+    if rows == 0 or cols == 0:
+        raise XlMcpError("data is empty; nothing to write")
+    top, left = grid.min_row, grid.min_col
+    if (top + rows - 1) > gridio._locate.MAX_ROW or \
+            (left + cols - 1) > gridio._locate.MAX_COL:
+        raise RangeOutOfBounds(
+            "the block would extend past the grid limits from its anchor")
+    if rows * cols > gridio.MAX_READ_CELLS:
+        raise RangeOutOfBounds(
+            f"the block is {rows * cols:,} cells, over the "
+            f"{gridio.MAX_READ_CELLS:,}-cell write ceiling; split it")
+    for i, row in enumerate(data):
+        for j, val in enumerate(row):
+            pkg.set_cell(grid.sheet, gridio.a1(top + i, left + j), val)
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["anchor"] = gridio.a1(top, left)
+    result["changed"]["shape"] = {"rows": rows, "cols": cols}
+    return result
+
+
+def clear_range(path: str, location: Any, what: str = "contents",
+                sheet: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Clear a cell or range: 'contents' (values/formulas), 'formats' (styles),
+    or 'all'. One backup + one verified save."""
+    if what not in CLEAR_WHAT:
+        raise XlMcpError(f"what must be one of {CLEAR_WHAT}, got {what!r}")
+    pkg = WorkbookPackage.open(path)
+    grid = pkg.resolve(location, default_sheet=sheet)
+    gridio.guard_cell_count(grid)
+    ws = pkg.workbook[grid.sheet]
+    from openpyxl.styles import Alignment, Border, Font, PatternFill
+    n = 0
+    for r in range(grid.min_row, grid.max_row + 1):
+        for c in range(grid.min_col, grid.max_col + 1):
+            cell = ws.cell(r, c)
+            if what in ("contents", "all"):
+                if cell.value is not None:
+                    cell.value = None
+                    pkg._intended[(grid.sheet, gridio.a1(r, c))] = (
+                        "value", None)
+                    n += 1
+            if what in ("formats", "all"):
+                cell.font = Font()
+                cell.fill = PatternFill()
+                cell.border = Border()
+                cell.alignment = Alignment()
+                cell.number_format = "General"
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["cleared"] = {"range": grid.a1, "what": what}
+    return result
+
+
+# --------------------------------------------------------------- copy / move
+
+
+def _read_block(ws, grid, data_only_ws=None):
+    """Buffer (value, style, is_formula) for each cell of a rectangle."""
+    block = []
+    for r in range(grid.min_row, grid.max_row + 1):
+        row = []
+        for c in range(grid.min_col, grid.max_col + 1):
+            cell = ws.cell(r, c)
+            cached = data_only_ws.cell(r, c).value if data_only_ws else None
+            row.append((cell.value, _copy(cell._style), cached))
+        block.append(row)
+    return block
+
+
+def copy_range(path: str, source: Any, dest: Any, what: str = "all",
+               adjust_formulas: bool = True, sheet: str | None = None,
+               allow_loss: bool = False, backup: bool = True) -> dict:
+    """Copy a source rectangle to a destination anchor: 'all', 'values',
+    'formulas', or 'formats'. Relative references in copied formulas shift by
+    the paste offset (Excel semantics) unless adjust_formulas=false. One backup
+    + one verified save."""
+    if what not in COPY_WHAT:
+        raise XlMcpError(f"what must be one of {COPY_WHAT}, got {what!r}")
+    pkg = WorkbookPackage.open(path)
+    src = pkg.resolve(source, default_sheet=sheet)
+    dst = pkg.resolve(dest, default_sheet=sheet)
+    gridio.guard_cell_count(src)
+    sws = pkg.workbook[src.sheet]
+    dws = pkg.workbook[dst.sheet]
+    dows = None
+    if what == "values":
+        dob = gridio.open_wb(path, data_only=True)
+        dows = dob[src.sheet]
+    block = _read_block(sws, src, dows)
+    dr = dst.min_row - src.min_row
+    dc = dst.min_col - src.min_col
+    if (dst.min_row + src.max_row - src.min_row) > gridio._locate.MAX_ROW or \
+            (dst.min_col + src.max_col - src.min_col) > gridio._locate.MAX_COL:
+        raise RangeOutOfBounds("the paste would extend past the grid limits")
+    wrote_formula = False
+    for i, row in enumerate(block):
+        for j, (val, style, cached) in enumerate(row):
+            tcell = dws.cell(dst.min_row + i, dst.min_col + j)
+            if what in ("all", "values", "formulas"):
+                out = val
+                if what == "values":
+                    out = cached if (isinstance(val, str)
+                                     and val.startswith("=")) else val
+                elif isinstance(val, str) and val.startswith("="):
+                    if adjust_formulas:
+                        out = _refs.offset_formula(val, dr, dc, src.sheet)
+                    wrote_formula = True
+                tcell.value = out
+            if what in ("all", "formats"):
+                tcell._style = _copy(style)
+    if dows is not None:
+        dob.close()
+    if wrote_formula:
+        pkg._formula_written = True
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["copied"] = {
+        "from": f"{src.sheet}!{src.a1}",
+        "to": f"{dst.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
+        "what": what}
+    return result
+
+
+def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
+               allow_loss: bool = False, backup: bool = True) -> dict:
+    """Move a rectangle to a new anchor on the SAME sheet, rewriting every
+    reference that pointed into the source so the workbook stays coherent
+    (references follow the cells, Excel move semantics). One backup + one
+    verified save."""
+    pkg = WorkbookPackage.open(path)
+    src = pkg.resolve(source, default_sheet=sheet)
+    dst = pkg.resolve(dest, default_sheet=sheet)
+    if src.sheet != dst.sheet:
+        raise XlMcpError(
+            "move_range is single-sheet; use copy_range across sheets, then "
+            "clear_range the source")
+    gridio.guard_cell_count(src)
+    ws = pkg.workbook[src.sheet]
+    block = _read_block(ws, src)
+    dr = dst.min_row - src.min_row
+    dc = dst.min_col - src.min_col
+    if dr == 0 and dc == 0:
+        raise XlMcpError("the destination equals the source; nothing to move")
+    if (dst.min_row + src.max_row - src.min_row) > gridio._locate.MAX_ROW or \
+            (dst.min_col + src.max_col - src.min_col) > gridio._locate.MAX_COL:
+        raise RangeOutOfBounds("the move would extend past the grid limits")
+    from openpyxl.styles import Alignment, Border, Font, PatternFill
+    # Clear the source first (buffered), then place at the destination.
+    for r in range(src.min_row, src.max_row + 1):
+        for c in range(src.min_col, src.max_col + 1):
+            cell = ws.cell(r, c)
+            cell.value = None
+            cell.font = Font(); cell.fill = PatternFill()
+            cell.border = Border(); cell.alignment = Alignment()
+            cell.number_format = "General"
+    wrote_formula = False
+    for i, row in enumerate(block):
+        for j, (val, style, _cached) in enumerate(row):
+            tcell = ws.cell(dst.min_row + i, dst.min_col + j)
+            tcell.value = val
+            tcell._style = _copy(style)
+            if isinstance(val, str) and val.startswith("="):
+                wrote_formula = True
+    # References that pointed into the source rectangle now follow it to dest.
+    edit = _refs.RefEdit(
+        src.sheet, _refs.MOVE,
+        src=(src.min_row, src.min_col, src.max_row, src.max_col),
+        dst=(dst.min_row, dst.min_col))
+    report = _refs.rewrite_workbook(pkg.workbook, edit)
+    if wrote_formula or report.formulas:
+        pkg._formula_written = True
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["moved"] = {
+        "from": f"{src.sheet}!{src.a1}",
+        "to": f"{src.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
+        "reference_rewrites": report.as_dict()}
+    return result
+
+
+# ------------------------------------------------ query_range (headline read)
+
+
+_OPS_BINARY = {"eq", "ne", "gt", "ge", "lt", "le",
+               "contains", "startswith", "endswith", "regex"}
+_OPS_SET = {"in", "not_in"}
+_OPS_UNARY = {"is_blank", "not_blank"}
+_AGG_FUNCS = {"count", "count_nonblank", "count_distinct", "sum", "avg",
+              "mean", "min", "max", "first", "last"}
+
+
+def _num(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    if isinstance(v, str):
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    return None
+
+
+def _cmp(cell, op: str, target) -> bool:
+    if op in _OPS_UNARY:
+        blank = cell is None or (isinstance(cell, str) and cell == "")
+        return blank if op == "is_blank" else not blank
+    if op in _OPS_SET:
+        seq = target if isinstance(target, list) else [target]
+        hit = any(_scalar_eq(cell, t) for t in seq)
+        return hit if op == "in" else not hit
+    if op in ("contains", "startswith", "endswith"):
+        s = "" if cell is None else str(cell)
+        t = "" if target is None else str(target)
+        s, t = s.lower(), t.lower()
+        return {"contains": t in s, "startswith": s.startswith(t),
+                "endswith": s.endswith(t)}[op]
+    if op == "regex":
+        from ..core import _regex
+        s = "" if cell is None else str(cell)
+        return bool(_regex.finditer(str(target), s))
+    # ordered / equality comparisons: numeric when both coerce, else string
+    cn, tn = _num(cell), _num(target)
+    if cn is not None and tn is not None:
+        a, b = cn, tn
+    elif op in ("eq", "ne"):
+        return _scalar_eq(cell, target) if op == "eq" \
+            else not _scalar_eq(cell, target)
+    else:
+        a = "" if cell is None else str(cell)
+        b = "" if target is None else str(target)
+    return {"eq": a == b, "ne": a != b, "gt": a > b, "ge": a >= b,
+            "lt": a < b, "le": a <= b}[op]
+
+
+def _scalar_eq(a, b) -> bool:
+    an, bn = _num(a), _num(b)
+    if an is not None and bn is not None:
+        return an == bn
+    return ("" if a is None else str(a)) == ("" if b is None else str(b))
+
+
+def query_range(path: str, location: Any = None, sheet: str | None = None,
+                header: bool = True, columns: list | None = None,
+                where: list | None = None, match: str = "all",
+                order_by: list | None = None, aggregate: list | None = None,
+                group_by: Any = None, limit: int | None = None,
+                offset: int = 0, distinct: bool = False,
+                records: bool = False, values: str = "cached") -> dict:
+    """Server-side filter / project / sort / paginate / aggregate over a range,
+    so an agent reads only the rows and columns it needs.
+
+    location defaults to the sheet's TRUE used range. With header=true the first
+    row names the columns (referenced by name in columns/where/order_by/
+    aggregate/group_by); otherwise columns are the A1 letters. where is a list
+    of {column, op, value} predicates combined by match ('all'|'any'); ops:
+    eq ne gt ge lt le contains startswith endswith regex in not_in is_blank
+    not_blank. aggregate is a list of {column, func} (count count_nonblank
+    count_distinct sum avg min max first last), optionally per group_by. Returns
+    a compact projection (arrays by default, records=true for objects) with the
+    matched / returned / scanned counts. Read-only; nothing is written.
+    """
+    if match not in ("all", "any"):
+        raise XlMcpError("match must be 'all' or 'any'")
+    if values not in gridio.VALUE_MODES:
+        raise XlMcpError(f"values must be one of {gridio.VALUE_MODES}")
+    data_only = values != "formula"
+    wb = gridio.open_wb(path, data_only=data_only)
+    try:
+        loc = location if location is not None else {
+            "used_range": sheet if sheet is not None else True}
+        grid = gridio.resolve(wb, loc, default_sheet=sheet)
+        if grid.empty:
+            return {"sheet": grid.sheet, "source": grid.a1, "mode": "rows",
+                    "columns": [], "rows": [], "matched": 0, "returned": 0,
+                    "scanned": 0, "truncated": False}
+        gridio.guard_cell_count(grid)
+        ws = wb[grid.sheet]
+        matrix = [[gridio.compact_value(ws.cell(r, c).value)
+                   for c in range(grid.min_col, grid.max_col + 1)]
+                  for r in range(grid.min_row, grid.max_row + 1)]
+        # column names + data rows
+        from openpyxl.utils import get_column_letter
+        letters = [get_column_letter(c)
+                   for c in range(grid.min_col, grid.max_col + 1)]
+        if header and matrix:
+            col_names = [str(h) if h is not None else letters[i]
+                         for i, h in enumerate(matrix[0])]
+            body = matrix[1:]
+        else:
+            col_names = letters
+            body = matrix
+        idx = {name: i for i, name in enumerate(col_names)}
+        # allow addressing header columns by letter too
+        for i, lt in enumerate(letters):
+            idx.setdefault(lt, i)
+
+        def col_i(name) -> int:
+            if isinstance(name, int):
+                if 1 <= name <= len(col_names):
+                    return name - 1
+                raise XlMcpError(f"column index {name} out of range")
+            if name in idx:
+                return idx[name]
+            raise XlMcpError(
+                f"no column {name!r}; columns are {col_names}")
+
+        scanned = len(body)
+        # filter
+        preds = where or []
+        for p in preds:
+            if not isinstance(p, dict) or "column" not in p or "op" not in p:
+                raise XlMcpError(
+                    "each where clause is {column, op, value}")
+            if p["op"] not in (_OPS_BINARY | _OPS_SET | _OPS_UNARY):
+                raise XlMcpError(f"unknown op {p['op']!r}")
+
+        def keep(row) -> bool:
+            results = []
+            for p in preds:
+                ci = col_i(p["column"])
+                cell = row[ci] if ci < len(row) else None
+                results.append(_cmp(cell, p["op"], p.get("value")))
+            if not results:
+                return True
+            return all(results) if match == "all" else any(results)
+
+        matched_rows = [r for r in body if keep(r)]
+        matched = len(matched_rows)
+
+        # aggregate mode
+        if aggregate:
+            for a in aggregate:
+                if not isinstance(a, dict) or "func" not in a:
+                    raise XlMcpError("each aggregate is {column, func}")
+                if a["func"] not in _AGG_FUNCS:
+                    raise XlMcpError(f"unknown aggregate func {a['func']!r}")
+            gbs = ([group_by] if isinstance(group_by, (str, int))
+                   else list(group_by or []))
+            gb_idx = [col_i(g) for g in gbs]
+            groups: dict[tuple, list] = {}
+            order: list[tuple] = []
+            for row in matched_rows:
+                key = tuple(row[i] if i < len(row) else None for i in gb_idx)
+                if key not in groups:
+                    groups[key] = []
+                    order.append(key)
+                groups[key].append(row)
+            out_groups = []
+            for key in order:
+                rows = groups[key]
+                aggs = {}
+                for a in aggregate:
+                    ci = col_i(a["column"]) if "column" in a else None
+                    vals = [row[ci] if ci is not None and ci < len(row)
+                            else None for row in rows]
+                    aggs[_agg_label(a)] = _apply_agg(a["func"], vals)
+                entry = {"aggregates": aggs}
+                if gbs:
+                    entry["group"] = {gbs[i]: key[i] for i in range(len(gbs))}
+                out_groups.append(entry)
+            return {
+                "sheet": grid.sheet, "source": grid.a1, "mode": "aggregate",
+                "group_by": gbs, "groups": out_groups,
+                "matched": matched, "scanned": scanned,
+            }
+
+        # projection
+        proj_idx = ([col_i(c) for c in columns] if columns
+                    else list(range(len(col_names))))
+        proj_names = [col_names[i] for i in proj_idx]
+        rows = [[row[i] if i < len(row) else None for i in proj_idx]
+                for row in matched_rows]
+        # sort
+        if order_by:
+            for spec in reversed(order_by):
+                ci = col_i(spec["column"]) if isinstance(spec, dict) \
+                    else col_i(spec)
+                pj = proj_idx.index(ci) if ci in proj_idx else None
+                desc = isinstance(spec, dict) and \
+                    str(spec.get("dir", "asc")).lower() in ("desc", "descending")
+                if pj is None:
+                    continue
+                rows.sort(key=lambda r, k=pj: _sort_key(r[k]), reverse=desc)
+        if distinct:
+            seen = set()
+            uniq = []
+            for r in rows:
+                sig = tuple(str(x) for x in r)
+                if sig not in seen:
+                    seen.add(sig)
+                    uniq.append(r)
+            rows = uniq
+        total_after_filter = len(rows)
+        if offset:
+            rows = rows[max(0, int(offset)):]
+        truncated = False
+        if limit is not None:
+            if int(limit) < 0:
+                raise XlMcpError("limit must be >= 0")
+            truncated = len(rows) > int(limit)
+            rows = rows[: int(limit)]
+        payload_rows = ([dict(zip(proj_names, r)) for r in rows]
+                        if records else rows)
+        return {
+            "sheet": grid.sheet, "source": grid.a1, "mode": "rows",
+            "header": header, "columns": proj_names,
+            "rows": payload_rows,
+            "matched": matched, "returned": len(rows),
+            "scanned": scanned, "distinct_after_filter": total_after_filter,
+            "truncated": truncated, "value_mode": values,
+        }
+    finally:
+        wb.close()
+
+
+def _agg_label(a: dict) -> str:
+    return a.get("as") or (f"{a['func']}_{a['column']}" if "column" in a
+                           else a["func"])
+
+
+def _apply_agg(func: str, vals: list):
+    nonblank = [v for v in vals if v is not None and v != ""]
+    if func == "count":
+        return len(vals)
+    if func == "count_nonblank":
+        return len(nonblank)
+    if func == "count_distinct":
+        return len({str(v) for v in nonblank})
+    if func == "first":
+        return nonblank[0] if nonblank else None
+    if func == "last":
+        return nonblank[-1] if nonblank else None
+    nums = [n for n in (_num(v) for v in nonblank) if n is not None]
+    if func in ("sum", "avg", "mean") and not nums:
+        return 0 if func == "sum" else None
+    if func == "sum":
+        return _round(sum(nums))
+    if func in ("avg", "mean"):
+        return _round(sum(nums) / len(nums)) if nums else None
+    if func in ("min", "max"):
+        pool = nums if nums else nonblank
+        if not pool:
+            return None
+        return min(pool) if func == "min" else max(pool)
+    return None
+
+
+def _round(x):
+    if isinstance(x, float) and x == int(x):
+        return int(x)
+    return round(x, 10) if isinstance(x, float) else x
+
+
+def _sort_key(v):
+    n = _num(v)
+    if n is not None:
+        return (0, n)
+    if v is None:
+        return (2, "")
+    return (1, str(v))
+
+
+__all__ = [
+    "read_range", "set_cell", "write_range", "clear_range",
+    "copy_range", "move_range", "query_range",
+    "CLEAR_WHAT", "COPY_WHAT",
+]

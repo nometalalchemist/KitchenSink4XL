@@ -25,13 +25,13 @@ import pytest
 
 from xlsx_mcp import server
 
-# Flip to True when the Phase 3 engine families land and the docstring budget
-# becomes enforceable across the whole surface. One-line change; nothing else
-# in this file needs to move.
-SURFACE_READY = False
+# Enforced from Phase 3a: the core data-plane families have landed, so the
+# docstring budget binds across the whole registered surface.
+SURFACE_READY = True
 
 # The planned multiplex / high-traffic tools that earn the ~350-token cap
-# (DESIGN Section 11; pre-listed so the later phases inherit the cap).
+# (DESIGN Section 11; pre-listed so the later phases inherit the cap). The
+# Phase 3a additions (query_range, the token-shaped read) join here.
 MULTIPLEX = {
     "get_grid_view", "apply_edits", "validate", "get_workflows",
     "diagnose_workbook", "manage_worksheet", "manage_backups",
@@ -39,6 +39,7 @@ MULTIPLEX = {
     "manage_conditional_format", "manage_data_validation",
     "manage_power_query", "modify_grid_structure", "audit_formulas",
     "com_manage_pivot", "enable_tools", "disable_tools",
+    "query_range",
 }
 
 

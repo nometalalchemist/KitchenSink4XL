@@ -38,6 +38,10 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
+from .ops import cells as _cells
+from .ops import format as _format
+from .ops import lifecycle as _lifecycle
+from .ops import view as _view
 
 mcp = FastMCP(
     "kitchensink4xl",
@@ -147,6 +151,272 @@ def get_server_info() -> dict:
         "platform": _platform.platform(),
         "python": _sys.version.split()[0],
     }
+
+
+# ============================================================ PHASE 3a TOOLS
+# The core data plane: lifecycle + discovery, cell/range read/write, the token-
+# shaped read (query_range), the grid view + batch layer, and formatting. All
+# lite (the daily driver). Each registered wrapper is a thin dispatch over an
+# ops/ module; every mutation runs through WorkbookPackage, so the hazard gate,
+# backup-before-mutation, and verify-after-write are automatic. No em dashes.
+
+
+# ------------------------------------------------- lifecycle and discovery
+
+
+@_tool("lite")
+def create_workbook(path: str, sheets: list[str] | None = None,
+                    overwrite: bool = False) -> dict:
+    """Create a new .xlsx workbook at path with the given sheet names (default a
+    single 'Sheet1'). Sheet names must be unique and at most 31 characters. An
+    existing file at path is left untouched unless overwrite is true, in which
+    case it is replaced. Returns the file path and the sheets created. This
+    writes a brand-new file, so there is no prior content to back up."""
+    return _lifecycle.create_workbook(path, sheets=sheets, overwrite=overwrite)
+
+
+@_tool("lite")
+def copy_workbook(src: str, dst: str, overwrite: bool = False) -> dict:
+    """Copy a workbook file byte-for-byte from src to dst, so nothing in the
+    original is re-serialized or degraded (charts, shapes, macros, and queries
+    all carry over intact). An existing dst is left untouched unless overwrite
+    is true. Returns the destination path. Use this to branch a working copy
+    before a risky batch of edits."""
+    return _lifecycle.copy_workbook(src, dst, overwrite=overwrite)
+
+
+@_tool("lite")
+def get_workbook_metadata(path: str) -> dict:
+    """Read a workbook's structure without opening it for edit: every sheet with
+    its visibility state, TRUE used range, dimensions, and merged-cell count,
+    plus defined names, tables, the active sheet, and a round-trip hazard
+    summary (whether an openpyxl edit would drop fragile parts). The
+    orient-before-editing call; read-only, touches no backup."""
+    return _lifecycle.get_workbook_metadata(path)
+
+
+@_tool("lite")
+def diagnose_workbook(path: str) -> dict:
+    """The round-trip hazard scan surfaced as a health readout: which fragile
+    parts the workbook holds (slicers, shapes, Power Query, VBA, and the rest),
+    whether a file-based openpyxl edit would drop any of them, the routing
+    recommendation for a surgical versus a structural edit, and a light
+    integrity summary (sheet counts, formula-cell count, keep_vba). This is how
+    you check a workbook is safe to edit before mutating it; read-only."""
+    return _lifecycle.diagnose_workbook(path)
+
+
+@_tool("lite")
+def manage_worksheet(path: str, action: str, sheet: str | None = None,
+                     new_name: str | None = None, index: int | None = None,
+                     state: str | None = None, allow_loss: bool = False,
+                     backup: bool = True) -> dict:
+    """Manage the worksheet lifecycle. action is one of: add (new_name, optional
+    index), delete (sheet), rename (sheet, new_name), copy (sheet, optional
+    new_name), reorder (sheet, index as 0-based target), hide (sheet, state
+    'hidden' or 'very_hidden'), unhide (sheet). The workbook always keeps at
+    least one visible sheet, so deleting or hiding the last one refuses. A
+    hazardous workbook refuses unless allow_loss is true. One backup is taken
+    before the change and the result is verified after the save."""
+    return _lifecycle.manage_worksheet(
+        path, action, sheet=sheet, new_name=new_name, index=index,
+        state=state, allow_loss=allow_loss, backup=backup)
+
+
+# --------------------------------------------------------- cells and ranges
+
+
+@_tool("lite")
+def read_range(path: str, location: Any, values: str = "cached",
+               sheet: str | None = None) -> dict:
+    """Read a cell or range addressed by a location object (cell, range, name,
+    table, used_range, region, or search). values controls the honest calc
+    story: 'cached' returns the last calculated values, 'formula' the formula
+    strings, 'both' pairs each value with a label (cached, absent, formula,
+    value). A formula cell with no cached value is labelled 'absent', never
+    passed off as blank. Read-only; page large ranges with query_range."""
+    return _cells.read_range(path, location, values=values, sheet=sheet)
+
+
+@_tool("lite")
+def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
+             allow_loss: bool = False, backup: bool = True) -> dict:
+    """Write a single cell addressed by a location object. A string beginning
+    with '=' is stored as a formula (normalized through the _xlfn shim so modern
+    functions do not land as #NAME?, and the workbook is flagged to recalculate
+    on open); anything else is a literal. A hazardous workbook refuses unless
+    allow_loss is true. One backup is taken before the write and the result is
+    verified after the save."""
+    return _cells.set_cell(path, location, value, sheet=sheet,
+                           allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def write_range(path: str, location: Any, data: list[list[Any]],
+                sheet: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Write a 2D block of values and formulas anchored at the location's
+    top-left cell. data is a list of row lists; formula strings ('=...') are
+    normalized and flag recalculation. The block must stay within the grid
+    limits. A hazardous workbook refuses unless allow_loss is true. One backup
+    is taken before the write and the result is verified after the save."""
+    return _cells.write_range(path, location, data, sheet=sheet,
+                              allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def clear_range(path: str, location: Any, what: str = "contents",
+                sheet: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Clear a cell or range: what='contents' removes values and formulas,
+    'formats' resets styles to default, 'all' does both. Addressed by a location
+    object. A hazardous workbook refuses unless allow_loss is true. One backup
+    is taken before the change and the result is verified after the save."""
+    return _cells.clear_range(path, location, what=what, sheet=sheet,
+                              allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def copy_range(path: str, source: Any, dest: Any, what: str = "all",
+               adjust_formulas: bool = True, sheet: str | None = None,
+               allow_loss: bool = False, backup: bool = True) -> dict:
+    """Copy a source rectangle to a destination anchor (source and dest are
+    location objects, which may name different sheets). what is 'all', 'values',
+    'formulas', or 'formats'. Relative references in copied formulas shift by the
+    paste offset like an Excel copy unless adjust_formulas is false; absolute
+    ($) anchors stay put. A hazardous workbook refuses unless allow_loss is
+    true. One backup is taken before the write and the result is verified after
+    the save."""
+    return _cells.copy_range(path, source, dest, what=what,
+                             adjust_formulas=adjust_formulas, sheet=sheet,
+                             allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
+               allow_loss: bool = False, backup: bool = True) -> dict:
+    """Move a rectangle to a new anchor on the same sheet, rewriting every
+    formula, name, conditional format, validation, table ref, and merge that
+    pointed into the source so references follow the cells (Excel move
+    semantics), via the reference-rewrite engine. A hazardous workbook refuses
+    unless allow_loss is true. One backup is taken before the write and the
+    result is verified after the save."""
+    return _cells.move_range(path, source, dest, sheet=sheet,
+                             allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def query_range(path: str, location: Any = None, sheet: str | None = None,
+                header: bool = True, columns: list | None = None,
+                where: list | None = None, match: str = "all",
+                order_by: list | None = None, aggregate: list | None = None,
+                group_by: Any = None, limit: int | None = None,
+                offset: int = 0, distinct: bool = False,
+                records: bool = False, values: str = "cached") -> dict:
+    """Filter, project, sort, paginate, and aggregate a range SERVER-SIDE so an
+    agent reads only the rows and columns it needs instead of a whole sheet.
+
+    location defaults to the sheet's true used range. With header=true the first
+    row names the columns (referenced by name; otherwise by A1 letter). where is
+    a list of {column, op, value} predicates joined by match ('all' or 'any');
+    ops: eq, ne, gt, ge, lt, le, contains, startswith, endswith, regex, in,
+    not_in, is_blank, not_blank. columns projects a subset; order_by sorts;
+    offset and limit page; distinct dedupes. aggregate is a list of
+    {column, func} (count, count_nonblank, count_distinct, sum, avg, min, max,
+    first, last), optionally per group_by, returning group summaries instead of
+    rows. Rows come back as compact arrays, or objects when records=true, with
+    matched, returned, and scanned counts. Read-only."""
+    return _cells.query_range(
+        path, location=location, sheet=sheet, header=header, columns=columns,
+        where=where, match=match, order_by=order_by, aggregate=aggregate,
+        group_by=group_by, limit=limit, offset=offset, distinct=distinct,
+        records=records, values=values)
+
+
+# ------------------------------------------------------- grid view + batch
+
+
+@_tool("lite")
+def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
+                  max_rows: int = 50, max_cols: int = 30,
+                  values: str = "cached") -> dict:
+    """A compact, token-efficient projection of a sheet or range: the true used
+    range, a markdown table with A1 addressing (column letters across the top,
+    row numbers down the side), formula and merged-cell markers, dimensions, and
+    the hazard summary, so an agent can see the grid without a per-cell JSON
+    dump.
+
+    location defaults to the sheet's used range. values='cached' shows last
+    calculated values with formula cells marked (a florin sign where a formula
+    has no cached value); 'formula' shows the formula strings. The view
+    paginates with max_rows and max_cols and reports truncated flags so the
+    caller knows when to page. formula_cells maps addresses to their formula
+    strings. Read-only; pair it with apply_edits to edit what you see."""
+    return _view.get_grid_view(path, location=location, sheet=sheet,
+                               max_rows=max_rows, max_cols=max_cols,
+                               values=values)
+
+
+@_tool("lite")
+def apply_edits(path: str, edits: list, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Apply many addressed edits as ONE atomic batch. edits is a list of
+    {op, location, ...}: set_value {value}, set_formula {formula}, clear
+    {what: contents|formats|all}, write_range {data: 2D array}. location is any
+    location object.
+
+    Every location is resolved and every op validated BEFORE anything is
+    written, so a single bad edit refuses the whole batch and the file stays
+    byte-for-byte unchanged. The batch then takes ONE backup, does ONE save, and
+    runs ONE verify-after-write, which restores from the backup if the produced
+    file fails to read back as intended. Formula edits are normalized and flag
+    recalculation. A hazardous workbook refuses unless allow_loss is true.
+    Returns the count of edits applied and cells touched."""
+    return _view.apply_edits(path, edits, allow_loss=allow_loss, backup=backup)
+
+
+# --------------------------------------------------------- formatting
+
+
+@_tool("lite")
+def format_cells(path: str, location: Any, number_format: str | None = None,
+                 font: dict | None = None, fill: dict | None = None,
+                 border: dict | None = None, alignment: dict | None = None,
+                 sheet: str | None = None, allow_loss: bool = False,
+                 backup: bool = True) -> dict:
+    """Apply formatting to a range, merging onto the existing style so
+    unspecified attributes are preserved. number_format is an Excel format code;
+    font is {name, size, bold, italic, underline, strike, color}; fill is
+    {color} or {pattern, fg, bg}; border is {style, color, sides}; alignment is
+    {horizontal, vertical, wrap_text, text_rotation, indent}. Colors are hex;
+    styles are deduplicated automatically. A hazardous workbook refuses unless
+    allow_loss is true. One backup is taken and the write is verified after
+    the save."""
+    return _format.format_cells(
+        path, location, number_format=number_format, font=font, fill=fill,
+        border=border, alignment=alignment, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def set_dimensions(path: str, sheet: str | None = None,
+                   column_widths: dict | None = None,
+                   row_heights: dict | None = None,
+                   autofit_columns: list | None = None,
+                   hide_columns: list | None = None,
+                   hide_rows: list | None = None,
+                   allow_loss: bool = False, backup: bool = True) -> dict:
+    """Set column widths and row heights, hide rows or columns, and service an
+    autofit request. column_widths maps column letters or indices to widths;
+    row_heights maps row numbers to heights; autofit_columns lists columns to
+    size to their content as a best-effort APPROXIMATION (true autofit needs
+    Excel via the com pack); hide_columns and hide_rows hide them. A hazardous
+    workbook refuses unless allow_loss is true. One backup is taken before the
+    write and the result is verified after the save."""
+    return _format.set_dimensions(
+        path, sheet=sheet, column_widths=column_widths, row_heights=row_heights,
+        autofit_columns=autofit_columns, hide_columns=hide_columns,
+        hide_rows=hide_rows, allow_loss=allow_loss, backup=backup)
 
 
 # ------------------------------------------------ tiered loading (Section 9)

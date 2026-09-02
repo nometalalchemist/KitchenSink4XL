@@ -21,30 +21,43 @@ from xlsx_mcp.core.errors import (
 )
 
 
+# The Phase 3a core data plane, all lite (the daily driver).
+PHASE_3A_LITE = {
+    "create_workbook", "copy_workbook", "get_workbook_metadata",
+    "diagnose_workbook", "manage_worksheet",
+    "read_range", "set_cell", "write_range", "clear_range",
+    "copy_range", "move_range", "query_range",
+    "get_grid_view", "apply_edits",
+    "format_cells", "set_dimensions",
+}
+BASE_LITE = {"enable_tools", "disable_tools", "get_server_info"}
+
+
 def test_imports_and_lists_over_client():
     """The server imports and lists its tools via an in-process fastmcp
-    Client. Phase 0 surface: the two tiered-loading toggles plus the
-    get_server_info placeholder reader."""
+    Client. Phase 3a surface: the tiered-loading toggles, get_server_info, and
+    the core data-plane families (all lite)."""
 
     async def run():
         async with Client(server.mcp) as c:
             return {t.name for t in await c.list_tools()}
 
     names = asyncio.run(run())
-    assert {"enable_tools", "disable_tools", "get_server_info"} <= names
-    # Phase 0 registers exactly these three and nothing else yet.
-    assert len(names) == 3, f"unexpected Phase 0 surface: {sorted(names)}"
+    assert BASE_LITE <= names
+    assert PHASE_3A_LITE <= names
 
 
 def test_all_tools_are_packed():
     """Every registered tool lands in the packs registry (no unpacked
-    strays); the Phase 0 trio is all lite."""
+    strays); the Phase 3a data plane is all lite."""
     listed = {t.name for t in asyncio.run(server.mcp.list_tools())}
     packed = {n for members in packs.tool_names().values() for n in members}
     assert listed <= packed, f"unpacked tools: {sorted(listed - packed)}"
-    assert set(packs.tool_names()["lite"]) == {
-        "enable_tools", "disable_tools", "get_server_info"
-    }
+    lite = set(packs.tool_names()["lite"])
+    assert (BASE_LITE | PHASE_3A_LITE) <= lite
+    # Phase 3a adds no non-lite tools; the gated packs stay empty here.
+    for pack in ("format", "objects", "tables-names", "io", "data", "com"):
+        assert packs.tool_names().get(pack, []) == []
 
 
 def test_pack_map_is_the_design_surface():
