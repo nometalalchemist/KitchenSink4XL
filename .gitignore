@@ -1,0 +1,39 @@
+# Environment / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Backups created by the server (two-slot folders next to each workbook)
+.ks4xl-backups/
+
+# PRIVATE test corpus: synthetic fixture workbooks are generated for CI; any
+# real sample workbooks stay private and out of the repo. Tests skip cleanly
+# when the corpus is absent.
+tests/corpus/*.xlsx
+tests/corpus/*.xlsm
+tests/corpus/*.xlsb
+tests/corpus/*.xls
+
+# Internal build-planning docs (gitignored-class internals; the public repo
+# tells the sanitized version).
+PLAN.md
+DESIGN.md
+KICKOFF.md
+BUILD_LOG.md
+research/
+
+# Build artifacts
+dist/
+build/
+
+# Packed bundles ship as release assets, not commits
+bundle/*.mcpb
+bundle/
+
+# Staging / integration snippets (never shipped)
+integration/
+
+# Temp
+temp/

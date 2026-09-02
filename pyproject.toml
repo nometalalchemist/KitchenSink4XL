@@ -1,0 +1,54 @@
+[project]
+name = "kitchensink4xl"
+version = "0.0.0"
+description = "Kitchen-sink Microsoft Excel (.xlsx) MCP server: round-trip-safe, honest calc, tiered loading"
+readme = "README.md"
+license = "AGPL-3.0-only"
+authors = [{ name = "nometalalchemist" }]
+keywords = [
+    "mcp", "excel", "xlsx", "ooxml", "spreadsheet", "claude",
+    "model-context-protocol", "openpyxl", "xlsxwriter", "pivot-tables",
+    "formulas", "conditional-formatting", "data-validation", "charts",
+    "round-trip-safety", "tiered-loading",
+]
+requires-python = ">=3.12"
+dependencies = [
+    # fastmcp is PINNED from day one (the Word v2 lesson: never ship
+    # unpinned fastmcp; a minor bump moved the visibility API mid-build).
+    "fastmcp>=3.4,<4",
+    "openpyxl",
+    "xlsxwriter",
+    # Ported-infrastructure deps: lxml backs the raw OOXML surgery escape
+    # hatch (DESIGN Section 2.4); regex backs the caller-pattern ReDoS guard
+    # (core/_regex.py).
+    "lxml",
+    "regex",
+]
+
+[project.optional-dependencies]
+# The COM tier is Windows + Excel only; keep pywin32 an opt-in extra so the
+# cross-platform file-based tier installs anywhere. Also platform-gated so a
+# non-Windows install of the extra is a no-op rather than a build failure.
+com = ["pywin32; sys_platform == 'win32'"]
+dev = [
+    "pytest",
+    "pytest-timeout",
+]
+
+[project.scripts]
+xl-mcp = "xlsx_mcp.server:main"
+kitchensink4xl = "xlsx_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+markers = [
+    "com: needs an interactive Excel instance (auto-skipped where Excel is unavailable)",
+]
