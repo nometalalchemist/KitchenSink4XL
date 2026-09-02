@@ -55,9 +55,20 @@ def test_all_tools_are_packed():
     assert listed <= packed, f"unpacked tools: {sorted(listed - packed)}"
     lite = set(packs.tool_names()["lite"])
     assert (BASE_LITE | PHASE_3A_LITE) <= lite
-    # Phase 3a adds no non-lite tools; the gated packs stay empty here.
-    for pack in ("format", "objects", "tables-names", "io", "data", "com"):
-        assert packs.tool_names().get(pack, []) == []
+    # Phase 3b populates format, tables-names, and io; objects/data/com are
+    # still empty (their families land in later waves).
+    members = packs.tool_names()
+    assert set(members.get("format", [])) == {
+        "manage_conditional_format", "manage_data_validation"}
+    assert set(members.get("tables-names", [])) == {"manage_table", "manage_name"}
+    assert set(members.get("io", [])) == {"manage_comment"}
+    for pack in ("objects", "data", "com"):
+        assert members.get(pack, []) == []
+    # Phase 3b lite additions.
+    for name in ("create_table", "get_table", "sort_range", "set_filter",
+                 "clear_filter", "manage_hyperlink", "import_data",
+                 "export_range"):
+        assert name in lite
 
 
 def test_pack_map_is_the_design_surface():

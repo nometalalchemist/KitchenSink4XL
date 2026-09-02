@@ -71,6 +71,22 @@ def _basename(*names: str):
     return m
 
 
+def _drawings_matcher(name: str) -> bool:
+    """Match drawing parts under xl/drawings/, EXCEPT legacy-comment VML
+    anchors (commentsDrawing*.vml). openpyxl models legacy notes and
+    re-serializes their VML drawing byte-for-byte on the round-trip
+    (empirically confirmed), so a comment anchor is not shape loss and must
+    not trip the SEV_DROPS drawings hazard. Genuine legacy shapes and form
+    controls use a different basename (vmlDrawing*.vml) and stay flagged."""
+    low = name.lower()
+    if not low.startswith("xl/drawings/"):
+        return False
+    base = low.rsplit("/", 1)[-1]
+    if base.startswith("commentsdrawing") and base.endswith(".vml"):
+        return False
+    return True
+
+
 # The knowledge table. survives_openpyxl is the CLAIM the fidelity harness
 # checks. Ordered most-to-least destructive for readable reports.
 HAZARD_SPECS: tuple[HazardSpec, ...] = (
@@ -97,8 +113,9 @@ HAZARD_SPECS: tuple[HazardSpec, ...] = (
     HazardSpec(
         "drawings", "drawings / shapes", SEV_DROPS, False,
         "openpyxl tutorial states shapes are lost from existing files; only "
-        "charts are re-modeled, textboxes and shapes vanish.",
-        _prefix("xl/drawings/"),
+        "charts are re-modeled, textboxes and shapes vanish. Legacy-comment "
+        "VML anchors are excluded (openpyxl preserves legacy notes).",
+        _drawings_matcher,
     ),
     HazardSpec(
         "media", "embedded media / images", SEV_DROPS, False,

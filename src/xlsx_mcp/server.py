@@ -38,9 +38,16 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
+from .ops import annotations as _annotations
 from .ops import cells as _cells
+from .ops import condformat as _condformat
+from .ops import datavalidation as _datavalidation
+from .ops import dataio as _dataio
 from .ops import format as _format
 from .ops import lifecycle as _lifecycle
+from .ops import names as _names
+from .ops import sortfilter as _sortfilter
+from .ops import tables as _tables
 from .ops import view as _view
 
 mcp = FastMCP(
@@ -417,6 +424,278 @@ def set_dimensions(path: str, sheet: str | None = None,
         path, sheet=sheet, column_widths=column_widths, row_heights=row_heights,
         autofit_columns=autofit_columns, hide_columns=hide_columns,
         hide_rows=hide_rows, allow_loss=allow_loss, backup=backup)
+
+
+# ============================================================ PHASE 3b TOOLS
+# The second wave of ungated file-tier families: tables and named ranges,
+# conditional formatting and data validation, sort and filter, comments and
+# hyperlinks, import and export. Each registered wrapper is a thin dispatch over
+# an ops/ module; every mutation runs through WorkbookPackage, so the hazard
+# gate, backup-before-mutation, and verify-after-write are automatic. Structural
+# table edits reuse core.refs so refs stay coherent. No em dashes.
+
+
+# ------------------------------------------------------------------- tables
+
+
+@_tool("lite")
+def create_table(path: str, location: Any, name: str, header: bool = True,
+                 style: str = "TableStyleMedium9", row_stripes: bool = True,
+                 col_stripes: bool = False, totals_row: bool = False,
+                 totals: dict | None = None, sheet: str | None = None,
+                 allow_loss: bool = False, backup: bool = True) -> dict:
+    """Turn a range into an Excel table (ListObject) named name. With header
+    true the first row supplies the column names (deduplicated); style is a
+    built-in table style; row_stripes and col_stripes toggle banding. totals_row
+    adds a totals row, and totals maps column names to a function (sum, average,
+    count, min, max, and the rest). A hazardous workbook refuses unless
+    allow_loss is true. One backup is taken before the write and the result is
+    verified after the save."""
+    return _tables.create_table(
+        path, location, name, header=header, style=style,
+        row_stripes=row_stripes, col_stripes=col_stripes,
+        totals_row=totals_row, totals=totals, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def get_table(path: str, name: str, columns: list | None = None,
+              values: str = "cached", records: bool = False) -> dict:
+    """Read a table's data by its name. columns projects a subset of the table
+    columns; values controls the honest calc story (cached returns last
+    calculated values, formula the formula strings, both pairs them); records
+    true returns row objects keyed by column name instead of arrays. Returns the
+    table ref, the column names, and the data rows without the header or totals
+    row. Read-only; nothing is written."""
+    return _tables.get_table(path, name, columns=columns, values=values,
+                             records=records)
+
+
+@_tool("tables-names")
+def manage_table(path: str, name: str, action: str, values: list | None = None,
+                 index: int | None = None, column: str | None = None,
+                 new_name: str | None = None, new_ref: str | None = None,
+                 style: str | None = None, on: bool = True,
+                 totals: dict | None = None, row_stripes: bool | None = None,
+                 col_stripes: bool | None = None, sheet: str | None = None,
+                 allow_loss: bool = False, backup: bool = True) -> dict:
+    """Advanced table lifecycle on the table named name. action is one of:
+    add_row (values as a row or list of rows), delete_row (index, 1-based data
+    row), add_column (column name, optional values), delete_column (column),
+    rename (new_name), resize (new_ref, keeping the top-left anchor),
+    toggle_totals (on, optional per-column totals functions), to_range (drop the
+    table, keep the data), set_style (style, row_stripes, col_stripes). Row and
+    column inserts and deletes rewrite every reference through the core engine so
+    formulas, names, and merges stay coherent, and the table ref is reset to its
+    intended bounds. A hazardous workbook refuses unless allow_loss is true. One
+    backup is taken before the change and the result is verified after the
+    save."""
+    return _tables.manage_table(
+        path, name, action, values=values, index=index, column=column,
+        new_name=new_name, new_ref=new_ref, style=style, on=on, totals=totals,
+        row_stripes=row_stripes, col_stripes=col_stripes, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+# -------------------------------------------------------------- named ranges
+
+
+@_tool("tables-names")
+def manage_name(path: str, action: str, name: str | None = None,
+                refers_to: str | None = None, scope: str | None = None,
+                new_name: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Manage defined names (named ranges). action is one of: add (name,
+    refers_to as an A1 reference or a formula, scope 'workbook' or a sheet
+    title), delete (name, optional scope), rename (name, new_name), update
+    (name, refers_to), list (every name with its scope and refers-to). A
+    sheet-scoped name can shadow a workbook-scoped one, so an action on an
+    ambiguous name refuses and returns both scopes until you pass scope. The
+    reserved print-area, print-title, and filter built-ins are protected from
+    delete and rename. A hazardous workbook refuses unless allow_loss is true.
+    One backup is taken before the change and the result is verified after the
+    save."""
+    return _names.manage_name(
+        path, action, name=name, refers_to=refers_to, scope=scope,
+        new_name=new_name, allow_loss=allow_loss, backup=backup)
+
+
+# ----------------------------------------------------- conditional formatting
+
+
+@_tool("format")
+def manage_conditional_format(path: str, action: str, location: Any = None,
+                              cf_type: str | None = None,
+                              params: dict | None = None,
+                              sheet: str | None = None,
+                              index: int | None = None,
+                              allow_loss: bool = False,
+                              backup: bool = True) -> dict:
+    """Manage conditional-formatting rules. action is add, list, or delete.
+    For add, location is the range and cf_type is one of cell_is, color_scale,
+    data_bar, icon_set, formula, or top_bottom, with params carrying the rule
+    settings (operator and formula, colors, fill, icon_style, rank). For delete,
+    location names the rule's range and an optional index picks one rule of
+    several. The file stores the rule declaratively; Excel evaluates it and
+    paints the cells on open, like the calc story. A hazardous workbook refuses
+    unless allow_loss is true. One backup is taken before the change and the
+    result is verified after the save."""
+    return _condformat.manage_conditional_format(
+        path, action, location=location, cf_type=cf_type, params=params,
+        sheet=sheet, index=index, allow_loss=allow_loss, backup=backup)
+
+
+# ------------------------------------------------------------ data validation
+
+
+@_tool("format")
+def manage_data_validation(path: str, action: str, location: Any = None,
+                           dv_type: str | None = None, values: Any = None,
+                           operator: str | None = None,
+                           formula1: Any = None, formula2: Any = None,
+                           allow_blank: bool = True, prompt: str | None = None,
+                           error: str | None = None, sheet: str | None = None,
+                           allow_loss: bool = False,
+                           backup: bool = True) -> dict:
+    """Manage data-validation rules. action is add, list, or delete. For add,
+    location is the range and dv_type is one of list, whole, decimal, date,
+    time, textLength, or custom. A list takes values (inline items or a range or
+    formula); the numeric and date types take operator plus formula1 and
+    formula2 bounds; custom takes formula1. prompt and error set the input and
+    error messages. The file stores the rule; Excel enforces it on entry. A
+    hazardous workbook refuses unless allow_loss is true. One backup is taken
+    before the change and the result is verified after the save."""
+    return _datavalidation.manage_data_validation(
+        path, action, location=location, dv_type=dv_type, values=values,
+        operator=operator, formula1=formula1, formula2=formula2,
+        allow_blank=allow_blank, prompt=prompt, error=error, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+# ------------------------------------------------------------ sort and filter
+
+
+@_tool("lite")
+def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
+               sheet: str | None = None, allow_loss: bool = False,
+               backup: bool = True) -> dict:
+    """Sort a range or table body by one or more keys, writing the reordered
+    rows back. keys is a list of {column, order}, where column is a header name,
+    a column letter, or a 1-based index and order is asc or desc; later keys
+    break ties. With has_header true the first row stays put. A moved formula
+    has its relative references shifted by its row displacement (Excel sort
+    semantics). A hazardous workbook refuses unless allow_loss is true. One
+    backup is taken before the write and the result is verified after the
+    save."""
+    return _sortfilter.sort_range(
+        path, location, keys, has_header=has_header, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def set_filter(path: str, location: Any, criteria: list | None = None,
+               sheet: str | None = None, allow_loss: bool = False,
+               backup: bool = True) -> dict:
+    """Apply an autofilter over a range whose first row is the header, and
+    actually hide the rows that do not match. An .xlsx stores filter criteria,
+    not which rows are hidden, so this evaluates criteria (a list of {column,
+    op, value}, combined as AND) over the current cached and literal values,
+    sets the row hidden flags, and records the autofilter range for Excel. A
+    hazardous workbook refuses unless allow_loss is true. One backup is taken
+    before the write and the result is verified after the save."""
+    return _sortfilter.set_filter(
+        path, location, criteria=criteria, sheet=sheet, allow_loss=allow_loss,
+        backup=backup)
+
+
+@_tool("lite")
+def clear_filter(path: str, location: Any = None, sheet: str | None = None,
+                 allow_loss: bool = False, backup: bool = True) -> dict:
+    """Remove the autofilter from a sheet and unhide the rows it hid, the
+    reverse of set_filter. location or sheet picks the sheet; the sheet's active
+    autofilter range is used when location is omitted. Returns how many rows were
+    unhidden. A hazardous workbook refuses unless allow_loss is true. One backup
+    is taken before the change and the result is verified after the save."""
+    return _sortfilter.clear_filter(
+        path, location=location, sheet=sheet, allow_loss=allow_loss,
+        backup=backup)
+
+
+# ----------------------------------------------------- comments and hyperlinks
+
+
+@_tool("io")
+def manage_comment(path: str, action: str, location: Any = None,
+                   text: str | None = None, author: str | None = None,
+                   sheet: str | None = None, allow_loss: bool = False,
+                   backup: bool = True) -> dict:
+    """Manage legacy cell comments (the sticky notes). action is add (location,
+    text, optional author), edit (location, new text or author), delete
+    (location), or list (every comment with its cell, text, and author). This
+    writes legacy notes, which round-trip cleanly through a file-based save;
+    threaded reply-and-resolve comments are a separate part openpyxl does not
+    model, so they are handled by the safety core rather than authored here. A
+    hazardous workbook refuses unless allow_loss is true. One backup is taken
+    before the change and the result is verified after the save."""
+    return _annotations.manage_comment(
+        path, action, location=location, text=text, author=author,
+        sheet=sheet, allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def manage_hyperlink(path: str, action: str, location: Any = None,
+                     target: str | None = None, display: str | None = None,
+                     tooltip: str | None = None, sheet: str | None = None,
+                     allow_loss: bool = False, backup: bool = True) -> dict:
+    """Manage cell hyperlinks. action is add (location, target as a URL or an
+    in-workbook 'Sheet!A1' reference, optional display text and tooltip), remove
+    (location), or list. On list it surfaces both real cell hyperlinks and
+    HYPERLINK() formula links so an audit sees every kind. A hazardous workbook
+    refuses unless allow_loss is true. One backup is taken before the change and
+    the result is verified after the save."""
+    return _annotations.manage_hyperlink(
+        path, action, location=location, target=target, display=display,
+        tooltip=tooltip, sheet=sheet, allow_loss=allow_loss, backup=backup)
+
+
+# ------------------------------------------------------------ import / export
+
+
+@_tool("lite")
+def import_data(path: str, source: str | None = None,
+                source_file: str | None = None, fmt: str = "auto",
+                location: Any = None, sheet: str | None = None,
+                header: bool = True, delimiter: str | None = None,
+                encoding: str = "utf-8", formulas: bool = False,
+                allow_loss: bool = False, backup: bool = True) -> dict:
+    """Import CSV, TSV, or JSON into a sheet at an anchor. Pass source (inline
+    text) or source_file (a path); fmt auto-detects from the extension. location
+    is the top-left anchor (default A1). A cell whose text begins with =, +, -,
+    or @ is written as TEXT to block formula injection unless formulas is true.
+    An import past the write ceiling refuses rather than dropping rows. A
+    hazardous workbook refuses unless allow_loss is true. One backup is taken
+    before the write and the result is verified after the save."""
+    return _dataio.import_data(
+        path, source=source, source_file=source_file, fmt=fmt,
+        location=location, sheet=sheet, header=header, delimiter=delimiter,
+        encoding=encoding, formulas=formulas, allow_loss=allow_loss,
+        backup=backup)
+
+
+@_tool("lite")
+def export_range(path: str, location: Any = None, sheet: str | None = None,
+                 fmt: str = "csv", header: bool = True, values: str = "cached",
+                 records: bool = False, out_file: str | None = None) -> dict:
+    """Export a range, table, or sheet to CSV, TSV, or JSON. location defaults
+    to the sheet's true used range; a {table} selector exports a table. values
+    controls the calc story (cached, formula, or both), and the result states
+    which mode produced the output so a formula with no cached value is never
+    passed off as blank. out_file writes the text to a sandboxed path; otherwise
+    the text is returned inline. Read-only; nothing in the workbook is
+    changed."""
+    return _dataio.export_range(
+        path, location=location, sheet=sheet, fmt=fmt, header=header,
+        values=values, records=records, out_file=out_file)
 
 
 # ------------------------------------------------ tiered loading (Section 9)
