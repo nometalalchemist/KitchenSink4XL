@@ -22,6 +22,8 @@ from __future__ import annotations
 import csv as _csv
 import io as _io
 import json as _json
+import os
+import re
 from typing import Any
 
 from openpyxl.utils import get_column_letter
@@ -213,4 +215,120 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
                 wb.close()
 
 
-__all__ = ["import_data", "export_range"]
+_FILE_FORMATS = ("csv", "tsv", "json")
+_UNSAFE_NAME = re.compile(r'[\\/:*?"<>|]+')
+
+
+def _serialize_matrix(vals, fmt: str, header: bool, records: bool,
+                      min_col: int) -> Any:
+    """Shared range-to-text/payload serialization (export_range's logic,
+    factored so export_file emits identical output per sheet). For json the
+    PAYLOAD is returned (the caller decides bundling); csv/tsv return
+    text."""
+    if fmt == "json":
+        if header and vals:
+            cols = [str(h) if h is not None else get_column_letter(
+                min_col + i) for i, h in enumerate(vals[0])]
+            body = vals[1:]
+            return ([dict(zip(cols, r)) for r in body] if records
+                    else {"columns": cols, "rows": body})
+        return vals
+    delim = "\t" if fmt == "tsv" else ","
+    buf = _io.StringIO()
+    writer = _csv.writer(buf, delimiter=delim, lineterminator="\n")
+    for row in vals:
+        writer.writerow(["" if v is None else v for v in row])
+    return buf.getvalue()
+
+
+def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
+                out_dir: str | None = None, out_file: str | None = None,
+                header: bool = True, values: str = "cached",
+                records: bool = False) -> dict:
+    """Export whole sheets (or the whole workbook) to a CSV/TSV set or one
+    JSON bundle. Read-only.
+
+    csv/tsv: one file per sheet into out_dir (named <stem>_<sheet>.csv), or
+    inline per-sheet text when out_dir is omitted. json: a single bundle
+    keyed by sheet name, written to out_file or returned inline."""
+    if fmt not in _FILE_FORMATS:
+        raise XlMcpError(f"fmt must be one of {_FILE_FORMATS}")
+    if values not in gridio.VALUE_MODES:
+        raise XlMcpError(f"values must be one of {gridio.VALUE_MODES}")
+    if out_dir and fmt == "json":
+        raise XlMcpError("json produces ONE bundle; pass out_file, not "
+                         "out_dir")
+    if out_file and fmt != "json":
+        raise XlMcpError(f"{fmt} produces one file per sheet; pass "
+                         "out_dir, not out_file")
+
+    formula_wb = gridio.open_wb(path, data_only=False) \
+        if values in ("formula", "both") else None
+    cached_wb = gridio.open_wb(path, data_only=True) \
+        if values in ("cached", "both") else None
+    base = formula_wb if formula_wb is not None else cached_wb
+    try:
+        wanted = sheets if sheets else base.sheetnames
+        missing = [s for s in wanted if s not in base.sheetnames]
+        if missing:
+            raise XlMcpError(
+                f"no sheet(s) named {missing}; sheets: {base.sheetnames}")
+        per_sheet: dict[str, Any] = {}
+        exported: list[dict] = []
+        for name in wanted:
+            grid = gridio.resolve(base, {"used_range": name})
+            if grid.empty:
+                per_sheet[name] = [] if fmt == "json" else ""
+                exported.append({"sheet": name, "rows": 0, "empty": True})
+                continue
+            gridio.guard_cell_count(grid)
+            vals, _labels, _hf = gridio.read_matrix(
+                grid, mode=values, formula_wb=formula_wb,
+                cached_wb=cached_wb)
+            vals = [[gridio.compact_value(v) for v in row] for row in vals]
+            per_sheet[name] = _serialize_matrix(
+                vals, fmt, header, records, grid.min_col)
+            exported.append({"sheet": name, "range": grid.a1,
+                             "rows": len(vals)})
+
+        out: dict[str, Any] = {"format": fmt, "value_mode": values,
+                               "sheets": exported,
+                               "sheet_count": len(exported)}
+        if fmt == "json":
+            bundle = {"workbook": os.path.basename(path),
+                      "value_mode": values, "sheets": per_sheet}
+            content = _json.dumps(bundle, ensure_ascii=False, default=str,
+                                  indent=2)
+            if out_file:
+                op = check_path(out_file, "write export file")
+                with open(op, "w", encoding="utf-8", newline="") as fh:
+                    fh.write(content)
+                out["written_to"] = op
+            else:
+                out["content"] = content
+        else:
+            if out_dir:
+                od = check_path(out_dir, "write export files")
+                if not os.path.isdir(od):
+                    raise XlMcpError(
+                        f"out_dir is not an existing directory: {od}")
+                stem = os.path.splitext(os.path.basename(path))[0]
+                written = []
+                for name, text in per_sheet.items():
+                    safe = _UNSAFE_NAME.sub("_", name)
+                    dest = os.path.join(od, f"{stem}_{safe}.{fmt}")
+                    with open(dest, "w", encoding="utf-8",
+                              newline="") as fh:
+                        fh.write(text)
+                    written.append(dest)
+                out["written_to"] = written
+            else:
+                out["content"] = per_sheet
+        return out
+    finally:
+        for wb in (formula_wb, cached_wb):
+            if wb is not None:
+                wb.close()
+
+
+__all__ = ["import_data", "export_range", "export_file"]
