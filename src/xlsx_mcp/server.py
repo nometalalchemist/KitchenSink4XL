@@ -790,20 +790,18 @@ def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
     conditional-format ranges, table refs, and merged ranges all shift with
     the edit. action is insert_rows, delete_rows, insert_cols, or
     delete_cols; at is the 1-based row number or column letter where the
-    edit starts (a cell like 'B7' or any location object also works, using
-    its top-left); count inserts or deletes that many at once.
+    edit starts (a cell like 'B7' or a location object also works, using
+    its top-left); count edits that many at once.
 
-    Semantics worth knowing: whole-column spans like =SUM(B:B) and whole-row
-    spans like $1:$2 shift on their own axis, while an edit on the other
-    axis leaves them alone (Excel's behavior); a reference wholly inside a
-    deleted band becomes #REF! and the count of new #REF! errors is
-    reported, never hidden; a merge that loses its whole range is dropped
-    and counted; an insert that would push value-bearing cells past the
-    grid edge refuses. Returns per-kind rewrite counts. A hazardous
-    workbook refuses unless allow_loss is true. Auto-backup: prev/anchor
-    slots in .ks4xl-backups (backup=false skips rotation); atomic verified
-    save, restored on failed verify; the prev slot is the undo for a
-    delete. Refuses while open in Excel."""
+    Whole-column spans like =SUM(B:B) and whole-row spans like $1:$2 shift
+    on their own axis; an edit on the other axis leaves them alone (Excel's
+    behavior). A reference wholly inside a deleted band becomes #REF! and
+    the new-#REF! count is reported, never hidden; an insert that would
+    push value-bearing cells off the grid edge refuses. Returns per-kind
+    rewrite counts. A hazardous workbook refuses unless allow_loss is true.
+    Auto-backup: prev/anchor slots in .ks4xl-backups (backup=false skips
+    rotation); atomic verified save, restored on failed verify; the prev
+    slot is the undo for a delete. Refuses while open in Excel."""
     return _structure.modify_grid_structure(
         path, action, at, count=count, sheet=sheet, allow_loss=allow_loss,
         backup=backup)
@@ -861,19 +859,18 @@ def replace_cells(path: str, find: str, replace: str,
                   location: Any = None, dry_run: bool = False,
                   formulas: bool = False, allow_loss: bool = False,
                   backup: bool = True) -> dict:
-    """Find-and-replace across a workbook, sheet, or range. find matches like
-    find_cells: exact (whole cell), contains (literal substring), or regex
-    (timeout-guarded; backreferences like \\1 work in replace). look_in
-    'values' rewrites literal cells, 'formulas' rewrites formula text (the
-    cell stays a formula, normalized), 'both' does both. dry_run=true
-    previews every change without touching the file; a real run validates
-    the whole plan first, then applies it as ONE batch and reports cells
-    changed and occurrences replaced. A replaced value that parses as a
-    number is written as a number; replacement text beginning with =, +, -,
-    or @ is written as TEXT to block formula injection unless formulas is
-    true. A hazardous workbook refuses unless allow_loss is true.
-    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
-    in Excel."""
+    """Find-and-replace across a workbook, sheet, or range. match is exact
+    (whole cell), contains (literal substring), or regex (timeout-guarded;
+    backreferences like \\1 work in replace). look_in 'values' rewrites
+    literal cells, 'formulas' rewrites formula text (the cell stays a
+    formula, normalized), 'both' does both. dry_run=true previews every
+    change without touching the file; a real run validates the whole plan
+    first, applies it as ONE batch, and reports cells changed and
+    occurrences replaced. A replaced value that parses as a number is
+    written as a number; replacement text beginning with =, +, -, or @ is
+    written as TEXT to block formula injection unless formulas is true. A
+    hazardous workbook refuses unless allow_loss is true. Auto-backup to
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _search.replace_cells(
         path, find, replace, look_in=look_in, match=match,
         match_case=match_case, sheet=sheet, location=location,
