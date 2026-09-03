@@ -37,9 +37,6 @@ from ..core.errors import WorkbookCorrupt, WorkbookNotFound, XlMcpError
 from ..core.sandbox import check_path
 from . import gridio
 
-_MAIN_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
-_REL_NS = ("{http://schemas.openxmlformats.org/officeDocument/2006/"
-           "relationships}")
 _PKG_REL_NS = ("{http://schemas.openxmlformats.org/package/2006/"
                "relationships}")
 
