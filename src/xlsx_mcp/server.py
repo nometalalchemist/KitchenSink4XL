@@ -44,6 +44,7 @@ from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
 from .ops import annotations as _annotations
+from .ops import backups as _backups
 from .ops import cells as _cells
 from .ops import inspectors as _inspectors
 from .ops import objects as _objects
@@ -53,13 +54,18 @@ from .ops import condformat as _condformat
 from .ops import datavalidation as _datavalidation
 from .ops import dataio as _dataio
 from .ops import format as _format
+from .ops import formulas as _formulas
 from .ops import lifecycle as _lifecycle
 from .ops import names as _names
+from .ops import properties as _properties
 from .ops import search as _search
+from .ops import sheetview as _sheetview
 from .ops import sortfilter as _sortfilter
 from .ops import structure as _structure
 from .ops import tables as _tables
+from .ops import validation as _validation
 from .ops import view as _view
+from .ops import workflows as _workflows
 
 mcp = FastMCP(
     "kitchensink4xl",
@@ -164,7 +170,7 @@ def get_server_info() -> dict:
     return {
         "name": "kitchensink4xl",
         "version": __version__,
-        "phase": "3c (ungated file tier complete; COM tier pending)",
+        "phase": "3e (ungated file tier complete; COM tier pending)",
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
@@ -1187,6 +1193,166 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
     return _dataio.export_file(
         path, fmt=fmt, sheets=sheets, out_dir=out_dir, out_file=out_file,
         header=header, values=values, records=records)
+
+
+# ============================================================ PHASE 3e TOOLS
+# The remaining ungated file-tier tools, completing the lite surface on the
+# audited engine: the formula pair (write with fill, the read-side audit),
+# the multiplex validate battery, workflow recipes, backup management over
+# the safesave slots, document properties with the calc-settings surface,
+# and sheet-view state. Every mutation runs through WorkbookPackage. No em
+# dashes. The COM tier (recalculate and friends) is a later phase and is
+# named as forthcoming, never pretended present.
+
+
+# ----------------------------------------------------------------- formulas
+
+
+@_tool("lite")
+def set_formula(path: str, location: Any, formula: str,
+                sheet: str | None = None, allow_loss: bool = False,
+                backup: bool = True) -> dict:
+    """Write a formula to a single cell, or fill a range where each cell gets
+    the formula with its relative references shifted by that cell's offset
+    (Excel copy semantics; absolute $ anchors stay put). Formulas are
+    normalized so modern functions do not land as #NAME?, and the workbook
+    is flagged to recalculate on its next open; stored cached results stay
+    stale until then (the recalculate tool arrives with the com pack).
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
+    return _formulas.set_formula(path, location, formula, sheet=sheet,
+                                 allow_loss=allow_loss, backup=backup)
+
+
+@_tool("lite")
+def audit_formulas(path: str, location: Any = None,
+                   sheet: str | None = None) -> dict:
+    """Read-only formula intelligence for a range, one sheet (sheet alone), or
+    the whole workbook (no scope): the formula list plus five safety
+    reports. external_references flags formulas reaching into other
+    workbooks; volatile lists always-recalculating functions (NOW, RAND,
+    OFFSET, INDIRECT and kin); missing_cached_values names formula cells
+    with NO stored result, which read as blank to every non-Excel consumer
+    until a recalculation; error_cells catches #REF!, #NAME?, and the other
+    error literals in cached results or formula text; and
+    cross_sheet_dependencies summarizes which sheets' formulas depend on
+    which. Each list is capped with exact counts and a truncated flag. Use
+    it before and after structural edits, and to judge whether cached
+    values can be trusted. Read-only; works while the file is open in
+    Excel."""
+    return _formulas.audit_formulas(path, location=location, sheet=sheet)
+
+
+# --------------------------------------------------- validation and workflow
+
+
+@_tool("lite")
+def validate(path: str, checks: list[str] | None = None) -> dict:
+    """Run read-only correctness checks and return one report. checks (default
+    ['structure', 'references', 'calc_staleness']): structure (package
+    opens clean, sheet integrity), references (#REF!/#NAME? and the other
+    error cells), names (broken defined names), merges (overlapping or
+    orphaned merged ranges), tables (duplicate names, broken refs,
+    overlaps), formatting_bloat (the audit_styles counters against the
+    64,000-format ceiling), hazards (the round-trip scan as a check),
+    external_links (links reported, not repaired), calc_staleness (formulas
+    lacking cached values, which read as blank outside Excel). Returns
+    {passed, results: {check: {passed, findings}}}; findings keep the
+    underlying ops' shapes where those exist, and passed=false means
+    findings, not a failed call. Read-only, always; repairs live in the
+    editing tools. Works while the file is open in Excel."""
+    return _validation.validate(path, checks=checks)
+
+
+@_tool("lite")
+def get_workflows(task: str | None = None) -> dict:
+    """Recommended tool sequences for common multi-step spreadsheet tasks, each
+    step naming the tool, the rationale, and the pack it lives in (lite is
+    always on; enable_tools loads the rest). Call with no task to list the
+    available tasks (merge-workbooks, report-build, data-cleanup,
+    formatting-audit-and-fix, safe-edit-of-rich-workbook,
+    migrate-from-incumbent); call with task='<name>' for that task's
+    step-by-step recipe and notes. Steps naming COM-tier tools that have
+    not shipped yet are marked forthcoming rather than pretended present.
+    Pure guidance: reads nothing, changes nothing."""
+    return _workflows.get_workflows(task)
+
+
+# ------------------------------------------------------------------ backups
+
+
+@_tool("lite")
+def manage_backups(action: str, path: str | None = None,
+                   directory: str | None = None, source: str | None = None,
+                   scope: str | None = None, dry_run: bool = True,
+                   label: str | None = None,
+                   dest_dir: str | None = None) -> dict:
+    """Manage the automatic backups in the hidden .ks4xl-backups folder next to
+    each mutated workbook: two rotating slots per file, prev (state before
+    the most recent mutation) and anchor (session start). action='list':
+    slot files with sizes and mtimes plus orphaned slot folders; give path
+    for one workbook or directory for a folder. action='restore': overwrite
+    path with source 'prev' or 'anchor'; the current content rotates into
+    prev FIRST so a restore is itself undoable, the payload is validated as
+    a real workbook before the atomic replace, and files open in Excel
+    refuse. action='purge': delete backups; scope is 'orphans' (slot
+    folders whose workbook is gone) or 'slots' (one workbook's pair);
+    dry_run defaults to TRUE and only reports. action='snapshot': save a
+    permanent DTG-stamped copy, YYYYMMDD_HHMM_<name>, optional label and
+    dest_dir; snapshots are never rotated and no purge scope touches
+    them."""
+    return _backups.manage_backups(
+        action, path=path, directory=directory, source=source, scope=scope,
+        dry_run=dry_run, label=label, dest_dir=dest_dir)
+
+
+# ------------------------------------------------------- properties and view
+
+
+@_tool("lite")
+def set_workbook_properties(path: str, title: str | None = None,
+                            author: str | None = None,
+                            subject: str | None = None,
+                            keywords: str | None = None,
+                            category: str | None = None,
+                            comments: str | None = None,
+                            calc_mode: str | None = None,
+                            full_calc_on_load: bool | None = None,
+                            allow_loss: bool = False,
+                            backup: bool = True) -> dict:
+    """Set core document properties (title, author, subject, keywords,
+    category, comments) and the calc settings: calc_mode ('auto',
+    'autoNoTable', 'manual') and the full_calc_on_load flag. Only the given
+    parameters change; called with none it returns the current values
+    read-only. Manual mode means Excel does not recalculate on open, so
+    cached results go stale after every edit; the result says so.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
+    return _properties.set_workbook_properties(
+        path, title=title, author=author, subject=subject, keywords=keywords,
+        category=category, comments=comments, calc_mode=calc_mode,
+        full_calc_on_load=full_calc_on_load, allow_loss=allow_loss,
+        backup=backup)
+
+
+@_tool("lite")
+def set_view(path: str, sheet: str | None = None, freeze: str | None = None,
+             split: dict | None = None, gridlines: bool | None = None,
+             headings: bool | None = None, zoom: int | None = None,
+             selection: str | None = None, tab_color: str | None = None,
+             allow_loss: bool = False, backup: bool = True) -> dict:
+    """Set sheet-view state in one call: freeze panes (freeze='B2' locks the
+    rows above and columns left of it; 'clear' removes), split panes
+    (split={x, y} positions in points, exclusive with freeze), gridlines
+    and headings visibility, zoom (10 to 400 percent), the active selection
+    (an A1 cell or range), and the sheet tab color (6-digit hex or
+    'clear'). Unset parameters keep their current values; sheet defaults to
+    the active sheet. Auto-backup to .ks4xl-backups; atomic verified save.
+    Refuses while open in Excel."""
+    return _sheetview.set_view(
+        path, sheet=sheet, freeze=freeze, split=split, gridlines=gridlines,
+        headings=headings, zoom=zoom, selection=selection,
+        tab_color=tab_color, allow_loss=allow_loss, backup=backup)
 
 
 # ------------------------------------------------ tiered loading (Section 9)
