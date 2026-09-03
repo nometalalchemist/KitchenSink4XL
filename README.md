@@ -5,10 +5,12 @@
 Everything plus the kitchen sink for Microsoft Excel files: a round-trip-safe
 `.xlsx` MCP server with an honest calculation story and tiered loading.
 
-> Status: PRE-RELEASE (Phase 0 scaffold). The infrastructure is ported and
-> wired; the Excel engine and the tool surface land in later build phases.
-> Counts are published only once `scripts/measure_surface.py` measures the
-> real surface, so no numbers appear here yet.
+> Status: PRE-RELEASE (file tier built: safety core, cells and ranges,
+> query, formatting, tables, names, conditional formatting, validation,
+> sort/filter, comments, hyperlinks, import/export). The COM application
+> tier and the gated families (pivots, charts, images, Power Query) land in
+> later build phases. Counts are published only once
+> `scripts/measure_surface.py` measures the final surface.
 
 ## What it is
 
@@ -18,9 +20,11 @@ application (COM) tier, and it is built around a safety core: a round-trip
 hazard scan, backup-before-mutation, and verify-after-write, so rich workbooks
 are not silently damaged on edit.
 
-- Cross-platform file-based tier for cells, ranges, formulas, formatting,
-  styles, conditional formatting, data validation, tables, named ranges, sort
-  and filter, images, and charts.
+- Cross-platform file-based tier for cells, ranges, formulas, server-side
+  query and aggregation, formatting, styles, conditional formatting, data
+  validation, tables, named ranges, sort and filter, comments, hyperlinks,
+  and CSV/TSV/JSON interop (images and charts join with the gated
+  families).
 - An honest calculation story: reads label every value as cached, computed,
   formula, or absent, because no pure-Python engine computes formulas.
 - Tiered loading: sessions start with a small lite core; optional packs load

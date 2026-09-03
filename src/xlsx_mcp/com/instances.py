@@ -307,12 +307,17 @@ class ExcelInstanceManager:
                     pending.discard(pid)
             if pending:
                 time.sleep(poll)
-        # Grace elapsed: taskkill any owned PID still alive.
+        # Grace elapsed: taskkill any owned PID still alive. A pid is
+        # forgotten ONLY once it is confirmed gone; a failed taskkill keeps
+        # its journal record so the next sweep can retry (forgetting a live
+        # zombie would orphan it forever).
         for pid in sorted(pending):
             if pid_alive(pid):
                 if taskkill(pid):
                     res.killed.append(pid)
-                self.journal.forget(pid)
+                    self.journal.forget(pid)
+                else:
+                    res.still_waiting.append(pid)
             else:
                 res.exited_on_own.append(pid)
                 self.journal.forget(pid)
@@ -329,11 +334,14 @@ class ExcelInstanceManager:
             if pid_alive(pid):
                 if taskkill(pid):
                     res.killed.append(pid)
+                    self.journal.forget(pid)
                 else:
+                    # keep the journal record: a kill that failed leaves a
+                    # live owned zombie, and forgetting it would orphan it
                     res.still_waiting.append(pid)
             else:
                 res.exited_on_own.append(pid)
-            self.journal.forget(pid)
+                self.journal.forget(pid)
         return res
 
 

@@ -52,3 +52,31 @@ def test_owned_pids_unions_workers_and_journal(tmp_path):
     mgr = instances.ExcelInstanceManager(journal_path=tmp_path / "j.json")
     mgr.journal.record(7777)
     assert 7777 in mgr.owned_pids()
+
+
+def test_failed_taskkill_keeps_journal_record(tmp_path, monkeypatch):
+    """Re-audit fix: sweep/force_reclaim used to journal.forget a PID even
+    when taskkill FAILED, orphaning a live owned zombie forever. A failed
+    kill must keep its record so the next sweep can retry."""
+    from xlsx_mcp.com import instances as inst
+
+    mgr = inst.ExcelInstanceManager(journal_path=tmp_path / "j.json")
+    mgr.journal.record(99999)
+    monkeypatch.setattr(inst, "pid_alive", lambda pid: True)
+    monkeypatch.setattr(inst, "taskkill", lambda pid: False)
+
+    res = mgr.force_reclaim()
+    assert res.still_waiting == [99999]
+    assert res.killed == []
+    assert 99999 in mgr.journal.owned_pids(), (
+        "a live zombie whose kill failed must stay journaled")
+
+    res2 = mgr.sweep(grace_seconds=0.0, poll=0.01)
+    assert res2.still_waiting == [99999]
+    assert 99999 in mgr.journal.owned_pids()
+
+    # once the kill succeeds, the record is released
+    monkeypatch.setattr(inst, "taskkill", lambda pid: True)
+    res3 = mgr.force_reclaim()
+    assert res3.killed == [99999]
+    assert 99999 not in mgr.journal.owned_pids()
