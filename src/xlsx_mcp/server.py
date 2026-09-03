@@ -636,14 +636,14 @@ def manage_data_validation(path: str, action: str, location: Any = None,
 def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                sheet: str | None = None, allow_loss: bool = False,
                backup: bool = True) -> dict:
-    """Sort a range or table body by one or more keys, writing the reordered
-    rows back. keys is a list of {column, order}: a header name, letter, or
-    1-based index; order asc or desc; later keys break ties. has_header true
-    keeps the first row put. Moved formulas shift relative refs by their row
+    """Sort a range or table body by one or more keys, writing the rows back
+    reordered. keys is a list of {column, order}: a header name, letter, or
+    1-based index; asc or desc; later keys break ties. has_header true keeps
+    the first row put. Moved formulas shift relative refs by their row
     displacement (Excel semantics); keys compare cached values, warning on
     uncalculated formulas. Hazardous workbooks refuse unless allow_loss is
-    true. Auto-backup to .ks4xl-backups (prev slot is the undo); atomic
-    verified save. Refuses while open in Excel."""
+    true. Auto-backup (prev slot is the undo); atomic verified save. Refuses
+    while open in Excel."""
     return _sortfilter.sort_range(
         path, location, keys, has_header=has_header, sheet=sheet,
         allow_loss=allow_loss, backup=backup)
