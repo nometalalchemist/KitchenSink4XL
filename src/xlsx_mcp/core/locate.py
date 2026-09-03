@@ -348,9 +348,11 @@ def _find_table(wb, name: str):
         tables = getattr(ws, "tables", {})
         if name in tables:
             return ws, tables[name]
-        for tname, t in tables.items():
+        for tname in list(tables):
+            # index by name: TableList.items() yields ref STRINGS, not Table
+            # objects, so the old items() loop returned a str here
             if tname.lower() == name.lower():
-                return ws, t
+                return ws, tables[tname]
     return None, None
 
 

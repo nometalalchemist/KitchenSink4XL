@@ -180,3 +180,48 @@ def test_sort_on_uncached_formula_keys_warns(tmp_path):
     assert any("formula TEXT" in w for w in out.get("warnings", [])), (
         "sorting by a never-calculated formula must warn, not silently order "
         "by formula text")
+
+
+# ------------------------------------------------------- table overlap/names
+
+
+def test_overlapping_tables_refused(tmp_path):
+    p = _make(tmp_path / "ov.xlsx",
+              [["a", "b", "c"], [1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    _tables.create_table(p, {"range": "A1:B3"}, "First")
+    with pytest.raises(XlMcpError, match="overlap"):
+        _tables.create_table(p, {"range": "B2:C4"}, "Second")
+    # a disjoint table on the same sheet is fine
+    out = _tables.create_table(p, {"range": "C1:C4"}, "Second")
+    assert out["ok"] is True
+
+
+def test_table_name_defined_name_collision_refused(tmp_path):
+    p = _make(tmp_path / "nc.xlsx", [["h", 1], [2, 3]])
+    _names.manage_name(p, "add", name="Shared", refers_to="Data!$A$1")
+    with pytest.raises(XlMcpError, match="defined name"):
+        _tables.create_table(p, {"range": "A1:B2"}, "Shared")
+
+
+# ------------------------------------- TableList.items() latent crashes
+
+
+def test_metadata_lists_tables_without_crashing(tmp_path):
+    """openpyxl's TableList.items() yields (name, ref-STRING) pairs, not
+    Table objects. get_workbook_metadata iterated items() and read .ref off
+    the string, so ANY workbook containing a table crashed the discovery
+    call. Same trap fixed in both _find_table case-insensitive fallbacks."""
+    p = _make(tmp_path / "m.xlsx", [["h1", "h2"], [1, 2]])
+    _tables.create_table(p, {"range": "A1:B2"}, "Inv")
+    meta = _lifecycle.get_workbook_metadata(p)
+    assert meta["tables"] == [
+        {"name": "Inv", "sheet": "Data", "ref": "A1:B2"}]
+
+
+def test_case_insensitive_table_lookup_returns_table(tmp_path):
+    p = _make(tmp_path / "ci.xlsx", [["h1", "h2"], [1, 2]])
+    _tables.create_table(p, {"range": "A1:B2"}, "Sales")
+    out = _tables.get_table(p, "sales")  # case-insensitive fallback path
+    assert out["ref"] == "A1:B2"
+    got = _cells.read_range(p, {"table": "SALES", "part": "data"})
+    assert got["range"] == "A2:B2"

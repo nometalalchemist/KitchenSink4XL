@@ -63,7 +63,31 @@ def _validate_name(wb, name: str) -> str:
     existing = {t.lower() for w in wb.worksheets for t in getattr(w, "tables", {})}
     if name.lower() in existing:
         raise XlMcpError(f"a table named {name!r} already exists in the workbook")
+    # Table names and defined names share one namespace in Excel.
+    defined = {n.lower() for n in wb.defined_names}
+    for w in wb.worksheets:
+        dn = getattr(w, "defined_names", None)
+        if dn is not None:
+            defined.update(n.lower() for n in dn)
+    if name.lower() in defined:
+        raise XlMcpError(
+            f"{name!r} is already a defined name; table and defined names "
+            "share one namespace in Excel")
     return name
+
+
+def _check_no_table_overlap(ws, min_row, min_col, max_row, max_col) -> None:
+    """Excel refuses overlapping ListObjects; writing one anyway produces a
+    repair-prompt file, so the overlap refuses here instead."""
+    tables = getattr(ws, "tables", {})
+    for tname in list(tables):
+        t = tables[tname]  # TableList.items() yields ref strings, not Tables
+        t_min_c, t_min_r, t_max_c, t_max_r = range_boundaries(t.ref)
+        if (min_row <= t_max_r and max_row >= t_min_r
+                and min_col <= t_max_c and max_col >= t_min_c):
+            raise XlMcpError(
+                f"the range overlaps table {tname!r} ({t.ref}) on "
+                f"{ws.title!r}; Excel does not allow overlapping tables")
 
 
 def _find_table(wb, name: str):
@@ -71,9 +95,11 @@ def _find_table(wb, name: str):
         tables = getattr(ws, "tables", {})
         if name in tables:
             return ws, tables[name]
-        for tname, t in tables.items():
+        for tname in list(tables):
+            # index by name: TableList.items() yields ref STRINGS, not Table
+            # objects, so the old items() loop returned a str here
             if tname.lower() == name.lower():
-                return ws, t
+                return ws, tables[tname]
     raise TargetNotFound(
         f"no table named {name!r}; tables: "
         + (", ".join(repr(t) for w in wb.worksheets
@@ -137,6 +163,7 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
     ws = wb[grid.sheet]
     min_row, min_col, max_row, max_col = (
         grid.min_row, grid.min_col, grid.max_row, grid.max_col)
+    _check_no_table_overlap(ws, min_row, min_col, max_row, max_col)
     ncols = max_col - min_col + 1
 
     if header:

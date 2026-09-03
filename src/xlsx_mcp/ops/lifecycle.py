@@ -110,7 +110,12 @@ def get_workbook_metadata(path: str) -> dict:
                           "value": getattr(defn, "value", None)})
         tables = []
         for ws in wb.worksheets:
-            for tname, t in getattr(ws, "tables", {}).items():
+            tmap = getattr(ws, "tables", {})
+            for tname in list(tmap):
+                # index by name: TableList.items() yields ref STRINGS, not
+                # Table objects (a latent AttributeError the re-audit caught;
+                # this path crashed on any workbook containing a table)
+                t = tmap[tname]
                 tables.append({"name": tname, "sheet": ws.title, "ref": t.ref})
         rep = _hazard.scan_path(check_path(path, "scan workbook"))
         return {
