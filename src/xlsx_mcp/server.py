@@ -1,13 +1,15 @@
 """kitchensink4xl: the consolidated FastMCP surface.
 
-Phase 0 scaffold. The infrastructure is ported and wired (envelope, packs,
-the boundary wrapper, tiered-loading toggles, the KS4XL_MODE startup route);
-the domain engine (core/package, hazard, verify, locate, refs, calc and the
-ops/ families) is stubbed and lands in later phases. This module has ZERO
-domain tools yet: just the enable_tools/disable_tools toggles and a trivial
-get_server_info reader, so the server imports and lists cleanly.
+Phase 3b surface: the infrastructure (envelope, packs, boundary wrapper,
+tiered loading, the KS4XL_MODE startup route) plus the file-tier domain
+families over the core engine (core/package, hazard, verify, locate, refs,
+calc): lifecycle and discovery, cells and ranges with the token-shaped
+query_range, the grid view and batch layer, formatting, tables and names,
+conditional formatting and data validation, sort and filter, comments and
+hyperlinks, import and export. The COM application tier and the gated
+families (pivots, charts, Power Query) land in later phases.
 
-Contract (carried from the family, enforced as the engine lands):
+Contract (carried from the family):
 - Positional tools take the DESIGN Section 5 grid location object, resolved
   through core.locate (ambiguity is a loud refusal carrying every match).
 - The Section 7 envelope applies AT THE MCP BOUNDARY: the registered tool
@@ -54,16 +56,18 @@ mcp = FastMCP(
     "kitchensink4xl",
     instructions=(
         "Kitchen-sink Microsoft Excel (.xlsx) editor: cells and ranges, "
-        "formulas with an honest cached-value story, formatting and styles, "
-        "conditional formatting, data validation, tables and named ranges, "
-        "sort and filter, images and charts, pivots, Power Query, and the "
-        "Excel application tier (com_ tools). Positional tools take one "
-        "location object (cell | range | r1c1 | name | table | used_range | "
-        "region | search | anchor); ambiguous matches refuse loudly with "
+        "formulas with an honest cached-value story, server-side query and "
+        "aggregation, formatting and styles, conditional formatting, data "
+        "validation, tables and named ranges, sort and filter, comments and "
+        "hyperlinks, CSV/TSV/JSON import and export. Positional tools take "
+        "one location object (cell | range | r1c1 | name | table | "
+        "used_range | region | search; an optional sibling 'sheet' picks "
+        "the sheet, default active); ambiguous matches refuse loudly with "
         "every candidate. File-based with a round-trip hazard scan, "
-        "auto-backup before every mutation, and verify-after-write; "
-        "dual-mode tools route to Excel when the workbook is open. Sessions "
-        "start lite; enable_tools loads optional packs. Not affiliated with "
+        "auto-backup before every mutation, and verify-after-write; a "
+        "workbook open in Excel refuses rather than risking the open copy. "
+        "Sessions start lite; enable_tools loads optional packs (the Excel "
+        "COM application tier arrives as a later pack). Not affiliated with "
         "Microsoft Corporation."
     ),
 )
@@ -147,12 +151,11 @@ def get_server_info() -> dict:
     optional packs, and the host platform and Python. A read-only orient
     call that needs no workbook and touches no file; use it to confirm the
     server is reachable and to see which packs are currently loaded before
-    deciding whether to call enable_tools. The engine families and the COM
-    tier register in later build phases."""
+    deciding whether to call enable_tools."""
     return {
         "name": "kitchensink4xl",
         "version": __version__,
-        "phase": "0 (scaffold and infrastructure ports)",
+        "phase": "3b (file-tier families live; COM tier pending)",
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
@@ -175,10 +178,11 @@ def get_server_info() -> dict:
 def create_workbook(path: str, sheets: list[str] | None = None,
                     overwrite: bool = False) -> dict:
     """Create a new .xlsx workbook at path with the given sheet names (default a
-    single 'Sheet1'). Sheet names must be unique and at most 31 characters. An
-    existing file at path is left untouched unless overwrite is true, in which
-    case it is replaced. Returns the file path and the sheets created. This
-    writes a brand-new file, so there is no prior content to back up."""
+    single 'Sheet1'). Sheet names must be unique and at most 31 characters; the
+    parent directory must already exist. An existing file at path is left
+    untouched unless overwrite is true, in which case it is replaced. Returns
+    the file path and the sheets created. This writes a brand-new file, so
+    there is no prior content to back up."""
     return _lifecycle.create_workbook(path, sheets=sheets, overwrite=overwrite)
 
 
@@ -187,29 +191,39 @@ def copy_workbook(src: str, dst: str, overwrite: bool = False) -> dict:
     """Copy a workbook file byte-for-byte from src to dst, so nothing in the
     original is re-serialized or degraded (charts, shapes, macros, and queries
     all carry over intact). An existing dst is left untouched unless overwrite
-    is true. Returns the destination path. Use this to branch a working copy
-    before a risky batch of edits."""
+    is true; note overwrite replaces dst directly, with no backup slot and no
+    verify, so the destination's prior content is unrecoverable. Returns the
+    destination path. Use this to branch a working copy before a risky batch
+    of edits."""
     return _lifecycle.copy_workbook(src, dst, overwrite=overwrite)
 
 
 @_tool("lite")
 def get_workbook_metadata(path: str) -> dict:
     """Read a workbook's structure without opening it for edit: every sheet with
-    its visibility state, TRUE used range, dimensions, and merged-cell count,
-    plus defined names, tables, the active sheet, and a round-trip hazard
-    summary (whether an openpyxl edit would drop fragile parts). The
-    orient-before-editing call; read-only, touches no backup."""
+    its visibility state, TRUE used range (value-bearing bounds, not the often
+    wrong stored dimension), dimensions, and merged-cell count, plus defined
+    names, tables, the active sheet, and a round-trip hazard summary (whether
+    an openpyxl edit would drop fragile parts). The orient-before-editing
+    call. Read-only; works while the file is open in Excel."""
     return _lifecycle.get_workbook_metadata(path)
 
 
 @_tool("lite")
 def diagnose_workbook(path: str) -> dict:
     """The round-trip hazard scan surfaced as a health readout: which fragile
-    parts the workbook holds (slicers, shapes, Power Query, VBA, and the rest),
-    whether a file-based openpyxl edit would drop any of them, the routing
-    recommendation for a surgical versus a structural edit, and a light
-    integrity summary (sheet counts, formula-cell count, keep_vba). This is how
-    you check a workbook is safe to edit before mutating it; read-only."""
+    parts the workbook holds (slicers, shapes, embedded objects, Power Query,
+    VBA, and the rest), whether a file-based openpyxl edit would drop any of
+    them, the routing recommendation for a surgical versus a structural edit,
+    and a light integrity summary (sheet counts, formula-cell count, keep_vba).
+    This is how you check a workbook is safe to edit before mutating it.
+
+    What to do with the verdict: hazards never block reads; a would-lose
+    verdict means every mutating tool will refuse until the COM route exists
+    or you pass allow_loss:true (an explicit, backed-up acceptance of the
+    loss). A clean verdict means file-based edits are round-trip safe. Limit:
+    the scan sees PARTS, so features living inside surviving parts (x14
+    conditional formats, sparklines) are outside its sight. Read-only."""
     return _lifecycle.diagnose_workbook(path)
 
 
@@ -222,9 +236,16 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
     index), delete (sheet), rename (sheet, new_name), copy (sheet, optional
     new_name), reorder (sheet, index as 0-based target), hide (sheet, state
     'hidden' or 'very_hidden'), unhide (sheet). The workbook always keeps at
-    least one visible sheet, so deleting or hiding the last one refuses. A
-    hazardous workbook refuses unless allow_loss is true. One backup is taken
-    before the change and the result is verified after the save."""
+    least one VISIBLE sheet, so deleting or hiding the last visible one
+    refuses.
+
+    Consequence worth knowing: delete does NOT rewrite references, so formulas
+    and defined names that pointed at the deleted sheet break to #REF! when
+    Excel opens the file (Excel's own behavior); rename likewise does not
+    rewrite cross-sheet formula text. Audit references first when in doubt. A
+    hazardous workbook refuses unless allow_loss is true. Auto-backup:
+    prev/anchor slots in .ks4xl-backups (backup=false skips rotation); atomic
+    verified save, restored on failed verify. Refuses while open in Excel."""
     return _lifecycle.manage_worksheet(
         path, action, sheet=sheet, new_name=new_name, index=index,
         state=state, allow_loss=allow_loss, backup=backup)
@@ -236,9 +257,10 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
 @_tool("lite")
 def read_range(path: str, location: Any, values: str = "cached",
                sheet: str | None = None) -> dict:
-    """Read a cell or range addressed by a location object (cell, range, name,
-    table, used_range, region, or search). values controls the honest calc
-    story: 'cached' returns the last calculated values, 'formula' the formula
+    """Read a cell or range addressed by a location object (cell, range, r1c1,
+    name, table, used_range, region, or search; sheet picks the sheet when the
+    location does not, default active). values controls the honest calc story:
+    'cached' returns the last calculated values, 'formula' the formula
     strings, 'both' pairs each value with a label (cached, absent, formula,
     value). A formula cell with no cached value is labelled 'absent', never
     passed off as blank. Read-only; page large ranges with query_range."""
@@ -249,11 +271,12 @@ def read_range(path: str, location: Any, values: str = "cached",
 def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
              allow_loss: bool = False, backup: bool = True) -> dict:
     """Write a single cell addressed by a location object. A string beginning
-    with '=' is stored as a formula (normalized through the _xlfn shim so modern
-    functions do not land as #NAME?, and the workbook is flagged to recalculate
-    on open); anything else is a literal. A hazardous workbook refuses unless
-    allow_loss is true. One backup is taken before the write and the result is
-    verified after the save."""
+    with '=' is ALWAYS stored as a formula (there is no literal escape),
+    normalized so modern functions do not land as #NAME? and flagged to
+    recalculate on open; anything else is a literal. A hazardous workbook
+    refuses unless allow_loss is true. Auto-backup: prev/anchor slots in
+    .ks4xl-backups (backup=false skips rotation); atomic verified save,
+    restored on failed verify. Refuses while open in Excel."""
     return _cells.set_cell(path, location, value, sheet=sheet,
                            allow_loss=allow_loss, backup=backup)
 
@@ -263,10 +286,12 @@ def write_range(path: str, location: Any, data: list[list[Any]],
                 sheet: str | None = None, allow_loss: bool = False,
                 backup: bool = True) -> dict:
     """Write a 2D block of values and formulas anchored at the location's
-    top-left cell. data is a list of row lists; formula strings ('=...') are
-    normalized and flag recalculation. The block must stay within the grid
-    limits. A hazardous workbook refuses unless allow_loss is true. One backup
-    is taken before the write and the result is verified after the save."""
+    top-left cell. data is a list of row lists; a short row writes only its
+    own cells (existing content beyond it is kept, never blanked); formula
+    strings ('=...') are normalized and flag recalculation. The block must
+    stay within the grid limits and the 200,000-cell write ceiling. A
+    hazardous workbook refuses unless allow_loss is true. Auto-backup to
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _cells.write_range(path, location, data, sheet=sheet,
                               allow_loss=allow_loss, backup=backup)
 
@@ -276,9 +301,12 @@ def clear_range(path: str, location: Any, what: str = "contents",
                 sheet: str | None = None, allow_loss: bool = False,
                 backup: bool = True) -> dict:
     """Clear a cell or range: what='contents' removes values and formulas,
-    'formats' resets styles to default, 'all' does both. Addressed by a location
-    object. A hazardous workbook refuses unless allow_loss is true. One backup
-    is taken before the change and the result is verified after the save."""
+    'formats' resets styles to default, 'all' does both. Neither removes
+    merges, conditional formats, validations, comments, or hyperlinks; those
+    have their own manage tools. Addressed by a location object. A hazardous
+    workbook refuses unless allow_loss is true. Auto-backup: prev/anchor slots
+    in .ks4xl-backups (backup=false skips rotation); atomic verified save,
+    restored on failed verify. Refuses while open in Excel."""
     return _cells.clear_range(path, location, what=what, sheet=sheet,
                               allow_loss=allow_loss, backup=backup)
 
@@ -287,13 +315,14 @@ def clear_range(path: str, location: Any, what: str = "contents",
 def copy_range(path: str, source: Any, dest: Any, what: str = "all",
                adjust_formulas: bool = True, sheet: str | None = None,
                allow_loss: bool = False, backup: bool = True) -> dict:
-    """Copy a source rectangle to a destination anchor (source and dest are
-    location objects, which may name different sheets). what is 'all', 'values',
-    'formulas', or 'formats'. Relative references in copied formulas shift by the
+    """Copy a source rectangle to a destination anchor (location objects, may
+    name different sheets). what is 'all', 'values', 'formulas', or 'formats'.
+    The destination is overwritten; the source is buffered first, so an
+    overlapping paste is safe. Relative refs in copied formulas shift by the
     paste offset like an Excel copy unless adjust_formulas is false; absolute
     ($) anchors stay put. A hazardous workbook refuses unless allow_loss is
-    true. One backup is taken before the write and the result is verified after
-    the save."""
+    true. Auto-backup to .ks4xl-backups; atomic verified save. Refuses while
+    open in Excel."""
     return _cells.copy_range(path, source, dest, what=what,
                              adjust_formulas=adjust_formulas, sheet=sheet,
                              allow_loss=allow_loss, backup=backup)
@@ -305,9 +334,10 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
     """Move a rectangle to a new anchor on the same sheet, rewriting every
     formula, name, conditional format, validation, table ref, and merge that
     pointed into the source so references follow the cells (Excel move
-    semantics), via the reference-rewrite engine. A hazardous workbook refuses
-    unless allow_loss is true. One backup is taken before the write and the
-    result is verified after the save."""
+    semantics). A cross-sheet destination refuses (copy_range then clear_range
+    instead); cells at the destination are overwritten. A hazardous workbook
+    refuses unless allow_loss is true. Auto-backup to .ks4xl-backups; atomic
+    verified save. Refuses while open in Excel."""
     return _cells.move_range(path, source, dest, sheet=sheet,
                              allow_loss=allow_loss, backup=backup)
 
@@ -327,12 +357,21 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     row names the columns (referenced by name; otherwise by A1 letter). where is
     a list of {column, op, value} predicates joined by match ('all' or 'any');
     ops: eq, ne, gt, ge, lt, le, contains, startswith, endswith, regex, in,
-    not_in, is_blank, not_blank. columns projects a subset; order_by sorts;
-    offset and limit page; distinct dedupes. aggregate is a list of
-    {column, func} (count, count_nonblank, count_distinct, sum, avg, min, max,
-    first, last), optionally per group_by, returning group summaries instead of
-    rows. Rows come back as compact arrays, or objects when records=true, with
-    matched, returned, and scanned counts. Read-only."""
+    not_in, is_blank, not_blank. columns projects a subset; order_by sorts (on
+    any source column, projected or not); offset and limit page; distinct
+    dedupes. aggregate is a list of {column, func} (count, count_nonblank,
+    count_distinct, sum, avg, min, max, first, last), optionally per group_by,
+    returning group summaries instead of rows. Rows come back as compact
+    arrays, or objects when records=true, with matched, returned, and scanned
+    counts.
+
+    Semantics worth knowing: predicates evaluate CACHED and literal values, so
+    a formula cell that was never calculated reads as blank here (run a recalc
+    or open in Excel first for exact results); gt/ge/lt/le compare numerically
+    when both sides coerce, as case-folded text otherwise, and a blank cell
+    never satisfies an ordered comparison; regex is an unanchored search
+    (anchor with ^ and $), guarded by a timeout; contains/startswith/endswith
+    are case-insensitive. Read-only; nothing is written."""
     return _cells.query_range(
         path, location=location, sheet=sheet, header=header, columns=columns,
         where=where, match=match, order_by=order_by, aggregate=aggregate,
@@ -354,11 +393,13 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
     dump.
 
     location defaults to the sheet's used range. values='cached' shows last
-    calculated values with formula cells marked (a florin sign where a formula
-    has no cached value); 'formula' shows the formula strings. The view
-    paginates with max_rows and max_cols and reports truncated flags so the
-    caller knows when to page. formula_cells maps addresses to their formula
-    strings. Read-only; pair it with apply_edits to edit what you see."""
+    calculated values with formula cells marked (the florin character U+0192
+    marks a formula with no cached value); 'formula' shows the formula
+    strings. The view paginates with max_rows and max_cols (caps 200 and 100)
+    and reports truncated flags so the caller knows when to page.
+    formula_cells maps addresses to their formula strings; merged ranges
+    intersecting the view are listed. Read-only; works while the file is open
+    in Excel. Pair it with apply_edits to edit what you see."""
     return _view.get_grid_view(path, location=location, sheet=sheet,
                                max_rows=max_rows, max_cols=max_cols,
                                values=values)
@@ -374,11 +415,14 @@ def apply_edits(path: str, edits: list, allow_loss: bool = False,
 
     Every location is resolved and every op validated BEFORE anything is
     written, so a single bad edit refuses the whole batch and the file stays
-    byte-for-byte unchanged. The batch then takes ONE backup, does ONE save, and
-    runs ONE verify-after-write, which restores from the backup if the produced
-    file fails to read back as intended. Formula edits are normalized and flag
-    recalculation. A hazardous workbook refuses unless allow_loss is true.
-    Returns the count of edits applied and cells touched."""
+    byte-for-byte unchanged. The batch then takes ONE backup (prev/anchor
+    slots in .ks4xl-backups), does ONE atomic save, and runs ONE
+    verify-after-write, which restores from the backup if the produced file
+    fails to read back as intended. Formula edits are normalized and flag
+    recalculation; each write_range op honors the 200,000-cell ceiling. A
+    hazardous workbook refuses unless allow_loss is true; refuses while the
+    file is open in Excel. Returns the count of edits applied and cells
+    touched."""
     return _view.apply_edits(path, edits, allow_loss=allow_loss, backup=backup)
 
 
@@ -392,13 +436,13 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
                  sheet: str | None = None, allow_loss: bool = False,
                  backup: bool = True) -> dict:
     """Apply formatting to a range, merging onto the existing style so
-    unspecified attributes are preserved. number_format is an Excel format code;
-    font is {name, size, bold, italic, underline, strike, color}; fill is
-    {color} or {pattern, fg, bg}; border is {style, color, sides}; alignment is
-    {horizontal, vertical, wrap_text, text_rotation, indent}. Colors are hex;
-    styles are deduplicated automatically. A hazardous workbook refuses unless
-    allow_loss is true. One backup is taken and the write is verified after
-    the save."""
+    unspecified attributes are preserved. number_format is an Excel format
+    code; font is {name, size, bold, italic, underline, strike, color}; fill
+    is {color} or {pattern, fg, bg}; border is {style, color, sides};
+    alignment is {horizontal, vertical, wrap_text, text_rotation, indent}.
+    Colors are hex. A hazardous workbook refuses unless allow_loss is true.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
     return _format.format_cells(
         path, location, number_format=number_format, font=font, fill=fill,
         border=border, alignment=alignment, sheet=sheet,
@@ -414,12 +458,12 @@ def set_dimensions(path: str, sheet: str | None = None,
                    hide_rows: list | None = None,
                    allow_loss: bool = False, backup: bool = True) -> dict:
     """Set column widths and row heights, hide rows or columns, and service an
-    autofit request. column_widths maps column letters or indices to widths;
-    row_heights maps row numbers to heights; autofit_columns lists columns to
-    size to their content as a best-effort APPROXIMATION (true autofit needs
-    Excel via the com pack); hide_columns and hide_rows hide them. A hazardous
-    workbook refuses unless allow_loss is true. One backup is taken before the
-    write and the result is verified after the save."""
+    autofit request. column_widths maps column letters or indices to widths in
+    Excel character units; row_heights maps row numbers to heights in points;
+    autofit_columns sizes columns to content as a best-effort APPROXIMATION
+    (true autofit needs Excel via the com pack). A hazardous workbook refuses
+    unless allow_loss is true. Auto-backup to .ks4xl-backups; atomic verified
+    save. Refuses while open in Excel."""
     return _format.set_dimensions(
         path, sheet=sheet, column_widths=column_widths, row_heights=row_heights,
         autofit_columns=autofit_columns, hide_columns=hide_columns,
@@ -446,11 +490,12 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
                  allow_loss: bool = False, backup: bool = True) -> dict:
     """Turn a range into an Excel table (ListObject) named name. With header
     true the first row supplies the column names (deduplicated); style is a
-    built-in table style; row_stripes and col_stripes toggle banding. totals_row
-    adds a totals row, and totals maps column names to a function (sum, average,
-    count, min, max, and the rest). A hazardous workbook refuses unless
-    allow_loss is true. One backup is taken before the write and the result is
-    verified after the save."""
+    built-in style; row_stripes and col_stripes toggle banding. totals maps
+    columns to a function (sum, average, count, min, max...). Refuses an
+    overlap with an existing table, and a name already taken by a table or
+    defined name. Hazardous workbooks refuse unless allow_loss is true.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
     return _tables.create_table(
         path, location, name, header=header, style=style,
         row_stripes=row_stripes, col_stripes=col_stripes,
@@ -461,12 +506,13 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
 @_tool("lite")
 def get_table(path: str, name: str, columns: list | None = None,
               values: str = "cached", records: bool = False) -> dict:
-    """Read a table's data by its name. columns projects a subset of the table
-    columns; values controls the honest calc story (cached returns last
-    calculated values, formula the formula strings, both pairs them); records
-    true returns row objects keyed by column name instead of arrays. Returns the
-    table ref, the column names, and the data rows without the header or totals
-    row. Read-only; nothing is written."""
+    """Read a table's data by its name (case-insensitive). columns projects a
+    subset of the table columns; values controls the honest calc story (cached
+    returns last calculated values, formula the formula strings, both pairs
+    them); records true returns row objects keyed by column name. Returns the
+    table ref, the column names, and the data rows without the header or
+    totals row; a large table returns everything, so filter or page big ones
+    with query_range and a {table} location. Read-only; nothing is written."""
     return _tables.get_table(path, name, columns=columns, values=values,
                              records=records)
 
@@ -481,15 +527,17 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
                  allow_loss: bool = False, backup: bool = True) -> dict:
     """Advanced table lifecycle on the table named name. action is one of:
     add_row (values as a row or list of rows), delete_row (index, 1-based data
-    row), add_column (column name, optional values), delete_column (column),
-    rename (new_name), resize (new_ref, keeping the top-left anchor),
-    toggle_totals (on, optional per-column totals functions), to_range (drop the
-    table, keep the data), set_style (style, row_stripes, col_stripes). Row and
-    column inserts and deletes rewrite every reference through the core engine so
-    formulas, names, and merges stay coherent, and the table ref is reset to its
-    intended bounds. A hazardous workbook refuses unless allow_loss is true. One
-    backup is taken before the change and the result is verified after the
-    save."""
+    row; REMOVES that row's data), add_column (column name, optional values),
+    delete_column (column; REMOVES that column's data), rename (new_name),
+    resize (new_ref, keeping the top-left anchor), toggle_totals (on, optional
+    per-column totals functions), to_range (drop the table shell, keep the
+    data), set_style (style, row_stripes, col_stripes). Row and column inserts
+    and deletes rewrite every reference through the core engine so formulas,
+    names, and merges stay coherent, and the table ref is reset to its
+    intended bounds. A hazardous workbook refuses unless allow_loss is true.
+    Auto-backup: prev/anchor slots in .ks4xl-backups (backup=false skips
+    rotation); atomic verified save, restored on failed verify; the prev slot
+    is the undo for the destructive actions. Refuses while open in Excel."""
     return _tables.manage_table(
         path, name, action, values=values, index=index, column=column,
         new_name=new_name, new_ref=new_ref, style=style, on=on, totals=totals,
@@ -506,15 +554,17 @@ def manage_name(path: str, action: str, name: str | None = None,
                 new_name: str | None = None, allow_loss: bool = False,
                 backup: bool = True) -> dict:
     """Manage defined names (named ranges). action is one of: add (name,
-    refers_to as an A1 reference or a formula, scope 'workbook' or a sheet
-    title), delete (name, optional scope), rename (name, new_name), update
-    (name, refers_to), list (every name with its scope and refers-to). A
-    sheet-scoped name can shadow a workbook-scoped one, so an action on an
-    ambiguous name refuses and returns both scopes until you pass scope. The
-    reserved print-area, print-title, and filter built-ins are protected from
-    delete and rename. A hazardous workbook refuses unless allow_loss is true.
-    One backup is taken before the change and the result is verified after the
-    save."""
+    refers_to as an A1 reference or a formula; a convenience leading '=' is
+    stripped, definitions are stored bare), delete (name, optional scope),
+    rename (name, new_name), update (name, refers_to), list (every name with
+    its scope and refers-to; read-only, no backup). Names live at 'workbook'
+    scope or a sheet-title scope, and a sheet-scoped name can shadow a
+    workbook-scoped one, so an action on an ambiguous name refuses and returns
+    both scopes until you pass scope. The reserved print-area, print-title,
+    and filter built-ins (_xlnm.*) are protected from delete and rename. For
+    the mutating actions: a hazardous workbook refuses unless allow_loss is
+    true; auto-backup to prev/anchor slots in .ks4xl-backups (backup=false
+    skips rotation); atomic verified save. Refuses while open in Excel."""
     return _names.manage_name(
         path, action, name=name, refers_to=refers_to, scope=scope,
         new_name=new_name, allow_loss=allow_loss, backup=backup)
@@ -531,15 +581,18 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
                               index: int | None = None,
                               allow_loss: bool = False,
                               backup: bool = True) -> dict:
-    """Manage conditional-formatting rules. action is add, list, or delete.
-    For add, location is the range and cf_type is one of cell_is, color_scale,
-    data_bar, icon_set, formula, or top_bottom, with params carrying the rule
-    settings (operator and formula, colors, fill, icon_style, rank). For delete,
-    location names the rule's range and an optional index picks one rule of
-    several. The file stores the rule declaratively; Excel evaluates it and
-    paints the cells on open, like the calc story. A hazardous workbook refuses
-    unless allow_loss is true. One backup is taken before the change and the
-    result is verified after the save."""
+    """Manage conditional-formatting rules. action is add, list (read-only), or
+    delete. For add, location is the range and cf_type picks the rule with its
+    params: cell_is {operator, formula (a value or [lo, hi]), fill,
+    font_color}; formula {formula, fill}; color_scale {colors: 2 or 3 hex
+    stops}; data_bar {color, show_value}; icon_set {icon_style, values,
+    show_value, reverse}; top_bottom {rank, percent, bottom, fill}. For
+    delete, location must EXACTLY match the rule's stored range (or one member
+    of it) and an optional index picks one rule of several. The file stores
+    the rule declaratively; Excel evaluates it and paints the cells on open,
+    like the calc story. For the mutating actions: a hazardous workbook
+    refuses unless allow_loss is true; auto-backup to prev/anchor slots in
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _condformat.manage_conditional_format(
         path, action, location=location, cf_type=cf_type, params=params,
         sheet=sheet, index=index, allow_loss=allow_loss, backup=backup)
@@ -557,14 +610,18 @@ def manage_data_validation(path: str, action: str, location: Any = None,
                            error: str | None = None, sheet: str | None = None,
                            allow_loss: bool = False,
                            backup: bool = True) -> dict:
-    """Manage data-validation rules. action is add, list, or delete. For add,
-    location is the range and dv_type is one of list, whole, decimal, date,
-    time, textLength, or custom. A list takes values (inline items or a range or
-    formula); the numeric and date types take operator plus formula1 and
-    formula2 bounds; custom takes formula1. prompt and error set the input and
-    error messages. The file stores the rule; Excel enforces it on entry. A
-    hazardous workbook refuses unless allow_loss is true. One backup is taken
-    before the change and the result is verified after the save."""
+    """Manage data-validation rules. action is add, list (read-only), or
+    delete. For add, location is the range and dv_type is one of list, whole,
+    decimal, date, time, textLength, or custom. A list takes values (inline
+    items, or a range/formula; inline lists over 255 characters draw a
+    warning, point long lists at a range); the numeric and date types take
+    operator plus formula1 and formula2 bounds; custom takes formula1.
+    allow_blank (default true) lets empty entries pass; prompt and error set
+    the input and error messages. Delete matches the rule's stored range
+    exactly. The file stores the rule; Excel enforces it on entry. For the
+    mutating actions: a hazardous workbook refuses unless allow_loss is true;
+    auto-backup to prev/anchor slots in .ks4xl-backups; atomic verified save.
+    Refuses while open in Excel."""
     return _datavalidation.manage_data_validation(
         path, action, location=location, dv_type=dv_type, values=values,
         operator=operator, formula1=formula1, formula2=formula2,
@@ -580,13 +637,13 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                sheet: str | None = None, allow_loss: bool = False,
                backup: bool = True) -> dict:
     """Sort a range or table body by one or more keys, writing the reordered
-    rows back. keys is a list of {column, order}, where column is a header name,
-    a column letter, or a 1-based index and order is asc or desc; later keys
-    break ties. With has_header true the first row stays put. A moved formula
-    has its relative references shifted by its row displacement (Excel sort
-    semantics). A hazardous workbook refuses unless allow_loss is true. One
-    backup is taken before the write and the result is verified after the
-    save."""
+    rows back. keys is a list of {column, order}: a header name, letter, or
+    1-based index; order asc or desc; later keys break ties. has_header true
+    keeps the first row put. Moved formulas shift relative refs by their row
+    displacement (Excel semantics); keys compare cached values, warning on
+    uncalculated formulas. Hazardous workbooks refuse unless allow_loss is
+    true. Auto-backup to .ks4xl-backups (prev slot is the undo); atomic
+    verified save. Refuses while open in Excel."""
     return _sortfilter.sort_range(
         path, location, keys, has_header=has_header, sheet=sheet,
         allow_loss=allow_loss, backup=backup)
@@ -597,12 +654,13 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
                sheet: str | None = None, allow_loss: bool = False,
                backup: bool = True) -> dict:
     """Apply an autofilter over a range whose first row is the header, and
-    actually hide the rows that do not match. An .xlsx stores filter criteria,
-    not which rows are hidden, so this evaluates criteria (a list of {column,
-    op, value}, combined as AND) over the current cached and literal values,
-    sets the row hidden flags, and records the autofilter range for Excel. A
-    hazardous workbook refuses unless allow_loss is true. One backup is taken
-    before the write and the result is verified after the save."""
+    actually hide the non-matching rows: an .xlsx stores filter CRITERIA, not
+    hidden state, so criteria (a list of {column, op, value}, ops as in
+    query_range, combined as AND) are evaluated here over cached and literal
+    values; a row whose tested cell holds an uncalculated formula stays
+    visible with a warning. A hazardous workbook refuses unless allow_loss is
+    true. Auto-backup to .ks4xl-backups; atomic verified save. Refuses while
+    open in Excel."""
     return _sortfilter.set_filter(
         path, location, criteria=criteria, sheet=sheet, allow_loss=allow_loss,
         backup=backup)
@@ -612,10 +670,12 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
 def clear_filter(path: str, location: Any = None, sheet: str | None = None,
                  allow_loss: bool = False, backup: bool = True) -> dict:
     """Remove the autofilter from a sheet and unhide the rows it hid, the
-    reverse of set_filter. location or sheet picks the sheet; the sheet's active
-    autofilter range is used when location is omitted. Returns how many rows were
-    unhidden. A hazardous workbook refuses unless allow_loss is true. One backup
-    is taken before the change and the result is verified after the save."""
+    reverse of set_filter. location or sheet picks the sheet; the sheet's
+    active autofilter range is used when location is omitted. A sheet with no
+    autofilter refuses (NOT_FOUND) rather than silently no-opping. Returns how
+    many rows were unhidden. A hazardous workbook refuses unless allow_loss is
+    true. Auto-backup: prev/anchor slots in .ks4xl-backups; atomic verified
+    save. Refuses while open in Excel."""
     return _sortfilter.clear_filter(
         path, location=location, sheet=sheet, allow_loss=allow_loss,
         backup=backup)
@@ -631,12 +691,14 @@ def manage_comment(path: str, action: str, location: Any = None,
                    backup: bool = True) -> dict:
     """Manage legacy cell comments (the sticky notes). action is add (location,
     text, optional author), edit (location, new text or author), delete
-    (location), or list (every comment with its cell, text, and author). This
-    writes legacy notes, which round-trip cleanly through a file-based save;
-    threaded reply-and-resolve comments are a separate part openpyxl does not
-    model, so they are handled by the safety core rather than authored here. A
-    hazardous workbook refuses unless allow_loss is true. One backup is taken
-    before the change and the result is verified after the save."""
+    (location), or list (read-only; every comment with its cell, text, and
+    author). This writes legacy notes, which round-trip cleanly through a
+    file-based save. Threaded reply-and-resolve comments are a different part
+    this tool can neither read nor write: the hazard scan flags them and the
+    mutation gate refuses rather than dropping them, but reply/resolve waits
+    for the COM tier. For the mutating actions: a hazardous workbook refuses
+    unless allow_loss is true; auto-backup to prev/anchor slots in
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _annotations.manage_comment(
         path, action, location=location, text=text, author=author,
         sheet=sheet, allow_loss=allow_loss, backup=backup)
@@ -648,11 +710,14 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
                      tooltip: str | None = None, sheet: str | None = None,
                      allow_loss: bool = False, backup: bool = True) -> dict:
     """Manage cell hyperlinks. action is add (location, target as a URL or an
-    in-workbook 'Sheet!A1' reference, optional display text and tooltip), remove
-    (location), or list. On list it surfaces both real cell hyperlinks and
-    HYPERLINK() formula links so an audit sees every kind. A hazardous workbook
-    refuses unless allow_loss is true. One backup is taken before the change and
-    the result is verified after the save."""
+    in-workbook 'Sheet!A1' reference, optional display text and tooltip),
+    remove (location), or list (read-only). On add, display replaces the
+    cell's value; with no display an empty cell shows the target. remove
+    strips only the link: the cell's text and style stay. On list it surfaces
+    both real cell hyperlinks and HYPERLINK() formula links so an audit sees
+    every kind. For the mutating actions: a hazardous workbook refuses unless
+    allow_loss is true; auto-backup to prev/anchor slots in .ks4xl-backups;
+    atomic verified save. Refuses while open in Excel."""
     return _annotations.manage_hyperlink(
         path, action, location=location, target=target, display=display,
         tooltip=tooltip, sheet=sheet, allow_loss=allow_loss, backup=backup)
@@ -669,12 +734,13 @@ def import_data(path: str, source: str | None = None,
                 encoding: str = "utf-8", formulas: bool = False,
                 allow_loss: bool = False, backup: bool = True) -> dict:
     """Import CSV, TSV, or JSON into a sheet at an anchor. Pass source (inline
-    text) or source_file (a path); fmt auto-detects from the extension. location
-    is the top-left anchor (default A1). A cell whose text begins with =, +, -,
-    or @ is written as TEXT to block formula injection unless formulas is true.
-    An import past the write ceiling refuses rather than dropping rows. A
-    hazardous workbook refuses unless allow_loss is true. One backup is taken
-    before the write and the result is verified after the save."""
+    text) or source_file (a path); fmt auto-detects from the extension.
+    location is the top-left anchor (default A1). A cell whose text begins
+    with =, +, -, or @ is written as TEXT to block formula injection unless
+    formulas is true. An import past the 200,000-cell write ceiling refuses
+    rather than dropping rows. A hazardous workbook refuses unless allow_loss
+    is true. Auto-backup to .ks4xl-backups; atomic verified save. Refuses
+    while open in Excel."""
     return _dataio.import_data(
         path, source=source, source_file=source_file, fmt=fmt,
         location=location, sheet=sheet, header=header, delimiter=delimiter,
@@ -690,9 +756,9 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
     to the sheet's true used range; a {table} selector exports a table. values
     controls the calc story (cached, formula, or both), and the result states
     which mode produced the output so a formula with no cached value is never
-    passed off as blank. out_file writes the text to a sandboxed path; otherwise
-    the text is returned inline. Read-only; nothing in the workbook is
-    changed."""
+    passed off as blank. out_file writes the text to a sandboxed path,
+    silently replacing an existing file there; otherwise the text is returned
+    inline. Read-only; nothing in the workbook is changed."""
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
         values=values, records=records, out_file=out_file)
@@ -759,7 +825,8 @@ enable_tools.__doc__ = (
     "Enable optional tool packs mid-session (sessions start lite). "
     "Idempotent; result reports packs enabled, approx tokens added, and the "
     "new total surface. packs = any combination below or ['everything']; "
-    "disable_tools reverses it. Packs:\n" + _MENU_LINES
+    "disable_tools reverses it. Refuses when the host pins the surface with "
+    "KS4XL_PACK_POLICY=locked. Packs:\n" + _MENU_LINES
 )
 
 disable_tools.__doc__ = (
@@ -767,7 +834,10 @@ disable_tools.__doc__ = (
     "their context; the lite core always stays on. Idempotent. The result "
     "reports the packs just disabled, the approximate tokens removed, and "
     "the remaining surface. packs takes the same names as enable_tools (its "
-    "description carries the menu) or ['everything']."
+    "description carries the menu) or ['everything']. Calling a tool from a "
+    "disabled pack does not dead-end: the refusal names the owning pack and "
+    "the exact enable_tools call to turn it back on. Refuses when the host "
+    "pins the surface with KS4XL_PACK_POLICY=locked."
 )
 
 enable_tools = _tool("lite")(enable_tools)
