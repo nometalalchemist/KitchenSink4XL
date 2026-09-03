@@ -43,22 +43,22 @@ PACK_SUMMARIES: dict[str, str] = {
         "validation"
     ),
     "objects": (
-        "images and charts: insert/replace/export images, create and edit "
-        "charts, sparklines; honest about which engine preserves what on "
-        "round-trip"
+        "images and basic charts: insert/list/delete/extract images, "
+        "create/delete charts; chart fidelity is model-mediated, "
+        "sparklines are COM-tier"
     ),
     "tables-names": (
         "advanced table lifecycle (columns, rows, totals, resize, banding) "
         "and named ranges (define, scope, LAMBDA/named-formula, cleanup)"
     ),
     "io": (
-        "page layout and print, headers/footers, sheet and workbook "
-        "protection, comments (legacy notes and threaded), external-link "
-        "audit, read-only VBA inspection"
+        "page layout and print, headers/footers, advisory protection, "
+        "legacy comments, multi-sheet export, external-link audit, "
+        "read-only VBA inspection"
     ),
     "data": (
-        "pivots (file read/describe), Power Query (list, extract M, refresh "
-        "via COM), and data-connection inspection"
+        "pivots (file read/describe), data connections, and Power Query "
+        "presence; read-only, refresh and creation are COM-tier"
     ),
     "com": (
         "drives the Excel application (Windows + Excel required): real "
