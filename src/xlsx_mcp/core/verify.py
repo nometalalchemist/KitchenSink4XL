@@ -235,10 +235,21 @@ def structural_check(path: str) -> tuple[bool, list[str]]:
     return (not reasons), reasons
 
 
-def part_loss_check(pre_parts, path: str, *,
-                    allow_loss: bool) -> tuple[bool, list[str]]:
+def part_loss_check(pre_parts, path: str, *, allow_loss: bool,
+                    expected_removals: Iterable[str] = (),
+                    ) -> tuple[bool, list[str]]:
     """Diff the produced part list against the pre-write scan. A fragile part
-    that vanished unexpectedly (and was not allow_loss-covered) fails."""
+    that vanished unexpectedly (and was not allow_loss-covered) fails.
+
+    expected_removals extends excuse (d) of the module contract to FRAGILE
+    parts: an op that deliberately removes an object at the model level
+    (manage_chart delete drops its xl/charts/ part and anchor drawing;
+    manage_image delete drops xl/media/ and its drawing) registers the
+    removal via WorkbookPackage.expect_removal, and the registered prefixes
+    excuse exactly those losses here. Without this, a deliberate chart or
+    image delete could never pass verify (OBSERVED: removing a model chart
+    drops xl/charts/chart1.xml plus xl/drawings/drawing1.xml on save).
+    Anything not covered by a registered prefix still fails by default."""
     try:
         with zipfile.ZipFile(path) as zf:
             post = set(zf.namelist())
@@ -246,10 +257,14 @@ def part_loss_check(pre_parts, path: str, *,
         return False, ["could not list produced package parts"]
     pre = set(pre_parts)
     lost = pre - post
+    exp = tuple(e.lower() for e in expected_removals)
     fragile_lost: list[str] = []
     for name in sorted(lost):
-        if name.lower() in EXPECTED_DROPPABLE:
+        low = name.lower()
+        if low in EXPECTED_DROPPABLE:
             continue
+        if any(low.startswith(e) for e in exp):
+            continue  # a registered deliberate removal (excuse d)
         for spec in _hazard.HAZARD_SPECS:
             if spec.matcher(name):
                 fragile_lost.append(name)
@@ -430,7 +445,8 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
         result.reasons.extend(reasons)
         return result  # a structurally broken file is fatal; stop here
 
-    ok, lost = part_loss_check(pre_parts, path, allow_loss=allow_loss)
+    ok, lost = part_loss_check(pre_parts, path, allow_loss=allow_loss,
+                               expected_removals=expected_removals)
     if not ok:
         result.ok = False
         result.lost_parts = lost

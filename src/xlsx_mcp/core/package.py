@@ -78,6 +78,7 @@ class WorkbookPackage:
         self._structural: list[_refs.RefEdit] = []
         self._changed: dict[str, Any] = {}
         self._expected_removals: set[str] = set()
+        self._expected_preserved: set[str] = set()
 
     # ------------------------------------------------------------- open
 
@@ -192,6 +193,21 @@ class WorkbookPackage:
         diff."""
         self._expected_removals.update(p.lower() for p in prefixes)
 
+    def expect_preserved(self, *hazard_keys: str) -> None:
+        """Register hazard KEYS (core.hazard spec keys, e.g. 'media') whose
+        SEV_DROPS gate refusal this op downgrades to a warning, because the
+        op's own save path has been OBSERVED to preserve those parts and the
+        default-fail part checks in verify-after-write still refuse the save
+        if they are in fact lost. The sanctioned user: ops/objects.py
+        manage_image, whose Pillow-backed load round-trips picture drawings
+        and xl/media/ intact (observed on this machine for Excel-authored
+        and openpyxl-authored images alike; the op verifies the picture-only
+        precondition before registering). This NEVER weakens verification:
+        part_loss_check runs with allow_loss=False for these keys, so an
+        actual loss still fails the write and the original stays untouched.
+        Scoped to the next successful save; cleared with pending state."""
+        self._expected_preserved.update(k.lower() for k in hazard_keys)
+
     # ------------------------------------------------------------- save
 
     def _lockfile_present(self) -> bool:
@@ -220,6 +236,19 @@ class WorkbookPackage:
         if conditional and not self._keep_vba:
             drop_keys.extend(h.key for h in conditional)
             conditional = []
+
+        # Keys the op registered via expect_preserved: the gate downgrades
+        # them to a warning because the op's save path preserves them and
+        # verify-after-write still hard-fails if they are actually lost.
+        preserved = [k for k in drop_keys if k in self._expected_preserved]
+        if preserved:
+            drop_keys = [k for k in drop_keys if k not in preserved]
+            labels = [next(h.label for h in rep.hazards if h.key == k)
+                      for k in preserved]
+            warnings.append(
+                ", ".join(labels) + " are expected to survive this "
+                "operation's save path (observed round-trip); "
+                "verify-after-write refuses the save if they are lost")
 
         if drop_keys and not allow_loss:
             labels = [next(h.label for h in rep.hazards if h.key == k)
@@ -349,6 +378,7 @@ class WorkbookPackage:
             self._structural = []
             self._changed = {}
             self._expected_removals = set()
+            self._expected_preserved = set()
             return {
                 "ok": True,
                 "file": path,
