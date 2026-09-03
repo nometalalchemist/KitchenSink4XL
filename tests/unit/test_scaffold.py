@@ -55,11 +55,12 @@ def test_all_tools_are_packed():
     assert listed <= packed, f"unpacked tools: {sorted(listed - packed)}"
     lite = set(packs.tool_names()["lite"])
     assert (BASE_LITE | PHASE_3A_LITE) <= lite
-    # Phase 3b populates format, tables-names, and io; objects/data/com are
-    # still empty (their families land in later waves).
+    # Phase 3b/3c populate format, tables-names, and io; objects/data/com
+    # are still empty (their families land in later waves).
     members = packs.tool_names()
     assert set(members.get("format", [])) == {
-        "manage_conditional_format", "manage_data_validation"}
+        "manage_conditional_format", "manage_data_validation",
+        "apply_style", "copy_format", "audit_styles"}
     assert set(members.get("tables-names", [])) == {"manage_table", "manage_name"}
     assert set(members.get("io", [])) == {"manage_comment"}
     for pack in ("objects", "data", "com"):
@@ -68,6 +69,10 @@ def test_all_tools_are_packed():
     for name in ("create_table", "get_table", "sort_range", "set_filter",
                  "clear_filter", "manage_hyperlink", "import_data",
                  "export_range"):
+        assert name in lite
+    # Phase 3c lite additions.
+    for name in ("modify_grid_structure", "set_merge", "find_cells",
+                 "replace_cells", "get_cells", "set_cells"):
         assert name in lite
 
 

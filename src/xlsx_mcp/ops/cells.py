@@ -12,6 +12,13 @@ query_range is the context-safety answer (DESIGN 1.5, demand D1): rather than
 pull a whole sheet into the agent's context, it filters rows, projects a column
 subset, sorts, paginates, and aggregates SERVER-SIDE, returning only the slice
 or summary the caller asked for.
+
+Phase 3c additions: get_cells / set_cells, the SCATTER pair complementing the
+rectangular read_range / write_range (many individually addressed cells in one
+call, one save, one verify), and set_merge (merge / unmerge / list with the
+Excel semantics: merge keeps the top-left value, and absorbing cells that hold
+values refuses without an explicit confirm flag rather than discarding data
+silently).
 """
 
 from __future__ import annotations
@@ -20,12 +27,17 @@ from copy import copy as _copy
 from typing import Any
 
 from ..core import refs as _refs
-from ..core.errors import RangeOutOfBounds, XlMcpError
+from ..core.errors import RangeOutOfBounds, TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 from . import gridio
 
 CLEAR_WHAT = ("contents", "formats", "all")
 COPY_WHAT = ("all", "values", "formulas", "formats")
+MERGE_ACTIONS = ("merge", "unmerge", "list")
+
+#: A single scatter call over more cells than this refuses and asks for
+#: read_range / write_range / apply_edits, which are shaped for bulk.
+MAX_SCATTER_CELLS = 1_000
 
 
 # ------------------------------------------------------------------- reads
@@ -568,8 +580,211 @@ def _sort_key(v):
     return (1, str(v))
 
 
+# ------------------------------------------------------- scatter read / write
+
+
+def _single_cell_grid(base_wb, item: Any, i: int, sheet: str | None):
+    """Resolve one scatter item's address to a single-cell grid, or refuse
+    naming the offending item."""
+    grid = gridio.resolve(base_wb, item, default_sheet=sheet)
+    if not grid.is_single:
+        raise XlMcpError(
+            f"cells[{i}] resolves to the range {grid.a1}, not a single cell; "
+            "the scatter tools take individual cells (use read_range / "
+            "write_range for rectangles)")
+    return grid
+
+
+def get_cells(path: str, cells: list, values: str = "cached",
+              sheet: str | None = None) -> dict:
+    """Read many individually addressed cells in one call. Each item is a
+    location object or A1 string resolving to ONE cell; values is cached |
+    formula | both, labelled like read_range."""
+    if values not in gridio.VALUE_MODES:
+        raise XlMcpError(
+            f"values must be one of {gridio.VALUE_MODES}, got {values!r}")
+    if not isinstance(cells, list) or not cells:
+        raise XlMcpError(
+            "cells must be a non-empty list of cell addresses "
+            "(location objects or A1 strings)")
+    if len(cells) > MAX_SCATTER_CELLS:
+        raise RangeOutOfBounds(
+            f"{len(cells):,} cells is over the {MAX_SCATTER_CELLS:,}-cell "
+            "scatter ceiling; use read_range or query_range for bulk reads")
+    formula_wb = gridio.open_wb(path, data_only=False) \
+        if values in ("formula", "both") else None
+    cached_wb = gridio.open_wb(path, data_only=True) \
+        if values in ("cached", "both") else None
+    try:
+        base = formula_wb if formula_wb is not None else cached_wb
+        out = []
+        absent = 0
+        for i, item in enumerate(cells):
+            grid = _single_cell_grid(base, item, i, sheet)
+            vals, labels, _hf = gridio.read_matrix(
+                grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
+            label = labels[0][0]
+            if label == "absent":
+                absent += 1
+            out.append({
+                "sheet": grid.sheet, "cell": grid.a1,
+                "value": gridio.compact_value(vals[0][0]), "label": label})
+        result: dict[str, Any] = {
+            "count": len(out), "value_mode": values, "cells": out}
+        if absent:
+            result["warning"] = (
+                f"{absent} cell(s) hold formulas with no cached value (label "
+                "'absent'); run recalculate or open in Excel to populate them")
+        return result
+    finally:
+        for wb in (formula_wb, cached_wb):
+            if wb is not None:
+                wb.close()
+
+
+def set_cells(path: str, cells: list, sheet: str | None = None,
+              allow_loss: bool = False, backup: bool = True) -> dict:
+    """Write many individually addressed cells as ONE batch: every address is
+    resolved before anything is written, then one backup + one verified save.
+    Each item is {cell (or location), value}; '=' strings become formulas."""
+    if not isinstance(cells, list) or not cells:
+        raise XlMcpError(
+            "cells must be a non-empty list of {cell, value} objects")
+    if len(cells) > MAX_SCATTER_CELLS:
+        raise RangeOutOfBounds(
+            f"{len(cells):,} cells is over the {MAX_SCATTER_CELLS:,}-cell "
+            "scatter ceiling; use write_range or apply_edits for bulk writes")
+    pkg = WorkbookPackage.open(path)
+    # Validation pass: resolve every address and check every item's shape
+    # BEFORE mutating, so one bad item refuses the whole batch untouched.
+    plan: list[tuple[Any, Any]] = []
+    for i, item in enumerate(cells):
+        if not isinstance(item, dict):
+            raise XlMcpError(f"cells[{i}] is not an object")
+        if "value" not in item:
+            raise XlMcpError(f"cells[{i}] is missing 'value'")
+        loc = item.get("cell", item.get("location"))
+        if loc is None:
+            raise XlMcpError(f"cells[{i}] is missing 'cell' (or 'location')")
+        grid = _single_cell_grid(pkg.workbook, loc, i,
+                                 item.get("sheet", sheet))
+        plan.append((grid, item["value"]))
+    for grid, value in plan:
+        pkg.set_cell(grid.sheet, grid.a1, value)
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["cells_written"] = len(plan)
+    return result
+
+
+# -------------------------------------------------------------------- merges
+
+
+def _overlaps(a, b) -> bool:
+    return not (a.max_row < b.min_row or b.max_row < a.min_row
+                or a.max_col < b.min_col or b.max_col < a.min_col)
+
+
+def set_merge(path: str, action: str, location: Any = None,
+              sheet: str | None = None, confirm_data_loss: bool = False,
+              allow_loss: bool = False, backup: bool = True) -> dict:
+    """Merge or unmerge a cell range, or list merges. Excel semantics: a merge
+    keeps only the top-left value; absorbing cells that hold values refuses
+    without confirm_data_loss=true rather than discarding them silently."""
+    if action not in MERGE_ACTIONS:
+        raise XlMcpError(
+            f"action must be one of {MERGE_ACTIONS}, got {action!r}")
+
+    if action == "list":
+        wb = gridio.open_wb(path)
+        try:
+            if sheet is not None:
+                # Resolve through locate for its missing-sheet error paths.
+                title = gridio.resolve(
+                    wb, {"used_range": True}, default_sheet=sheet).sheet
+                sheets = [wb[title]]
+            else:
+                sheets = wb.worksheets
+            out = {}
+            total = 0
+            for ws in sheets:
+                ranges = sorted(
+                    str(r) for r in getattr(ws, "merged_cells", []).ranges) \
+                    if getattr(ws, "merged_cells", None) else []
+                out[ws.title] = ranges
+                total += len(ranges)
+            return {"merges": out, "count": total}
+        finally:
+            wb.close()
+
+    if location is None:
+        raise XlMcpError(f"action {action!r} needs a 'location' range")
+    pkg = WorkbookPackage.open(path)
+    grid = pkg.resolve(location, default_sheet=sheet)
+    ws = pkg.workbook[grid.sheet]
+    existing = list(getattr(ws, "merged_cells", []).ranges) \
+        if getattr(ws, "merged_cells", None) else []
+
+    if action == "unmerge":
+        hit = next((r for r in existing
+                    if (r.min_row, r.min_col, r.max_row, r.max_col)
+                    == (grid.min_row, grid.min_col, grid.max_row,
+                        grid.max_col)), None)
+        if hit is None:
+            listed = ", ".join(str(r) for r in existing[:25]) or "none"
+            raise TargetNotFound(
+                f"{grid.a1} on {grid.sheet!r} is not a merged range "
+                f"(unmerge needs the exact stored range; merges: {listed})")
+        ws.unmerge_cells(str(hit))
+        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result["changed"]["unmerged"] = {"sheet": grid.sheet,
+                                         "range": grid.a1}
+        return result
+
+    # merge
+    if grid.is_single:
+        raise XlMcpError(
+            f"{grid.a1} is a single cell; a merge needs a multi-cell range")
+    clashes = [str(r) for r in existing if _overlaps(r, grid)]
+    if clashes:
+        raise XlMcpError(
+            f"the range {grid.a1} on {grid.sheet!r} overlaps existing "
+            f"merge(s) {', '.join(clashes[:25])}; unmerge them first")
+    absorbed = []
+    for r in range(grid.min_row, grid.max_row + 1):
+        for c in range(grid.min_col, grid.max_col + 1):
+            if (r, c) == (grid.min_row, grid.min_col):
+                continue
+            if ws.cell(r, c).value is not None:
+                absorbed.append(gridio.a1(r, c))
+    if absorbed and not confirm_data_loss:
+        exc = XlMcpError(
+            f"merging {grid.a1} would DISCARD the values in "
+            f"{', '.join(absorbed[:25])}"
+            + (f" (+{len(absorbed) - 25} more)" if len(absorbed) > 25 else "")
+            + " (Excel keeps only the top-left value). Pass "
+            "confirm_data_loss:true to proceed; the prev backup slot is "
+            "the undo")
+        exc.code = "CONFLICT"
+        raise exc
+    for coord in absorbed:
+        ws[coord] = None
+        pkg._intended[(grid.sheet, coord)] = ("value", None)
+    ws.merge_cells(grid.a1)
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result["changed"]["merged"] = {"sheet": grid.sheet, "range": grid.a1,
+                                  "absorbed_cleared": absorbed}
+    if absorbed:
+        warnings = list(result.get("warnings", []))
+        warnings.append(
+            f"confirm_data_loss: {len(absorbed)} absorbed cell value(s) were "
+            "discarded (Excel merge semantics keep only the top-left value)")
+        result["warnings"] = warnings
+    return result
+
+
 __all__ = [
     "read_range", "set_cell", "write_range", "clear_range",
     "copy_range", "move_range", "query_range",
-    "CLEAR_WHAT", "COPY_WHAT",
+    "get_cells", "set_cells", "set_merge",
+    "CLEAR_WHAT", "COPY_WHAT", "MERGE_ACTIONS", "MAX_SCATTER_CELLS",
 ]

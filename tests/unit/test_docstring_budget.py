@@ -40,6 +40,10 @@ MULTIPLEX = {
     "manage_power_query", "modify_grid_structure", "audit_formulas",
     "com_manage_pivot", "enable_tools", "disable_tools",
     "query_range",
+    # Phase 3c: set_merge is an action-parameter tool (merge/unmerge/list);
+    # replace_cells is high-traffic with dry-run, plan-first, and
+    # injection-lint semantics that do not fit the standard cap.
+    "set_merge", "replace_cells",
 }
 
 

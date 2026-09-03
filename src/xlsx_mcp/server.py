@@ -1,10 +1,13 @@
 """kitchensink4xl: the consolidated FastMCP surface.
 
-Phase 3b surface: the infrastructure (envelope, packs, boundary wrapper,
+Phase 3c surface: the infrastructure (envelope, packs, boundary wrapper,
 tiered loading, the KS4XL_MODE startup route) plus the file-tier domain
 families over the core engine (core/package, hazard, verify, locate, refs,
 calc): lifecycle and discovery, cells and ranges with the token-shaped
-query_range, the grid view and batch layer, formatting, tables and names,
+query_range, the grid view and batch layer, structural edits with full
+reference rewriting (modify_grid_structure), merges, workbook-wide
+find/replace, scatter cell reads/writes, formatting and the style layer
+(named styles, format painter, style-bloat audit), tables and names,
 conditional formatting and data validation, sort and filter, comments and
 hyperlinks, import and export. The COM application tier and the gated
 families (pivots, charts, Power Query) land in later phases.
@@ -48,7 +51,9 @@ from .ops import dataio as _dataio
 from .ops import format as _format
 from .ops import lifecycle as _lifecycle
 from .ops import names as _names
+from .ops import search as _search
 from .ops import sortfilter as _sortfilter
+from .ops import structure as _structure
 from .ops import tables as _tables
 from .ops import view as _view
 
@@ -155,7 +160,7 @@ def get_server_info() -> dict:
     return {
         "name": "kitchensink4xl",
         "version": __version__,
-        "phase": "3b (file-tier families live; COM tier pending)",
+        "phase": "3c (ungated file tier complete; COM tier pending)",
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
@@ -762,6 +767,196 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
         values=values, records=records, out_file=out_file)
+
+
+# ============================================================ PHASE 3c TOOLS
+# The remaining ungated file-tier families on the audited engine: the
+# structural-edit flagship (modify_grid_structure over core.refs), merges,
+# workbook-wide find/replace, the scatter cell pair, and the style layer
+# (named styles, format painter, style-bloat audit). Every mutation runs
+# through WorkbookPackage as before. No em dashes.
+
+
+# ---------------------------------------------------------- grid structure
+
+
+@_tool("lite")
+def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
+                          sheet: str | None = None, allow_loss: bool = False,
+                          backup: bool = True) -> dict:
+    """Insert or delete rows or columns at a position and REWRITE EVERY
+    REFERENCE so the workbook stays coherent: formulas on every sheet
+    (cross-sheet refs included), defined names, data validations,
+    conditional-format ranges, table refs, and merged ranges all shift with
+    the edit. action is insert_rows, delete_rows, insert_cols, or
+    delete_cols; at is the 1-based row number or column letter where the
+    edit starts (a cell like 'B7' or any location object also works, using
+    its top-left); count inserts or deletes that many at once.
+
+    Semantics worth knowing: whole-column spans like =SUM(B:B) and whole-row
+    spans like $1:$2 shift on their own axis, while an edit on the other
+    axis leaves them alone (Excel's behavior); a reference wholly inside a
+    deleted band becomes #REF! and the count of new #REF! errors is
+    reported, never hidden; a merge that loses its whole range is dropped
+    and counted; an insert that would push value-bearing cells past the
+    grid edge refuses. Returns per-kind rewrite counts. A hazardous
+    workbook refuses unless allow_loss is true. Auto-backup: prev/anchor
+    slots in .ks4xl-backups (backup=false skips rotation); atomic verified
+    save, restored on failed verify; the prev slot is the undo for a
+    delete. Refuses while open in Excel."""
+    return _structure.modify_grid_structure(
+        path, action, at, count=count, sheet=sheet, allow_loss=allow_loss,
+        backup=backup)
+
+
+# ------------------------------------------------------------------- merges
+
+
+@_tool("lite")
+def set_merge(path: str, action: str, location: Any = None,
+              sheet: str | None = None, confirm_data_loss: bool = False,
+              allow_loss: bool = False, backup: bool = True) -> dict:
+    """Merge or unmerge cell ranges, or list every merge. action is merge
+    (location is the multi-cell range), unmerge (location must be the exact
+    stored merged range), or list (read-only, one sheet or the whole
+    workbook). Excel merge semantics: only the top-left value survives, so
+    a merge whose absorbed cells hold values REFUSES until you pass
+    confirm_data_loss=true, then reports exactly which values were
+    discarded; overlapping an existing merge refuses. Unmerge keeps the
+    surviving top-left value and leaves the rest blank. For the mutating
+    actions: a hazardous workbook refuses unless allow_loss is true;
+    auto-backup to prev/anchor slots in .ks4xl-backups; atomic verified
+    save. Refuses while open in Excel."""
+    return _cells.set_merge(
+        path, action, location=location, sheet=sheet,
+        confirm_data_loss=confirm_data_loss, allow_loss=allow_loss,
+        backup=backup)
+
+
+# ----------------------------------------------------------- find / replace
+
+
+@_tool("lite")
+def find_cells(path: str, query: str, look_in: str = "values",
+               match: str = "contains", match_case: bool = False,
+               sheet: str | None = None, location: Any = None,
+               limit: int = 100, offset: int = 0) -> dict:
+    """Search cell values and/or formulas across a workbook, sheet, or range
+    and return EVERY match with its unambiguous address (the plural sibling
+    of the single-target search location selector). match is exact,
+    contains, or regex (timeout-guarded, so a pathological pattern refuses
+    instead of hanging); look_in is values, formulas, or both; a formula
+    cell's searchable value is its last cached one. Results page with limit
+    and offset and report the total match count. Read-only; works while the
+    file is open in Excel."""
+    return _search.find_cells(
+        path, query, look_in=look_in, match=match, match_case=match_case,
+        sheet=sheet, location=location, limit=limit, offset=offset)
+
+
+@_tool("lite")
+def replace_cells(path: str, find: str, replace: str,
+                  look_in: str = "values", match: str = "contains",
+                  match_case: bool = False, sheet: str | None = None,
+                  location: Any = None, dry_run: bool = False,
+                  formulas: bool = False, allow_loss: bool = False,
+                  backup: bool = True) -> dict:
+    """Find-and-replace across a workbook, sheet, or range. find matches like
+    find_cells: exact (whole cell), contains (literal substring), or regex
+    (timeout-guarded; backreferences like \\1 work in replace). look_in
+    'values' rewrites literal cells, 'formulas' rewrites formula text (the
+    cell stays a formula, normalized), 'both' does both. dry_run=true
+    previews every change without touching the file; a real run validates
+    the whole plan first, then applies it as ONE batch and reports cells
+    changed and occurrences replaced. A replaced value that parses as a
+    number is written as a number; replacement text beginning with =, +, -,
+    or @ is written as TEXT to block formula injection unless formulas is
+    true. A hazardous workbook refuses unless allow_loss is true.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
+    return _search.replace_cells(
+        path, find, replace, look_in=look_in, match=match,
+        match_case=match_case, sheet=sheet, location=location,
+        dry_run=dry_run, formulas=formulas, allow_loss=allow_loss,
+        backup=backup)
+
+
+# ------------------------------------------------------------ scatter cells
+
+
+@_tool("lite")
+def get_cells(path: str, cells: list, values: str = "cached",
+              sheet: str | None = None) -> dict:
+    """Read many individually addressed cells in one call, the scatter
+    complement to the rectangular read_range. cells is a list of A1 strings
+    or location objects, each resolving to ONE cell (1,000-cell ceiling);
+    values is cached, formula, or both, and every returned value carries
+    the honest label (cached, absent, formula, value), so a formula with no
+    cached value is never passed off as blank. Read-only; works while the
+    file is open in Excel."""
+    return _cells.get_cells(path, cells, values=values, sheet=sheet)
+
+
+@_tool("lite")
+def set_cells(path: str, cells: list, sheet: str | None = None,
+              allow_loss: bool = False, backup: bool = True) -> dict:
+    """Write many individually addressed cells as ONE atomic batch, the
+    scatter complement to write_range. cells is a list of {cell, value}
+    items (cell is an A1 string or a location object resolving to one cell;
+    1,000-cell ceiling); every address is resolved BEFORE anything is
+    written, so one bad item refuses the whole batch untouched. '=' strings
+    become formulas, normalized. A hazardous workbook refuses unless
+    allow_loss is true. Auto-backup to .ks4xl-backups; atomic verified
+    save. Refuses while open in Excel."""
+    return _cells.set_cells(path, cells, sheet=sheet, allow_loss=allow_loss,
+                            backup=backup)
+
+
+# ------------------------------------------------------------- style layer
+
+
+@_tool("format")
+def apply_style(path: str, style: str, location: Any = None,
+                define: dict | None = None, sheet: str | None = None,
+                allow_loss: bool = False, backup: bool = True) -> dict:
+    """Apply a NAMED cell style to a range, optionally defining it first.
+    style is a workbook style or an Excel builtin (Good, Bad, Input, Title,
+    Total...); define ({number_format, font, fill, border, alignment})
+    registers a new named style under that name (with no location it only
+    registers). Named styles keep repeated formatting out of the
+    64,000-format registry. A hazardous workbook refuses unless allow_loss
+    is true. Auto-backup to .ks4xl-backups; atomic verified save. Refuses
+    while open in Excel."""
+    return _format.apply_style(
+        path, style, location=location, define=define, sheet=sheet,
+        allow_loss=allow_loss, backup=backup)
+
+
+@_tool("format")
+def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
+                allow_loss: bool = False, backup: bool = True) -> dict:
+    """The format painter: copy ONE source cell's complete format (font,
+    fill, border, alignment, number format) onto every cell of a
+    destination range, leaving values untouched. source must resolve to a
+    single cell; dest is any range, cross-sheet allowed; both are location
+    objects. A hazardous workbook refuses unless allow_loss is true.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
+    in Excel."""
+    return _format.copy_format(path, source, dest, sheet=sheet,
+                               allow_loss=allow_loss, backup=backup)
+
+
+@_tool("format")
+def audit_styles(path: str, top: int = 10) -> dict:
+    """Read-only style-bloat audit against Excel's 64,000 distinct-format
+    ceiling: counts from the styles.xml registry (cell formats, fonts,
+    fills, borders, custom number formats, named styles), the formats
+    actually in use per sheet, the `top` heaviest formats by cell count
+    with a compact description, and an ok / elevated / critical risk
+    verdict with its thresholds. A large registry-vs-in-use gap means
+    orphaned entries left by past edits. Nothing is written; works while
+    the file is open in Excel."""
+    return _format.audit_styles(path, top=top)
 
 
 # ------------------------------------------------ tiered loading (Section 9)
