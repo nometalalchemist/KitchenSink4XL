@@ -392,8 +392,10 @@ def _describe_style(cell) -> dict:
     if cell.fill is not None and cell.fill.fill_type:
         rgb = getattr(cell.fill.start_color, "rgb", None)
         fill = rgb if isinstance(rgb, str) else cell.fill.fill_type
-    bordered = any(
-        getattr(cell.border, s).style for s in _SIDES) if cell.border else False
+    border = cell.border
+    bordered = border is not None and any(
+        side is not None and side.style
+        for side in (getattr(border, s, None) for s in _SIDES))
     return {"font": fdesc, "fill": fill, "bordered": bordered,
             "number_format": cell.number_format}
 
