@@ -414,14 +414,15 @@ def _resolve_table(wb, name: Any, spec: dict) -> ResolvedGrid:
                  "column": column, "ref": table.ref})
 
 
-def _resolve_used_range(wb, value: Any) -> ResolvedGrid:
-    sheet = None
+def _resolve_used_range(wb, value: Any,
+                        sibling_sheet: str | None = None) -> ResolvedGrid:
+    sheet = sibling_sheet
     if isinstance(value, str) and value.strip():
         sheet = value.strip()
     elif value not in (True, None) and not isinstance(value, str):
         raise XlMcpError(
             'used_range selector takes a sheet name string, or true for the '
-            'active sheet')
+            'active sheet (a sibling "sheet" key also works)')
     ws = _sheet_for(wb, sheet, selector="used_range")
     bounds = true_used_range(ws)
     if bounds is None:
@@ -450,10 +451,18 @@ def _resolve_region(wb, value: Any, sheet: str | None) -> ResolvedGrid:
     except Exception:
         raise XlMcpError(f"region selector: {near!r} is not a valid A1 cell")
 
+    # Probe without ws.cell(): that call INSTANTIATES an empty cell object for
+    # every miss, polluting the model (and bloating a later save) with the
+    # whole probed frontier. _cells.get() is a pure lookup.
+    cells = getattr(ws, "_cells", None)
+
     def has_value(r: int, c: int) -> bool:
         if r < 1 or c < 1 or r > MAX_ROW or c > MAX_COL:
             return False
-        return ws.cell(r, c).value is not None
+        if cells is not None:
+            cell = cells.get((r, c))
+            return cell is not None and cell.value is not None
+        return ws.cell(r, c).value is not None  # read-only sheets
 
     if not has_value(r0, c0):
         # An empty anchor: the region is just that cell (Excel selects the
@@ -648,7 +657,7 @@ def resolve_location(wb, location: Any, *,
     if sel == "table":
         return _resolve_table(wb, value, location)
     if sel == "used_range":
-        return _resolve_used_range(wb, value)
+        return _resolve_used_range(wb, value, sheet)
     if sel == "region":
         return _resolve_region(wb, value, sheet)
     return _resolve_search(wb, value, sheet)

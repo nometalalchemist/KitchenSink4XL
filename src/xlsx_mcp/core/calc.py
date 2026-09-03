@@ -27,32 +27,76 @@ from dataclasses import dataclass, field
 # ---------------------------------------------------------- the _xlfn shim
 
 # Functions Excel stores with a _xlfn. prefix (post-2007 "future functions").
-# Writing the bare name via openpyxl lands #NAME? in Excel; the prefix fixes it.
+# Writing the bare name via openpyxl lands #NAME? in Excel (or, for dynamic
+# arrays, a repair-only file: Phase 1 spike, bare FILTER). The pre-audit list
+# held ~34 names; the re-audit expanded it to the full documented future-
+# function set (the 2010 statistical dot-family, the 2013 math/engineering
+# wave, 2016 IFS/TEXTJOIN, and the 365 dynamic-array and lambda-helper era),
+# because a missing entry means a silently broken formula write. Sources: the
+# MS-XLSX future-function storage rules and Microsoft's _xlfn documentation;
+# XLOOKUP was verified end to end in Excel by the Phase 1 spike.
 XLFN_FUNCS = frozenset({
-    "XLOOKUP", "XMATCH", "LET", "LAMBDA", "TEXTJOIN", "CONCAT", "IFS",
-    "SWITCH", "MAXIFS", "MINIFS", "TEXTBEFORE", "TEXTAFTER", "TEXTSPLIT",
-    "VSTACK", "HSTACK", "TOCOL", "TOROW", "WRAPROWS", "WRAPCOLS", "TAKE",
-    "DROP", "EXPAND", "CHOOSECOLS", "CHOOSEROWS", "ARRAYTOTEXT", "VALUETOTEXT",
-    "ISOMITTED", "FLOOR.MATH", "CEILING.MATH", "AGGREGATE", "FORMULATEXT",
-    "NUMBERVALUE", "UNICHAR", "UNICODE", "PERCENTILE.INC", "STDEV.S",
+    # 2010: statistical renames and friends
+    "AGGREGATE", "BETA.DIST", "BETA.INV", "BINOM.DIST", "BINOM.INV",
+    "CEILING.PRECISE", "CHISQ.DIST", "CHISQ.DIST.RT", "CHISQ.INV",
+    "CHISQ.INV.RT", "CHISQ.TEST", "CONFIDENCE.NORM", "CONFIDENCE.T",
+    "COVARIANCE.P", "COVARIANCE.S", "ERF.PRECISE", "ERFC.PRECISE",
+    "EXPON.DIST", "F.DIST", "F.DIST.RT", "F.INV", "F.INV.RT", "F.TEST",
+    "FLOOR.PRECISE", "GAMMA.DIST", "GAMMA.INV", "GAMMALN.PRECISE",
+    "HYPGEOM.DIST", "ISO.CEILING", "LOGNORM.DIST", "LOGNORM.INV",
+    "MODE.MULT", "MODE.SNGL", "NEGBINOM.DIST", "NETWORKDAYS.INTL",
+    "NORM.DIST", "NORM.INV", "NORM.S.DIST", "NORM.S.INV", "PERCENTILE.EXC",
+    "PERCENTILE.INC", "PERCENTRANK.EXC", "PERCENTRANK.INC", "POISSON.DIST",
+    "QUARTILE.EXC", "QUARTILE.INC", "RANK.AVG", "RANK.EQ", "STDEV.P",
+    "STDEV.S", "T.DIST", "T.DIST.2T", "T.DIST.RT", "T.INV", "T.INV.2T",
+    "T.TEST", "VAR.P", "VAR.S", "WEIBULL.DIST", "WORKDAY.INTL", "Z.TEST",
+    # 2013: math / engineering / info wave
+    "ACOT", "ACOTH", "ARABIC", "BASE", "BINOM.DIST.RANGE", "BITAND",
+    "BITLSHIFT", "BITOR", "BITRSHIFT", "BITXOR", "CEILING.MATH", "COMBINA",
+    "COT", "COTH", "CSC", "CSCH", "DAYS", "DECIMAL", "ENCODEURL",
+    "FILTERXML", "FLOOR.MATH", "FORMULATEXT", "GAMMA", "GAUSS", "IFNA",
+    "IMCOSH", "IMCOT", "IMCSC", "IMCSCH", "IMSEC", "IMSECH", "IMSINH",
+    "IMTAN", "ISFORMULA", "ISOWEEKNUM", "MUNIT", "NUMBERVALUE", "PDURATION",
+    "PERMUTATIONA", "PHI", "RRI", "SEC", "SECH", "SHEET", "SHEETS", "SKEW.P",
+    "UNICHAR", "UNICODE", "WEBSERVICE", "XOR",
+    # 2016: forecasting and aggregation
+    "FORECAST.ETS", "FORECAST.ETS.CONFINT", "FORECAST.ETS.SEASONALITY",
+    "FORECAST.ETS.STAT", "FORECAST.LINEAR", "CONCAT", "IFS", "MAXIFS",
+    "MINIFS", "SWITCH", "TEXTJOIN",
+    # 365: lookups, LET/LAMBDA and helpers, dynamic-array builders, text
+    "XLOOKUP", "XMATCH", "LET", "LAMBDA", "SINGLE", "ANCHORARRAY",
+    "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY",
+    "MAP", "REDUCE", "SCAN", "MAKEARRAY", "BYROW", "BYCOL", "ISOMITTED",
+    "TEXTBEFORE", "TEXTAFTER", "TEXTSPLIT", "VSTACK", "HSTACK", "TOCOL",
+    "TOROW", "WRAPROWS", "WRAPCOLS", "TAKE", "DROP", "EXPAND", "CHOOSECOLS",
+    "CHOOSEROWS", "ARRAYTOTEXT", "VALUETOTEXT", "STOCKHISTORY", "IMAGE",
+    "GROUPBY", "PIVOTBY", "PERCENTOF", "REGEXTEST", "REGEXEXTRACT",
+    "REGEXREPLACE", "TRANSLATE", "DETECTLANGUAGE", "TRIMRANGE",
 })
 
-# Dynamic-array worksheet functions stored with _xlfn._xlws. (the spill set).
-XLFN_XLWS_FUNCS = frozenset({
-    "FILTER", "SORT", "SORTBY", "UNIQUE", "SEQUENCE", "RANDARRAY",
-    "ANCHORARRAY", "SINGLE",
-})
+# Functions stored with the _xlfn._xlws. worksheet-scope prefix. Documented
+# storage uses this ONLY for FILTER and SORT; the Phase 1 spike verified
+# _xlfn._xlws.FILTER end to end in Excel. The pre-audit list wrongly put
+# SORTBY / UNIQUE / SEQUENCE / RANDARRAY / ANCHORARRAY / SINGLE here, which
+# risks the same repair-only failure the spike proved for a mis-prefixed
+# dynamic array; they are plain _xlfn. names (moved to XLFN_FUNCS above).
+# COM-tier task: verify each 365-era prefix empirically in Excel.
+XLFN_XLWS_FUNCS = frozenset({"FILTER", "SORT"})
 
 _CALL = re.compile(r"(?<![A-Za-z0-9_.])([A-Za-z][A-Za-z0-9_.]*)\s*\(")
+
+# Excel string literals: double-quoted, "" as the escape. Function names
+# inside them must never be prefixed.
+_STRING_RE = re.compile(r'"(?:[^"]|"")*"')
 
 
 def normalize_formula(formula: str) -> tuple[str, list[str]]:
     """Prefix modern function names so openpyxl-written formulas do not become
     #NAME? in Excel. Returns (normalized, list_of_functions_prefixed).
 
-    Best-effort: it prefixes call-site names outside an existing _xlfn context.
-    It does not descend into quoted string literals (a documented limitation;
-    a full tokenizer is a later hardening item)."""
+    Prefixes call-site names outside an existing _xlfn context. Quoted string
+    literals are skipped verbatim (the re-audit closed the earlier limitation
+    where a function-shaped substring inside a string was rewritten)."""
     prefixed: list[str] = []
 
     def sub(m: re.Match) -> str:
@@ -69,7 +113,16 @@ def normalize_formula(formula: str) -> tuple[str, list[str]]:
         return m.group(0)
 
     body = formula[1:] if formula.startswith("=") else formula
-    out = _CALL.sub(sub, body)
+    pieces: list[str] = []
+    pos = 0
+    for sm in _STRING_RE.finditer(body):
+        if sm.start() > pos:
+            pieces.append(_CALL.sub(sub, body[pos:sm.start()]))
+        pieces.append(sm.group(0))  # string literal, verbatim
+        pos = sm.end()
+    if pos < len(body):
+        pieces.append(_CALL.sub(sub, body[pos:]))
+    out = "".join(pieces)
     return ("=" + out if formula.startswith("=") else out), prefixed
 
 
@@ -227,8 +280,8 @@ def recalc_via_formulas(path: str, out_path: str) -> RecalcResult:
     try:
         xl_model = formulas.ExcelModel().loads(path).finish()
         solution = xl_model.calculate()
-        xl_model.write(dirpath=None) if False else None
-        # Write results back to a new file.
+        # Write results back next to out_path (the formulas lib names its own
+        # output files inside dirpath; the caller reads them from there).
         xl_model.write(dirpath=_dir_of(out_path))
         return RecalcResult(engine="formulas", ok=True,
                             values={k: _clean(v) for k, v in

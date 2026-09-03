@@ -21,14 +21,18 @@ The module has two layers:
      format and data-validation ranges, table refs, and merged ranges, and
      report a count per kind.
 
-Known bounded gaps, stated honestly (no warranty language): whole-column
-(``A:A``) and whole-row (``1:1``) ranges are left untouched; 3D references
-(``Sheet1:Sheet3!A1``) are transposed only when the edited sheet is a named
-endpoint of the span; structured table references (``Table[Col]``) inside
-formulas are not coordinate-shifted (they follow the table, which the rewriter
-resizes separately); partial-overlap MOVE of a range is left untouched. The
-transposer never guesses: an ambiguous construct is passed through unchanged
-rather than corrupted.
+Whole-column (``A:A``, ``$B:$D``) and whole-row (``1:1``, ``$1:$2``) spans ARE
+transposed on their own axis (the re-audit closed this gap: ``=SUM(B:B)`` went
+stale on every column insert/delete, and print-title names like ``$1:$2`` went
+stale on row inserts); an edit on the other axis leaves them untouched, which
+is Excel's own behavior. Known bounded gaps, stated honestly (no warranty
+language): 3D references (``Sheet1:Sheet3!A1``) are transposed only when the
+edited sheet is a named endpoint of the span; structured table references
+(``Table[Col]``) inside formulas are not coordinate-shifted (they follow the
+table, which the rewriter resizes separately); partial-overlap MOVE of a range
+and MOVE over a whole-row/column span are left untouched. The transposer never
+guesses: an ambiguous construct is passed through unchanged rather than
+corrupted.
 """
 
 from __future__ import annotations
@@ -252,15 +256,24 @@ _SHEET = (
     r"(?::(?:'(?:[^']|'')*'|[A-Za-z_\\][A-Za-z0-9_.]*))?!"
 )
 _CELL = r"\$?[A-Za-z]{1,3}\$?\d+"
-# A reference: optional sheet prefix, an anchor cell, optional ':cell' range.
-# Guards: not preceded by an identifier char (so it is not a name tail) and
-# not followed by '(' (a function call), '[' (structured), or an identifier
-# char (so 'A1B' or 'LOG10(' never match as refs).
+# Whole-column (B:B, $A:$C) and whole-row (1:1, $2:$5) spans. Both endpoints
+# must be the same shape, so "A1:B" or "A:B2" never half-match.
+_COLSPAN = r"(?P<cs1>\$?[A-Za-z]{1,3}):(?P<cs2>\$?[A-Za-z]{1,3})"
+_ROWSPAN = r"(?P<rs1>\$?\d+):(?P<rs2>\$?\d+)"
+# A reference: optional sheet prefix, then a cell (with optional ':cell'
+# range), a whole-column span, or a whole-row span. Guards: not preceded by an
+# identifier char (so it is not a name tail) and not followed by '(' (a
+# function call), '[' (structured), or an identifier char (so 'A1B' or
+# 'LOG10(' never match as refs). The cell alternative is tried first, so
+# 'A1:B2' is a cell range, never a truncated span.
 _REF_RE = re.compile(
     r"(?<![A-Za-z0-9_.'!])"
     r"(?P<sheet>" + _SHEET + r")?"
-    r"(?P<c1>" + _CELL + r")"
-    r"(?::(?P<c2>" + _CELL + r"))?"
+    r"(?:"
+    r"(?P<c1>" + _CELL + r")(?::(?P<c2>" + _CELL + r"))?"
+    r"|" + _COLSPAN +
+    r"|" + _ROWSPAN +
+    r")"
     r"(?![A-Za-z0-9_(\[])"
 )
 
@@ -309,6 +322,62 @@ def _split_3d(body: str) -> list[str]:
     return out
 
 
+# ------------------------------------------------- whole-row / whole-col spans
+
+
+def _parse_span_tok(tok: str, *, is_col: bool) -> tuple[bool, int] | None:
+    """One endpoint of a B:B / 1:1 span -> (is_absolute, index), or None when
+    the token is out of grid (left untouched by the caller)."""
+    absolute = tok.startswith("$")
+    body = tok[1:] if absolute else tok
+    if is_col:
+        idx = column_index_from_string(body.upper())
+        if idx > MAX_COL:
+            return None
+    else:
+        idx = int(body)
+        if idx > MAX_ROW:
+            return None
+    return absolute, idx
+
+
+def _render_span_tok(absolute: bool, idx: int, *, is_col: bool) -> str:
+    body = get_column_letter(idx) if is_col else str(idx)
+    return ("$" + body) if absolute else body
+
+
+def _transpose_span(t1: str, t2: str, edit: RefEdit, prefix: str,
+                    whole: str, *, is_col: bool) -> str:
+    """Shift a whole-column or whole-row span for a structural edit on its own
+    axis. An edit on the other axis, or a MOVE, leaves it untouched (Excel's
+    behavior: inserting rows never changes B:B)."""
+    if edit.kind == MOVE:
+        return whole
+    axis_matches = (edit.kind in _COL_KINDS) if is_col \
+        else (edit.kind in _ROW_KINDS)
+    if not axis_matches:
+        return whole
+    p1 = _parse_span_tok(t1, is_col=is_col)
+    p2 = _parse_span_tok(t2, is_col=is_col)
+    if p1 is None or p2 is None:
+        return whole
+    (abs1, i1), (abs2, i2) = p1, p2
+    span = _shift_span(min(i1, i2), max(i1, i2), edit)
+    if span is None:
+        return prefix + REF_ERROR
+    new_lo, new_hi = span
+    limit = MAX_COL if is_col else MAX_ROW
+    if new_lo > limit:
+        return prefix + REF_ERROR
+    new_hi = min(new_hi, limit)
+    if i1 <= i2:
+        n1, n2 = new_lo, new_hi
+    else:
+        n1, n2 = new_hi, new_lo
+    return (prefix + _render_span_tok(abs1, n1, is_col=is_col)
+            + ":" + _render_span_tok(abs2, n2, is_col=is_col))
+
+
 def _transpose_match(m: re.Match, edit: RefEdit,
                      formula_sheet: str | None) -> str:
     whole = m.group(0)
@@ -326,6 +395,14 @@ def _transpose_match(m: re.Match, edit: RefEdit,
     else:
         if not _in_scope(sheet_name, formula_sheet, edit.sheet):
             return whole
+
+    pre = prefix or ""
+    if m.group("cs1"):
+        return _transpose_span(m.group("cs1"), m.group("cs2"), edit, pre,
+                               whole, is_col=True)
+    if m.group("rs1"):
+        return _transpose_span(m.group("rs1"), m.group("rs2"), edit, pre,
+                               whole, is_col=False)
 
     ep1 = _parse_cell(c1)
     ep2 = _parse_cell(c2) if c2 else None
@@ -378,10 +455,37 @@ def transpose_formula(formula: str, edit: RefEdit,
     return lead + "".join(out)
 
 
+def _offset_span(t1: str, t2: str, prefix: str, whole: str, delta: int,
+                 *, is_col: bool) -> str:
+    """Copy/paste shift for a whole-column or whole-row span: relative
+    endpoints move by the offset on their own axis, absolute ($) endpoints
+    stay put, off-grid results become #REF! (Excel copy semantics)."""
+    if delta == 0:
+        return whole
+    p1 = _parse_span_tok(t1, is_col=is_col)
+    p2 = _parse_span_tok(t2, is_col=is_col)
+    if p1 is None or p2 is None:
+        return whole
+    limit = MAX_COL if is_col else MAX_ROW
+    out = []
+    for absolute, idx in (p1, p2):
+        new = idx if absolute else idx + delta
+        if new < 1 or new > limit:
+            return prefix + REF_ERROR
+        out.append(_render_span_tok(absolute, new, is_col=is_col))
+    return prefix + out[0] + ":" + out[1]
+
+
 def _offset_match(m: re.Match, dr: int, dc: int) -> str:
     prefix = m.group("sheet") or ""
     c1 = m.group("c1")
     c2 = m.group("c2")
+    if m.group("cs1"):
+        return _offset_span(m.group("cs1"), m.group("cs2"), prefix,
+                            m.group(0), dc, is_col=True)
+    if m.group("rs1"):
+        return _offset_span(m.group("rs1"), m.group("rs2"), prefix,
+                            m.group(0), dr, is_col=False)
 
     def shift(tok: str) -> str | None:
         ep = _parse_cell(tok)
@@ -504,7 +608,10 @@ def rewrite_workbook(wb, edit: RefEdit) -> RewriteReport:
     report = RewriteReport()
 
     # 1. Formula cells across every sheet (cross-sheet refs to the edited
-    #    sheet must be repaired too).
+    #    sheet must be repaired too). Array (CSE / dynamic) formulas are stored
+    #    as ArrayFormula objects, not strings; their text and anchor ref are
+    #    both rewritten (the re-audit closed this: they were silently skipped).
+    from openpyxl.worksheet.formula import ArrayFormula
     for ws in wb.worksheets:
         home = ws.title
         cells = getattr(ws, "_cells", None)
@@ -518,6 +625,22 @@ def rewrite_workbook(wb, edit: RefEdit) -> RewriteReport:
                     cell.value = new
                     report.formulas += 1
                     if REF_ERROR in new and REF_ERROR not in val:
+                        report.ref_errors += 1
+            elif isinstance(val, ArrayFormula):
+                text = val.text or ""
+                new_text = transpose_formula(text, edit, home) if text else text
+                ref = val.ref
+                new_ref = ref
+                if isinstance(ref, str) and ref:
+                    shifted = transpose_ref(ref, edit, home)
+                    if shifted is not None:
+                        new_ref = shifted
+                    # a wholly-deleted anchor keeps its old ref (conservative;
+                    # openpyxl's own delete already removed the cells)
+                if new_text != text or new_ref != ref:
+                    cell.value = ArrayFormula(new_ref, new_text)
+                    report.formulas += 1
+                    if REF_ERROR in new_text and REF_ERROR not in text:
                         report.ref_errors += 1
 
     # 2. Defined names (workbook + sheet scope).
