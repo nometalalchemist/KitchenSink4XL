@@ -68,6 +68,7 @@ class WorkbookPackage:
         self._keep_vba = self.path.lower().endswith(".xlsm")
         self._hazard: _hazard.HazardReport | None = None
         self._pre_parts: list[str] = []
+        self._pre_sizes: dict[str, int] = {}
         self._intended: dict[tuple[str, str], tuple[str, Any]] = {}
         self._formula_written = False
         self._structural: list[_refs.RefEdit] = []
@@ -89,6 +90,7 @@ class WorkbookPackage:
             raise WorkbookCorrupt(f"{p}: {rep.error}")
         pkg._hazard = rep
         pkg._pre_parts = list(rep.parts)
+        pkg._pre_sizes = dict(rep.sizes)
         return pkg
 
     @property
@@ -189,11 +191,20 @@ class WorkbookPackage:
         warnings: list[str] = []
         if rep.clean:
             return warnings
-        drop_keys = rep.lossy_keys  # SEV_DROPS
+        drop_keys = list(rep.lossy_keys)  # SEV_DROPS
         degradable = [h.label for h in rep.hazards
                       if h.severity == _hazard.SEV_DEGRADES]
         conditional = [h for h in rep.hazards
                        if h.severity == _hazard.SEV_CONDITIONAL]
+
+        # A conditional hazard (VBA) survives ONLY because the openpyxl load
+        # passes keep_vba, and keep_vba is set from the .xlsm extension. A
+        # vbaProject.bin inside a plain .xlsx (renamed or mis-authored file)
+        # gets NO keep_vba, so the save drops it: treat it as a hard drop,
+        # never claim it is preserved.
+        if conditional and not self._keep_vba:
+            drop_keys.extend(h.key for h in conditional)
+            conditional = []
 
         if drop_keys and not allow_loss:
             labels = [next(h.label for h in rep.hazards if h.key == k)
@@ -274,7 +285,7 @@ class WorkbookPackage:
 
             pre = _verify.verify_after_write(
                 tmp, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss)
+                allow_loss=allow_loss, pre_sizes=self._pre_sizes)
             if not pre.ok:
                 _silent_remove(tmp)
                 raise ValidationFailed(
@@ -295,7 +306,7 @@ class WorkbookPackage:
 
             post = _verify.verify_after_write(
                 path, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss)
+                allow_loss=allow_loss, pre_sizes=self._pre_sizes)
             if not post.ok:
                 restored = False
                 if backup:
@@ -310,6 +321,7 @@ class WorkbookPackage:
             self._workbook = None
             self._hazard = _hazard.scan_path(path)
             self._pre_parts = list(self._hazard.parts)
+            self._pre_sizes = dict(self._hazard.sizes)
             changed = dict(self._changed)
             if self._intended:
                 changed["cells"] = [

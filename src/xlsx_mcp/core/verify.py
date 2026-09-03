@@ -6,12 +6,18 @@ user's path, the server re-opens it and confirms three things:
 
   1. STRUCTURAL: the produced zip re-opens as a valid OOXML package, its
      ``[Content_Types].xml`` and workbook rels resolve, at least one sheet
-     stays visible, and openpyxl can parse it.
-  2. NO UNEXPECTED PART LOSS: the produced package's part list is diffed
-     against the pre-write scan. A fragile part (one the hazard table knows
-     openpyxl can drop) that was present before and vanished, and was NOT
-     covered by an explicit allow_loss, fails the write. Routine, expected
-     drops (calcChain.xml, printer settings) are ignored.
+     stays visible, every worksheet part and workbook.xml parse as
+     well-formed XML (a streaming parse, so a truncated or garbage sheet
+     cannot pass just because openpyxl's lazy read-only load never touched
+     it), and openpyxl can parse the package.
+  2. NO UNEXPECTED PART LOSS OR REPLACEMENT: the produced package's part
+     list is diffed against the pre-write scan. A fragile part (one the
+     hazard table knows openpyxl can drop) that was present before and
+     vanished, and was NOT covered by an explicit allow_loss, fails the
+     write. A fragile part that is still PRESENT but was replaced with
+     empty content, or whose XML no longer parses, also fails (loss by
+     replacement, not just by omission). Routine, expected drops
+     (calcChain.xml, printer settings) are ignored.
   3. CONTENT READ-BACK: the specific cells the tool claimed to write are
      re-read and compared against intent (literal values or formula strings).
      A mismatch fails the write.
@@ -32,11 +38,18 @@ from dataclasses import dataclass, field
 from . import hazard as _hazard
 
 #: Parts openpyxl legitimately drops or regenerates on a normal save; their
-#: absence after a write is expected, never a loss.
+#: absence after a write is expected, never a loss. (Parts under
+#: xl/printerSettings/ are also expected drops, but they match no hazard spec,
+#: so the loss check never sees them; the hazard module documents that policy.)
 EXPECTED_DROPPABLE = frozenset({
     "xl/calcchain.xml",
     "docprops/thumbnail.jpeg",
 })
+
+#: Ceiling for the per-part XML well-formedness re-parse in the replacement
+#: check. Fragile parts are typically small; anything bigger is skipped there
+#: (the worksheet streaming parse in structural_check has no such cap).
+_XML_RECHECK_MAX_BYTES = 8 * 1024 * 1024
 
 
 @dataclass
@@ -64,10 +77,35 @@ def structural_check(path: str) -> tuple[bool, list[str]]:
             if bad is not None:
                 return False, [f"corrupt zip member: {bad}"]
             names = set(zf.namelist())
+            # Every worksheet part and workbook.xml must parse as well-formed
+            # XML. This is a streaming parse (no tree kept), and it exists
+            # because the openpyxl read_only load below is LAZY: it never
+            # touches sheet XML, so a truncated or garbage sheet part would
+            # otherwise pass whenever no cell read-back runs (exactly the
+            # structural-edit and raw-surgery saves).
+            from xml.etree.ElementTree import iterparse
+            xml_parts = sorted(
+                n for n in names
+                if n.lower().startswith("xl/worksheets/")
+                and n.lower().endswith(".xml")
+                and "/_rels/" not in n.lower())
+            if "xl/workbook.xml" in names:
+                xml_parts.append("xl/workbook.xml")
+            for member in xml_parts:
+                try:
+                    with zf.open(member) as fh:
+                        for _event in iterparse(fh):
+                            pass
+                except Exception as exc:  # noqa: BLE001
+                    reasons.append(
+                        f"{member} is not well-formed XML "
+                        f"({type(exc).__name__})")
     except zipfile.BadZipFile:
         return False, ["produced file is not a valid zip / OOXML package"]
     except FileNotFoundError:
         return False, ["produced file is missing"]
+    if reasons:
+        return False, reasons
     if "[Content_Types].xml" not in names:
         reasons.append("missing [Content_Types].xml")
     if "xl/workbook.xml" not in names:
@@ -118,6 +156,44 @@ def part_loss_check(pre_parts, path: str, *,
     return True, fragile_lost if allow_loss else []
 
 
+def _is_fragile(name: str) -> bool:
+    return any(spec.matcher(name) for spec in _hazard.HAZARD_SPECS)
+
+
+def part_content_check(pre_sizes, path: str) -> tuple[bool, list[str]]:
+    """Catch loss by REPLACEMENT, which a presence diff cannot see: a fragile
+    part that still exists but was written back empty when it had content
+    before, or whose XML no longer parses. pre_sizes maps part name to its
+    uncompressed size at open time (hazard scan sizes); an empty mapping
+    (no pre-scan sizes available) checks nothing and passes."""
+    if not pre_sizes:
+        return True, []
+    problems: list[str] = []
+    try:
+        with zipfile.ZipFile(path) as zf:
+            post = {i.filename: i.file_size for i in zf.infolist()}
+            for name, pre_size in sorted(pre_sizes.items()):
+                if name not in post or not _is_fragile(name):
+                    continue  # absence is part_loss_check's job
+                post_size = post[name]
+                if pre_size > 0 and post_size == 0:
+                    problems.append(
+                        f"{name} was replaced with empty content "
+                        f"(was {pre_size} bytes)")
+                    continue
+                if (name.lower().endswith(".xml")
+                        and 0 < post_size <= _XML_RECHECK_MAX_BYTES):
+                    try:
+                        from xml.etree.ElementTree import fromstring
+                        fromstring(zf.read(name))
+                    except Exception:  # noqa: BLE001
+                        problems.append(
+                            f"{name} is no longer well-formed XML")
+    except Exception:  # noqa: BLE001
+        return False, ["could not re-read produced package parts"]
+    return (not problems), problems
+
+
 def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
     """Re-read the cells the tool claimed to write and compare against intent.
 
@@ -155,7 +231,8 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
 
 
 def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
-                       allow_loss: bool = False) -> VerifyResult:
+                       allow_loss: bool = False,
+                       pre_sizes: dict | None = None) -> VerifyResult:
     """Run the full verify gate on a produced (temp) package. Returns a
     VerifyResult; the caller raises ValidationFailed and refuses to promote on
     ``ok is False``."""
@@ -175,6 +252,12 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
             "the write would drop fragile part(s) that were present before: "
             + ", ".join(lost))
 
+    ok, replaced = part_content_check(pre_sizes or {}, path)
+    if not ok:
+        result.ok = False
+        result.reasons.append(
+            "fragile part(s) were damaged in place: " + "; ".join(replaced))
+
     if intended:
         ok, mism = content_readback(path, intended)
         if not ok:
@@ -188,5 +271,6 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
 
 __all__ = [
     "VerifyResult", "verify_after_write", "structural_check",
-    "part_loss_check", "content_readback", "EXPECTED_DROPPABLE",
+    "part_loss_check", "part_content_check", "content_readback",
+    "EXPECTED_DROPPABLE",
 ]

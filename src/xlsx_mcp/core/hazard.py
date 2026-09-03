@@ -9,11 +9,28 @@ openpyxl / raw OOXML surgery / COM / HAZARD_REFUSED.
 
 The knowledge table in HAZARD_SPECS encodes what openpyxl preserves vs drops.
 The Phase 1 fidelity harness (tests/fixtures + scripts) VALIDATES every
-`survives_openpyxl` claim in this table empirically against real fixtures.
+`survives_openpyxl` claim in this table empirically against real fixtures,
+and the re-audit's part-injection round-trips validated the additions
+(embeddings, persons, richData, namedSheetViews, queryTables, data model).
 Any file whose parts openpyxl would drop MUST be flagged here; a lossy file
 this scan calls clean is the exact incumbent failure the brand exists to
 prevent, so the table errs toward flagging (a false positive costs a needless
 raw/COM route; a false negative silently destroys user content).
+
+Two deliberate NON-flags, verified empirically (re-audit round-trips):
+- xl/externalLinks/ is PRESERVED by openpyxl (modeled; re-serialized but
+  semantically intact), so it carries no spec. Only externalBook links were
+  tested; ddeLink/oleLink variants are untested and would surface in
+  verify-after-write's part-loss diff if they ever dropped.
+- xl/printerSettings/ IS dropped by openpyxl, but flagging it would refuse
+  mutations on nearly every workbook that ever printed, for a loss that is
+  cosmetic (page-setup device settings; the pageSetup element itself
+  survives). It stays unflagged by policy and is treated as a routine drop.
+
+KNOWN LIMIT: hazards that live INSIDE surviving parts (x14 conditional
+formatting, sparklines, in-sheet extLst extensions) are invisible to a
+part-level scan; the container parts that can be detected (metadata.xml,
+charts) are flagged conservatively instead.
 """
 
 from __future__ import annotations
@@ -71,6 +88,16 @@ def _basename(*names: str):
     return m
 
 
+def _basename_or_prefix(basenames: tuple[str, ...], prefixes: tuple[str, ...]):
+    wanted = {n.lower() for n in basenames}
+    def m(name: str) -> bool:
+        low = name.lower()
+        if low.rsplit("/", 1)[-1] in wanted:
+            return True
+        return any(low.startswith(p) for p in prefixes)
+    return m
+
+
 def _drawings_matcher(name: str) -> bool:
     """Match drawing parts under xl/drawings/, EXCEPT legacy-comment VML
     anchors (commentsDrawing*.vml). openpyxl models legacy notes and
@@ -125,13 +152,23 @@ HAZARD_SPECS: tuple[HazardSpec, ...] = (
     ),
     HazardSpec(
         "threaded_comments", "threaded comments", SEV_DROPS, False,
-        "openpyxl models legacy notes only; threadedComments parts are lost.",
-        _prefix("xl/threadedcomments/"),
+        "openpyxl models legacy notes only; threadedComments parts and the "
+        "xl/persons/ author registry they reference are lost.",
+        _prefix("xl/threadedcomments/", "xl/persons/"),
     ),
     HazardSpec(
-        "power_query", "Power Query (DataMashup)", SEV_DROPS, False,
-        "Power Query M is stored in customXml DataMashup, which openpyxl does "
-        "not model; queries are dropped.",
+        "embeddings", "embedded OLE objects", SEV_DROPS, False,
+        "xl/embeddings/ holds embedded documents (Word, PDF, other OLE "
+        "payloads); openpyxl does not model them and drops them on save.",
+        _prefix("xl/embeddings/"),
+    ),
+    HazardSpec(
+        "power_query", "customXml (incl. Power Query DataMashup)", SEV_DROPS,
+        False,
+        "customXml parts are not modeled by openpyxl and are dropped. Power "
+        "Query M lives here (the DataMashup item), but so do add-in stores "
+        "and SharePoint property sets; a namelist scan cannot tell them "
+        "apart, so every customXml part is flagged.",
         _prefix("customxml/"),
     ),
     HazardSpec(
@@ -140,11 +177,32 @@ HAZARD_SPECS: tuple[HazardSpec, ...] = (
         _exact("xl/connections.xml"),
     ),
     HazardSpec(
+        "query_tables", "legacy query tables", SEV_DROPS, False,
+        "xl/queryTables/ (legacy web/database query definitions) is not "
+        "modeled by openpyxl and is dropped.",
+        _prefix("xl/querytables/"),
+    ),
+    HazardSpec(
+        "data_model", "Power Pivot data model", SEV_DROPS, False,
+        "xl/model/ holds the Power Pivot / data-model payload; openpyxl does "
+        "not model it and drops it on save.",
+        _prefix("xl/model/"),
+    ),
+    HazardSpec(
+        "named_sheet_views", "named sheet views", SEV_DROPS, False,
+        "xl/namedSheetViews/ (saved temporary filter/sort views) is not "
+        "modeled by openpyxl and is dropped.",
+        _prefix("xl/namedsheetviews/"),
+    ),
+    HazardSpec(
         "rich_metadata", "dynamic-array / rich-value metadata", SEV_DROPS,
         False,
-        "xl/metadata.xml carries dynamic-array spill and rich-value metadata; "
-        "openpyxl does not model it, so spill ranges can lose their metadata.",
-        _basename("metadata.xml", "richdata.xml"),
+        "xl/metadata.xml carries dynamic-array spill and rich-value metadata, "
+        "and xl/richData/ holds the rich-value payloads (stock/geo types, "
+        "images-in-cells); openpyxl models neither, so spill ranges and rich "
+        "values lose their backing.",
+        _basename_or_prefix(("metadata.xml", "richdata.xml"),
+                            ("xl/richdata/",)),
     ),
     HazardSpec(
         "pivot", "pivot tables / caches", SEV_DEGRADES, True,
@@ -185,6 +243,10 @@ class HazardReport:
     parts: list[str]
     hazards: list[Hazard]
     error: str | None = None
+    #: uncompressed part sizes from the zip central directory (scan_path only;
+    #: empty for scan_names). verify-after-write uses these to catch a fragile
+    #: part REPLACED with empty content rather than dropped outright.
+    sizes: dict[str, int] = field(default_factory=dict)
 
     @property
     def clean(self) -> bool:
@@ -236,25 +298,32 @@ class HazardReport:
 # controls) and pictures are dropped.
 #
 # THE HEURISTIC (cheap, and honest about its limits): a drawing part is a pure
-# chart anchor iff its relationship part (xl/drawings/_rels/drawingN.xml.rels)
-# exists and EVERY relationship in it targets a chart (Type ending "/chart").
+# chart anchor iff BOTH hold:
+#   (a) its relationship part (xl/drawings/_rels/drawingN.xml.rels) exists and
+#       EVERY relationship in it targets a chart (Type ending "/chart"), and
+#   (b) the drawing XML itself contains no inline shape content (sp / pic /
+#       grpSp / cxnSp elements). This second check matters: a textbox drawn
+#       NEXT TO a chart in the same drawing needs NO relationship of its own,
+#       so a rels-only test would call that drawing chart-only and let the
+#       textbox be silently dropped. The re-audit closed that bypass.
 #   - No rels part at all  -> inline shapes (textbox/rectangle), a real drop
 #     (this is exactly shape.xlsx: xl/drawings/drawing1.xml with no rels).
-#   - rels present, all chart -> chart anchor, NOT a shape-loss drop; chart
-#     fidelity is already tracked by the separate SEV_DEGRADES "charts" spec.
+#   - rels all chart AND no inline shape elements -> chart anchor, NOT a
+#     shape-loss drop; chart fidelity is already tracked by the separate
+#     SEV_DEGRADES "charts" spec.
 #   - rels present with any image / oleObject / control target -> a drop
 #     (this is image.xlsx: a /image relationship; media survival is Pillow- and
 #     authorship-dependent per Phase 1, so it stays conservatively flagged).
 #
-# LIMITS: the classification needs to read the tiny rels part, so it is not
-# decidable from the central-directory namelist ALONE. scan_path supplies a
-# reader (one extra small-part read only when drawings are present, still
-# milliseconds); scan_names WITHOUT a reader cannot see rels content and so
-# stays CONSERVATIVE, keeping every drawing flagged as a potential drop (a false
-# positive costs a needless raw/COM route, never silent loss). A drawing that
-# mixes a chart with a shape is (correctly) treated as a drop. A chart drawn
-# with no relationship part (not produced by Excel or openpyxl in practice)
-# would be conservatively flagged.
+# LIMITS: the classification needs to read the tiny rels part and the drawing
+# part, so it is not decidable from the central-directory namelist ALONE.
+# scan_path supplies a reader (two extra small-part reads only when drawings
+# are present, still milliseconds); scan_names WITHOUT a reader cannot see
+# part content and so stays CONSERVATIVE, keeping every drawing flagged as a
+# potential drop (a false positive costs a needless raw/COM route, never
+# silent loss). An unparseable drawing part is likewise conservatively
+# flagged. A chart drawn with no relationship part (not produced by Excel or
+# openpyxl in practice) would be conservatively flagged.
 
 _CHART_REL_SUFFIX = "/chart"
 _TYPE_RE = re.compile(r'Type="([^"]+)"')
@@ -265,12 +334,35 @@ def _drawing_rels_for(drawing_part: str) -> str:
     return f"{head}/_rels/{base}.rels"
 
 
+#: Local element names that mean a drawing carries inline shape content
+#: openpyxl would drop: shapes, pictures, shape groups, connectors.
+_SHAPE_LOCALS = frozenset({"sp", "pic", "grpSp", "cxnSp"})
+
+
+def _drawing_has_shape_content(data: bytes) -> bool | None:
+    """True when the drawing XML contains inline shape elements (dropped by
+    openpyxl even when every relationship targets a chart). None when the part
+    cannot be parsed (the caller stays conservative)."""
+    try:
+        from xml.etree.ElementTree import fromstring
+        root = fromstring(data)
+    except Exception:
+        return None
+    for el in root.iter():
+        tag = el.tag
+        local = tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+        if local in _SHAPE_LOCALS:
+            return True
+    return False
+
+
 def _drawing_is_chart_only(
     drawing_part: str, nameset: set[str],
     rels_reader: Callable[[str], bytes] | None,
 ) -> bool | None:
     """True: pure chart anchor (survives). False: shape/picture/control drawing
-    (drops). None: cannot tell without reading the rels (namelist-only path)."""
+    (drops). None: cannot tell without reading part content (namelist-only
+    path, or an unreadable/unparseable part)."""
     rels = _drawing_rels_for(drawing_part)
     if rels not in nameset:
         return False  # no rels: inline shapes, a genuine shape-loss drop
@@ -285,7 +377,19 @@ def _drawing_is_chart_only(
     types = _TYPE_RE.findall(data.decode("utf-8", "replace"))
     if not types:
         return False
-    return all(t.rstrip("/").lower().endswith(_CHART_REL_SUFFIX) for t in types)
+    if not all(t.rstrip("/").lower().endswith(_CHART_REL_SUFFIX)
+               for t in types):
+        return False
+    # Every relationship targets a chart; now confirm the drawing XML itself
+    # holds no inline shape (a textbox beside the chart needs no rel).
+    try:
+        drawing_data = rels_reader(drawing_part)
+    except Exception:
+        return None
+    has_shape = _drawing_has_shape_content(drawing_data)
+    if has_shape is None:
+        return None
+    return not has_shape
 
 
 def _refine_drawings(
@@ -352,7 +456,9 @@ def scan_path(path: str) -> HazardReport:
     namelist, no decompression, no XML parse), and classify. Milliseconds."""
     try:
         with zipfile.ZipFile(path) as zf:
-            names = zf.namelist()
+            infos = zf.infolist()
+            names = [i.filename for i in infos]
+            sizes = {i.filename: i.file_size for i in infos}
             has_drawings = any(
                 n.lower().startswith("xl/drawings/") for n in names)
             reader = None
@@ -365,6 +471,7 @@ def scan_path(path: str) -> HazardReport:
                     return _cache[member]
 
                 rep = scan_names(names, path=path, rels_reader=reader)
+                rep.sizes = sizes
                 return rep
     except zipfile.BadZipFile:
         return HazardReport(path=path, parts=[], hazards=[],
@@ -372,7 +479,9 @@ def scan_path(path: str) -> HazardReport:
     except FileNotFoundError:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="file not found")
-    return scan_names(names, path=path)
+    rep = scan_names(names, path=path)
+    rep.sizes = sizes
+    return rep
 
 
 def route(
