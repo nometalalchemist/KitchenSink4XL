@@ -328,7 +328,12 @@ def _cmp(cell, op: str, target) -> bool:
         return _scalar_eq(cell, target) if op == "eq" \
             else not _scalar_eq(cell, target)
     else:
-        a = "" if cell is None else str(cell)
+        # Blank cells never satisfy an ordered comparison (Excel's filter
+        # behavior: "less than 5" excludes blanks). Before the re-audit a
+        # blank coerced to "" and "" <= "5" let blank rows through lt/le.
+        if cell is None or cell == "":
+            return False
+        a = str(cell)
         b = "" if target is None else str(target)
     return {"eq": a == b, "ne": a != b, "gt": a > b, "ge": a >= b,
             "lt": a < b, "le": a <= b}[op]
@@ -466,23 +471,24 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
                 "matched": matched, "scanned": scanned,
             }
 
+        # sort BEFORE projection, so order_by works on any source column,
+        # projected or not (before the re-audit an order_by column missing
+        # from `columns` was silently ignored).
+        if order_by:
+            for spec in reversed(order_by):
+                ci = col_i(spec["column"]) if isinstance(spec, dict) \
+                    else col_i(spec)
+                desc = isinstance(spec, dict) and \
+                    str(spec.get("dir", "asc")).lower() in ("desc", "descending")
+                matched_rows.sort(
+                    key=lambda r, k=ci: _sort_key(r[k] if k < len(r) else None),
+                    reverse=desc)
         # projection
         proj_idx = ([col_i(c) for c in columns] if columns
                     else list(range(len(col_names))))
         proj_names = [col_names[i] for i in proj_idx]
         rows = [[row[i] if i < len(row) else None for i in proj_idx]
                 for row in matched_rows]
-        # sort
-        if order_by:
-            for spec in reversed(order_by):
-                ci = col_i(spec["column"]) if isinstance(spec, dict) \
-                    else col_i(spec)
-                pj = proj_idx.index(ci) if ci in proj_idx else None
-                desc = isinstance(spec, dict) and \
-                    str(spec.get("dir", "asc")).lower() in ("desc", "descending")
-                if pj is None:
-                    continue
-                rows.sort(key=lambda r, k=pj: _sort_key(r[k]), reverse=desc)
         if distinct:
             seen = set()
             uniq = []

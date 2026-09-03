@@ -33,6 +33,9 @@ from . import gridio
 #: digits, periods, underscores; never a cell-reference shape like "A1".
 _NAME_RE = re.compile(r"^[A-Za-z_\\][A-Za-z0-9_.]*$")
 _CELLREF_RE = re.compile(r"^[A-Za-z]{1,3}\$?\d+$")
+#: R1C1-shaped names (R, C, R1C1, R2, C33) are also illegal in Excel; writing
+#: one corrupts formula parsing when the workbook opens in R1C1 mode.
+_R1C1_RE = re.compile(r"^[Rr](\d+)?([Cc](\d+)?)?$|^[Cc](\d+)?$")
 
 TABLE_ACTIONS = (
     "add_row", "delete_row", "add_column", "delete_column", "rename",
@@ -49,10 +52,12 @@ def _validate_name(wb, name: str) -> str:
     if not isinstance(name, str) or not name.strip():
         raise XlMcpError("a table needs a non-empty name")
     name = name.strip()
-    if _CELLREF_RE.match(name) or not _NAME_RE.match(name):
+    if _CELLREF_RE.match(name) or _R1C1_RE.match(name) \
+            or not _NAME_RE.match(name):
         raise XlMcpError(
             f"table name {name!r} is not a legal Excel table name (start with "
-            "a letter or underscore, no spaces, not a cell reference)")
+            "a letter or underscore, no spaces, not an A1 or R1C1 cell "
+            "reference)")
     if len(name) > 255:
         raise XlMcpError("table name exceeds 255 characters")
     existing = {t.lower() for w in wb.worksheets for t in getattr(w, "tables", {})}

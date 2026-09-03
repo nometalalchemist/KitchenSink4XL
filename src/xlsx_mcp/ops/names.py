@@ -63,10 +63,16 @@ def _find(wb, name: str, scope: str | None):
 
 
 def _normalize_refers_to(refers_to: str) -> str:
+    """Defined-name definitions are stored WITHOUT a leading '=' (workbook.xml
+    holds the bare expression). A definition saved with '=' breaks openpyxl's
+    destinations parsing, which makes the name unresolvable by the locate
+    layer, so a convenience '=' from the caller is stripped."""
     rt = str(refers_to).strip()
+    if rt.startswith("="):
+        rt = rt[1:].strip()
     if not rt:
         raise XlMcpError("refers_to must be a non-empty A1 reference or formula")
-    return rt if rt.startswith("=") else rt
+    return rt
 
 
 def manage_name(path: str, action: str, name: str | None = None,

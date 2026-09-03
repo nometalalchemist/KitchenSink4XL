@@ -124,10 +124,13 @@ def manage_data_validation(path: str, action: str, location: Any = None,
         grid = pkg.resolve(location, default_sheet=sheet)
         ws = pkg.workbook[grid.sheet]
         dvs = ws.data_validations
+        # Exact match on a member range or the whole sqref; a substring test
+        # is a trap ("A1" is a substring of "A10:A20"), so members are
+        # compared whole.
         found = None
         for dv in list(dvs.dataValidation):
             members = [str(x) for x in dv.sqref.ranges]
-            if grid.a1 in members or any(grid.a1 in m for m in members):
+            if grid.a1 in members or str(dv.sqref) == grid.a1:
                 found = dv
                 break
         if found is None:

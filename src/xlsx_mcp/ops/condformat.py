@@ -154,9 +154,13 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
         ws = pkg.workbook[grid.sheet]
         cfc = ws.conditional_formatting
         rules_map = getattr(cfc, "_cf_rules", {}) or {}
+        # Exact match on the whole sqref or on one of its member ranges.
+        # A substring test is a trap ("A1" is a substring of "A10:A20" and
+        # "A1:B2" of "A1:B20"), so member strings are compared whole.
         target_key = None
         for cf_obj in list(rules_map):
-            if str(cf_obj.sqref) == grid.a1 or grid.a1 in str(cf_obj.sqref):
+            members = [str(x) for x in cf_obj.sqref.ranges]
+            if str(cf_obj.sqref) == grid.a1 or grid.a1 in members:
                 target_key = cf_obj
                 break
         if target_key is None:

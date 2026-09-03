@@ -87,6 +87,8 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         key_specs.append((_column_index(col, header_names, min_col),
                           order in ("desc", "descending")))
 
+    key_offsets = {o for o, _rev in key_specs}
+    uncached_keys = 0
     rows = []
     for r in range(data_top, max_row + 1):
         vals, styles, sortvals = [], [], []
@@ -95,6 +97,10 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
             vals.append(cell.value)
             styles.append(_copy(cell._style))
             cv = cws.cell(r, c).value
+            fv = cell.value
+            if (cv is None and isinstance(fv, str) and fv.startswith("=")
+                    and (c - min_col) in key_offsets):
+                uncached_keys += 1  # sorts by formula TEXT, not its value
             sortvals.append(cv if cv is not None else cell.value)
         rows.append({"src": r, "vals": vals, "styles": styles,
                      "sort": sortvals})
@@ -125,7 +131,14 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         "rows_sorted": len(rows), "keys": [
             {"column": header_names[o] if o < len(header_names) else o,
              "order": "desc" if rev else "asc"} for o, rev in key_specs]}
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    if uncached_keys:
+        result["warnings"] = list(result.get("warnings", [])) + [
+            f"{uncached_keys} sort-key cell(s) hold a formula with no cached "
+            "value and were ordered by their formula TEXT, not their result. "
+            "Run recalculate or open in Excel first for a value-accurate "
+            "sort."]
+    return result
 
 
 def set_filter(path: str, location: Any, criteria: list | None = None,

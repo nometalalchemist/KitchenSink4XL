@@ -76,9 +76,14 @@ def _coerce(v: str) -> Any:
     try:
         if v.strip().lstrip("-").isdigit():
             return int(v)
-        return float(v)
+        f = float(v)
     except ValueError:
         return v
+    # float() accepts "nan"/"inf"/"infinity"; Excel has no such numbers and
+    # a NaN cell value serializes as garbage, so those stay text.
+    if f != f or f in (float("inf"), float("-inf")):
+        return v
+    return f
 
 
 def import_data(path: str, source: str | None = None,

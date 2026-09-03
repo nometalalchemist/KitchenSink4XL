@@ -214,6 +214,12 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
             raise XlMcpError(
                 "cannot delete the only sheet; a workbook needs one visible "
                 "sheet")
+        visible = [w for w in wb.worksheets if w.sheet_state == "visible"]
+        if len(visible) == 1 and visible[0].title == name:
+            raise XlMcpError(
+                f"cannot delete {name!r}: it is the only VISIBLE sheet (the "
+                "others are hidden) and a workbook needs one visible sheet; "
+                "unhide another sheet first")
         del wb[name]
         detail.update(sheet=name)
     elif action == "rename":
