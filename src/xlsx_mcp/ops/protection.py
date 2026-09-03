@@ -172,7 +172,11 @@ def set_protection(path: str, action: str, sheet: str | None = None,
                     ws.protection = SheetProtection(sheet=False)
                     removed.append(f"sheet:{ws.title}")
         if scope in ("workbook", "all"):
-            if pkg.workbook.security is not None:
+            sec = pkg.workbook.security
+            # openpyxl auto-creates an empty WorkbookProtection on new
+            # files; only an object that actually locks something counts
+            if sec is not None and (sec.lockStructure or sec.lockWindows
+                                    or sec.workbookPassword):
                 pkg.workbook.security = None
                 removed.append("workbook")
         if not removed:

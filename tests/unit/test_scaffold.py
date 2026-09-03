@@ -62,9 +62,15 @@ def test_all_tools_are_packed():
         "manage_conditional_format", "manage_data_validation",
         "apply_style", "copy_format", "audit_styles"}
     assert set(members.get("tables-names", [])) == {"manage_table", "manage_name"}
-    assert set(members.get("io", [])) == {"manage_comment"}
-    for pack in ("objects", "data", "com"):
-        assert members.get(pack, []) == []
+    # Phase 3d populates io, objects, and data; com stays empty until the
+    # application tier lands.
+    assert set(members.get("io", [])) == {
+        "manage_comment", "set_protection", "set_page_layout",
+        "set_header_footer", "get_external_links", "inspect_vba",
+        "export_file"}
+    assert set(members.get("objects", [])) == {"manage_image", "manage_chart"}
+    assert set(members.get("data", [])) == {"get_pivot", "get_connections"}
+    assert members.get("com", []) == []
     # Phase 3b lite additions.
     for name in ("create_table", "get_table", "sort_range", "set_filter",
                  "clear_filter", "manage_hyperlink", "import_data",

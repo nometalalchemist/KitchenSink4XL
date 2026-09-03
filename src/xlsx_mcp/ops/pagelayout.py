@@ -151,7 +151,7 @@ def set_page_layout(path: str, sheet: str | None = None,
             changed["print_area"] = grid.a1
     if print_title_rows is not None:
         if print_title_rows.strip().lower() == "clear":
-            ws.print_title_rows = None
+            ws._print_rows = None  # the public setter ignores None
             changed["print_title_rows"] = "cleared"
         elif not _ROWS_SPAN.match(print_title_rows.strip()):
             raise XlMcpError(
@@ -162,7 +162,7 @@ def set_page_layout(path: str, sheet: str | None = None,
             changed["print_title_rows"] = print_title_rows.strip()
     if print_title_cols is not None:
         if print_title_cols.strip().lower() == "clear":
-            ws.print_title_cols = None
+            ws._print_cols = None  # the public setter ignores None
             changed["print_title_cols"] = "cleared"
         elif not _COLS_SPAN.match(print_title_cols.strip()):
             raise XlMcpError(

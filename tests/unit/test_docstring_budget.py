@@ -44,6 +44,11 @@ MULTIPLEX = {
     # replace_cells is high-traffic with dry-run, plan-first, and
     # injection-lint semantics that do not fit the standard cap.
     "set_merge", "replace_cells",
+    # Phase 3d: the objects pair and set_protection are action-parameter
+    # multiplexes with honesty stories (round-trip, advisory protection)
+    # that must be stated; set_page_layout carries eleven orthogonal
+    # settings whose units and exclusions need naming.
+    "manage_image", "manage_chart", "set_protection", "set_page_layout",
 }
 
 

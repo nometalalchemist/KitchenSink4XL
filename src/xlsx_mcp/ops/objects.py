@@ -169,11 +169,19 @@ def manage_image(path: str, action: str, image_file: str | None = None,
             out = []
             for ws in (wb.worksheets if sheet is None else [wb[sheet]]):
                 for i, img in enumerate(getattr(ws, "_images", []), start=1):
+                    # display size comes from the anchor extent (EMU, 9525
+                    # per pixel) when present; openpyxl's img.width is the
+                    # source file's pixel size, not the placed size
+                    w = getattr(img, "width", None)
+                    h = getattr(img, "height", None)
+                    ext = getattr(getattr(img, "anchor", None), "ext", None)
+                    if ext is not None and ext.cx and ext.cy:
+                        w = round(ext.cx / 9525)
+                        h = round(ext.cy / 9525)
                     out.append({
                         "sheet": ws.title, "index": i,
                         "anchor": _anchor_cell(img),
-                        "width": getattr(img, "width", None),
-                        "height": getattr(img, "height", None),
+                        "width": w, "height": h,
                         "format": getattr(img, "format", None)})
             return {"images": out, "count": len(out)}
         finally:

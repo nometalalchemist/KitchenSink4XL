@@ -45,6 +45,10 @@ from . import envelope as _envelope
 from . import packs as _packs
 from .ops import annotations as _annotations
 from .ops import cells as _cells
+from .ops import inspectors as _inspectors
+from .ops import objects as _objects
+from .ops import pagelayout as _pagelayout
+from .ops import protection as _protection
 from .ops import condformat as _condformat
 from .ops import datavalidation as _datavalidation
 from .ops import dataio as _dataio
@@ -954,6 +958,235 @@ def audit_styles(path: str, top: int = 10) -> dict:
     orphaned entries left by past edits. Nothing is written; works while
     the file is open in Excel."""
     return _format.audit_styles(path, top=top)
+
+
+# ============================================================ PHASE 3d TOOLS
+# The remaining ungated file-tier families: objects (images and charts on the
+# openpyxl model, with the observed-round-trip gate story), protection, page
+# layout and headers/footers, the read-side inspectors (external links, VBA,
+# pivots, connections), and the multi-sheet export_file. Sparklines are an x14
+# in-sheet extension openpyxl does not model; that tool is deferred to the COM
+# tier (DESIGN as-built notes), not faked here. No em dashes.
+
+
+# ------------------------------------------------------------------ objects
+
+
+@_tool("objects")
+def manage_image(path: str, action: str, image_file: str | None = None,
+                 location: Any = None, sheet: str | None = None,
+                 width: int | None = None, height: int | None = None,
+                 index: int | None = None, out_dir: str | None = None,
+                 allow_loss: bool = False, backup: bool = True) -> dict:
+    """Manage cell-anchored images. action is insert (image_file, location as
+    the anchor cell, optional width and height in pixels), list (read-only:
+    every image with its sheet, index, anchor, size, and format), delete
+    (sheet plus index from list or location as the anchor cell), or extract
+    (write every embedded image into out_dir; read-only).
+
+    Round-trip honesty: images survive a file-based save because Pillow is
+    installed and the workbook's drawings hold pictures only; the mutating
+    actions verify that precondition, downgrade the usual hazard refusal to
+    a warning, and verify-after-write still refuses the save if an image
+    part is in fact lost. A workbook whose drawings hold real shapes
+    (textboxes, controls) refuses unless allow_loss is true, because those
+    shapes die on a file-based save. After every mutation the image count
+    is read back and a mismatch restores the backup. Auto-backup to
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
+    return _objects.manage_image(
+        path, action, image_file=image_file, location=location, sheet=sheet,
+        width=width, height=height, index=index, out_dir=out_dir,
+        allow_loss=allow_loss, backup=backup)
+
+
+@_tool("objects")
+def manage_chart(path: str, action: str, chart_type: str | None = None,
+                 data: Any = None, categories: Any = None,
+                 title: str | None = None, x_title: str | None = None,
+                 y_title: str | None = None, anchor: str | None = None,
+                 sheet: str | None = None, index: int | None = None,
+                 titles_from_data: bool = True, allow_loss: bool = False,
+                 backup: bool = True) -> dict:
+    """Create, list, and delete charts. action create takes chart_type (bar,
+    bar_horizontal, line, pie, doughnut, area, scatter), data (a location
+    object; its first row supplies series titles unless titles_from_data is
+    false, and scatter uses the first column as x values), optional
+    categories, title, x_title, y_title, and an anchor cell (default just
+    right of the data). list reports each chart's sheet, index, type,
+    title, and anchor; delete takes sheet plus index or title.
+
+    Fidelity honesty: chart fidelity is model-mediated. openpyxl
+    re-serializes every chart through its own model on save, so a complex
+    Excel-authored chart can lose sub-features the model does not know;
+    the hazard scan tracks charts as a degrade risk and warns on every
+    save. Existing charts are not editable here (delete and recreate, or
+    wait for the COM tier). After create or delete the chart count is read
+    back and a mismatch restores the backup. Auto-backup to .ks4xl-backups;
+    atomic verified save. Refuses while open in Excel."""
+    return _objects.manage_chart(
+        path, action, chart_type=chart_type, data=data,
+        categories=categories, title=title, x_title=x_title,
+        y_title=y_title, anchor=anchor, sheet=sheet, index=index,
+        titles_from_data=titles_from_data, allow_loss=allow_loss,
+        backup=backup)
+
+
+# --------------------------------------------------------------- protection
+
+
+@_tool("io")
+def set_protection(path: str, action: str, sheet: str | None = None,
+                   password: str | None = None, options: dict | None = None,
+                   unlock_ranges: list | None = None, locked: bool = False,
+                   structure: bool = True, windows: bool = False,
+                   scope: str = "all", allow_loss: bool = False,
+                   backup: bool = True) -> dict:
+    """Advisory workbook and sheet protection. action is sheet (protect one
+    sheet; options maps per-option names like format_cells, insert_rows,
+    sort, auto_filter to true = allowed while protected; optional
+    password), workbook (lock the structure and optionally windows,
+    optional password), unlock (mark unlock_ranges as exceptions that stay
+    editable under protection; locked true relocks them), remove (scope
+    sheet, workbook, or all), or status (read-only report of every lock).
+
+    Honesty: xlsx protection is tamper DISCOURAGEMENT, not security. The
+    password is stored as the legacy ECMA-376 hash Excel checks in its UI;
+    the file stays a readable zip and any tool can strip the lock. Real
+    encryption is a different mechanism and needs the Excel application
+    (com pack, com_save_with_password, a later phase). Auto-backup to
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
+    return _protection.set_protection(
+        path, action, sheet=sheet, password=password, options=options,
+        unlock_ranges=unlock_ranges, locked=locked, structure=structure,
+        windows=windows, scope=scope, allow_loss=allow_loss, backup=backup)
+
+
+# -------------------------------------------------------------- page layout
+
+
+@_tool("io")
+def set_page_layout(path: str, sheet: str | None = None,
+                    orientation: str | None = None,
+                    paper_size: Any = None, margins: dict | None = None,
+                    scale: int | None = None, fit_to_width: int | None = None,
+                    fit_to_height: int | None = None,
+                    print_area: str | None = None,
+                    print_title_rows: str | None = None,
+                    print_title_cols: str | None = None,
+                    gridlines: bool | None = None,
+                    headings: bool | None = None, allow_loss: bool = False,
+                    backup: bool = True) -> dict:
+    """Set the print-shaped page settings in one call; every parameter is
+    optional and unset ones keep their current values. orientation is
+    portrait or landscape; paper_size is a name (letter, legal, tabloid,
+    executive, a3, a4, a5, b4, b5, ledger) or an ECMA-376 code; margins
+    maps left, right, top, bottom, header, footer to inches; scale (10-400
+    percent) and the fit_to_width/fit_to_height page counts are mutually
+    exclusive; print_area takes an A1 range or 'clear'; print_title_rows
+    ('1:2') and print_title_cols ('A:B') repeat those spans on every
+    printed page; gridlines and headings toggle their print flags.
+    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while
+    open in Excel."""
+    return _pagelayout.set_page_layout(
+        path, sheet=sheet, orientation=orientation, paper_size=paper_size,
+        margins=margins, scale=scale, fit_to_width=fit_to_width,
+        fit_to_height=fit_to_height, print_area=print_area,
+        print_title_rows=print_title_rows, print_title_cols=print_title_cols,
+        gridlines=gridlines, headings=headings, allow_loss=allow_loss,
+        backup=backup)
+
+
+@_tool("io")
+def set_header_footer(path: str, sheet: str | None = None,
+                      header: dict | None = None, footer: dict | None = None,
+                      apply_to: str = "odd", raw: bool = False,
+                      allow_loss: bool = False, backup: bool = True) -> dict:
+    """Write the three-section page headers and footers. header and footer
+    are {left, center, right} dicts; an empty string clears a section.
+    Text is literal by default: & is escaped and the placeholders {page}
+    {pages} {date} {time} {file} {sheet} {path} expand to Excel codes;
+    raw=true passes & codes through verbatim. apply_to targets odd
+    (default), even, or first pages, setting the matching flag. Auto-backup
+    to .ks4xl-backups; atomic verified save. Refuses while open in
+    Excel."""
+    return _pagelayout.set_header_footer(
+        path, sheet=sheet, header=header, footer=footer, apply_to=apply_to,
+        raw=raw, allow_loss=allow_loss, backup=backup)
+
+
+# ---------------------------------------------------- read-side inspectors
+
+
+@_tool("io")
+def get_external_links(path: str) -> dict:
+    """List external workbook links, read-only: each link's target path from
+    its relationship, the sheet names it references, and the cached cell
+    values Excel stored at the last refresh (capped per link, with the
+    total count and a truncated flag). Cached values are copies of data
+    from OTHER workbooks, so treat the output as sensitive. File-based
+    edits preserve external links, making this an audit tool; breaking or
+    repointing links is not offered at the file tier. Works while the file
+    is open in Excel."""
+    return _inspectors.get_external_links(path)
+
+
+@_tool("io")
+def inspect_vba(path: str) -> dict:
+    """Read-only VBA inspection: whether the workbook carries a
+    vbaProject.bin, its size and declared content type, and the module
+    names, types, and stream sizes extracted from the project's dir stream
+    when the container parses as a well-formed compound file. A container
+    that does not parse degrades honestly to presence plus size with a
+    note saying so. This server never writes or runs VBA; macro authoring
+    and execution stay outside the file tier. Works while the file is open
+    in Excel."""
+    return _inspectors.inspect_vba(path)
+
+
+@_tool("data")
+def get_pivot(path: str, sheet: str | None = None) -> dict:
+    """Describe existing pivot tables, read-only: each pivot's sheet and
+    location, source sheet and range, cache field list, row, column, data,
+    and page fields by name, cache record count, who refreshed it last and
+    when, and the refresh-on-load flag. Description only, stated honestly:
+    creating, modifying, or refreshing a pivot needs the Excel application
+    (com pack, a later phase), while file-based edits elsewhere in the
+    workbook preserve the pivot parts. Works while the file is open in
+    Excel."""
+    return _inspectors.get_pivot(path, sheet=sheet)
+
+
+@_tool("data")
+def get_connections(path: str) -> dict:
+    """List data connections and Power Query presence, read-only: each
+    connection's name, type, connection string or URL, command, and
+    refresh-on-load flag from the connections part, plus DataMashup
+    evidence for Power Query and any legacy query-table parts. Connection
+    strings can embed server names and credentials, so the output is
+    marked sensitive. Refreshing a connection needs the Excel application
+    (com pack, a later phase). Works while the file is open in Excel."""
+    return _inspectors.get_connections(path)
+
+
+# -------------------------------------------------------------- export_file
+
+
+@_tool("io")
+def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
+                out_dir: str | None = None, out_file: str | None = None,
+                header: bool = True, values: str = "cached",
+                records: bool = False) -> dict:
+    """Export whole sheets to a CSV/TSV file set or one JSON bundle, the
+    multi-sheet complement to export_range. sheets picks a subset (default
+    every sheet). csv and tsv write one file per sheet into out_dir, or
+    return per-sheet text inline; json builds one bundle keyed by sheet
+    name, written to out_file or returned inline (records=true emits row
+    objects). values picks the calc story (cached, formula, both) and the
+    result states the mode used. Read-only; nothing in the workbook
+    changes."""
+    return _dataio.export_file(
+        path, fmt=fmt, sheets=sheets, out_dir=out_dir, out_file=out_file,
+        header=header, values=values, records=records)
 
 
 # ------------------------------------------------ tiered loading (Section 9)
