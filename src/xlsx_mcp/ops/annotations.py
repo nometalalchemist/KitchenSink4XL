@@ -91,6 +91,10 @@ def manage_comment(path: str, action: str, location: Any = None,
         if cell.comment is None:
             raise TargetNotFound(f"{grid.a1} has no comment to delete")
         cell.comment = None
+        # Removing the sheet's last comment drops its comment part and VML
+        # anchor; declare the deliberate removal so the default-fail inventory
+        # verify does not read it as silent loss.
+        pkg.expect_removal("xl/comments", "xl/drawings/commentsdrawing")
         detail = {"deleted": grid.a1}
 
     pkg._changed["comment"] = {"sheet": ws.title, **detail}

@@ -328,3 +328,156 @@ def test_package_save_end_to_end_still_green(tmp_path):
     result = pkg.save()
     assert result["ok"] is True and result["verified"] is True
     shutil.rmtree(tmp_path / ".ks4xl-backups", ignore_errors=True)
+
+
+# --------------------- default-fail part-inventory verification (this change)
+
+_CORPUS = Path(__file__).resolve().parents[1] / "fixtures" / "corpus"
+_CORPUS_FIXTURES = sorted(
+    f.name for f in _CORPUS.glob("*.xls*") if not f.name.startswith("_"))
+
+
+@pytest.mark.parametrize("fixture", _CORPUS_FIXTURES)
+def test_corpus_roundtrip_survives_default_fail_inventory(tmp_path, fixture):
+    """THE critical regression risk of the default-fail flip: every corpus
+    fixture must still save cleanly through WorkbookPackage (with allow_loss
+    exactly when the hazard gate demands it), meaning the legitimate-rewrite
+    pass-list fully explains ordinary openpyxl save churn."""
+    path = tmp_path / fixture
+    shutil.copy2(_CORPUS / fixture, path)
+    pkg = WorkbookPackage.open(str(path))
+    pkg.set_cell(None, "A1000", 42)
+    result = pkg.save(allow_loss=pkg.hazard.would_lose)
+    assert result["ok"] is True and result["verified"] is True
+
+
+def _make_with_future_part(tmp_path: Path, name: str = "wb.xlsx") -> Path:
+    """A workbook carrying a part TYPE the hazard table has never cataloged;
+    openpyxl's save silently drops it, which is exactly the gap the default-
+    fail check closes."""
+    src = _make_clean(tmp_path / ("src_" + name))
+    return _inject_part(
+        src, tmp_path / name, "xl/futureFeature/part1.xml",
+        b"<future>user content the model does not know</future>",
+        "application/xml")
+
+
+def test_uncataloged_part_loss_fails_and_preserves_original(tmp_path):
+    path = _make_with_future_part(tmp_path)
+    original = path.read_bytes()
+    pkg = WorkbookPackage.open(str(path))
+    pkg.set_cell("S", "A3", 3)
+    with pytest.raises(ValidationFailed) as exc_info:
+        pkg.save()      # the DEFAULT openpyxl saver drops the unknown part
+    assert "xl/futureFeature/part1.xml" in str(exc_info.value)
+    assert path.read_bytes() == original
+
+
+def test_uncataloged_part_loss_not_excused_by_allow_loss(tmp_path):
+    """allow_loss consents to the loss of NAMED fragile families the hazard
+    gate warned about; it must not excuse an unrelated surprise loss."""
+    path = _make_with_future_part(tmp_path)
+    original = path.read_bytes()
+    pkg = WorkbookPackage.open(str(path))
+    pkg.set_cell("S", "A3", 3)
+    with pytest.raises(ValidationFailed) as exc_info:
+        pkg.save(allow_loss=True)
+    assert "xl/futureFeature/part1.xml" in str(exc_info.value)
+    assert path.read_bytes() == original
+
+
+def test_allow_loss_still_covers_named_fragile_family(tmp_path):
+    """The interaction the flip must not break: a user who accepted the loss
+    of a named fragile family (slicers here) saves fine under allow_loss."""
+    src = _make_clean(tmp_path / "src.xlsx")
+    path = _inject_part(
+        src, tmp_path / "wb.xlsx", "xl/slicers/slicer1.xml",
+        b"<slicers>real content</slicers>",
+        "application/vnd.ms-excel.slicer+xml")
+    pkg = WorkbookPackage.open(str(path))
+    pkg.set_cell("S", "A3", 3)
+    result = pkg.save(allow_loss=True)
+    assert result["ok"] is True
+    with zipfile.ZipFile(path) as zf:
+        assert "xl/slicers/slicer1.xml" not in zf.namelist()
+
+
+def test_fragile_consent_plus_surprise_loss_still_fails(tmp_path):
+    """allow_loss for the slicer AND an uncataloged part in the same file:
+    the surprise loss must still refuse the save."""
+    src = _make_clean(tmp_path / "src.xlsx")
+    with_slicer = _inject_part(
+        src, tmp_path / "s.xlsx", "xl/slicers/slicer1.xml",
+        b"<slicers>real content</slicers>",
+        "application/vnd.ms-excel.slicer+xml")
+    path = _inject_part(
+        with_slicer, tmp_path / "wb.xlsx", "xl/futureFeature/part1.xml",
+        b"<future>content</future>", "application/xml")
+    original = path.read_bytes()
+    pkg = WorkbookPackage.open(str(path))
+    pkg.set_cell("S", "A3", 3)
+    with pytest.raises(ValidationFailed) as exc_info:
+        pkg.save(allow_loss=True)
+    assert "xl/futureFeature/part1.xml" in str(exc_info.value)
+    assert "slicer" not in str(exc_info.value)   # consented, not the failure
+    assert path.read_bytes() == original
+
+
+def test_sheet_renumbering_workbook_saves_clean(tmp_path):
+    """Excel-authored files often carry non-contiguous sheet part numbers;
+    openpyxl renumbers them on save (observed sheet5 -> sheet1) and that must
+    not read as part loss."""
+    src = _make_clean(tmp_path / "src.xlsx")
+    odd = tmp_path / "odd.xlsx"
+    with zipfile.ZipFile(src) as zin, \
+            zipfile.ZipFile(odd, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            name = item.filename
+            if name == "xl/worksheets/sheet1.xml":
+                name = "xl/worksheets/sheet5.xml"
+            if name == "xl/_rels/workbook.xml.rels":
+                data = data.replace(b"worksheets/sheet1.xml",
+                                    b"worksheets/sheet5.xml")
+            if name == "[Content_Types].xml":
+                data = data.replace(b"/xl/worksheets/sheet1.xml",
+                                    b"/xl/worksheets/sheet5.xml")
+            zout.writestr(name, data)
+    pkg = WorkbookPackage.open(str(odd))
+    pkg.set_cell("S", "A3", 3)
+    result = pkg.save()
+    assert result["ok"] is True
+
+
+def test_deliberate_sheet_delete_saves_with_registration(tmp_path):
+    """The lifecycle delete path registers its removal; the default-fail
+    check must accept the registered deficit and refuse an unregistered one."""
+    from xlsx_mcp.ops.lifecycle import manage_worksheet
+
+    wb = openpyxl.Workbook()
+    wb.active.title = "Keep"
+    wb.active["A1"] = 1
+    wb.create_sheet("Drop")["A1"] = 2
+    path = tmp_path / "two.xlsx"
+    wb.save(path)
+    wb.close()
+
+    result = manage_worksheet(str(path), "delete", sheet="Drop")
+    assert result["ok"] is True
+    with zipfile.ZipFile(path) as zf:
+        assert sum(1 for n in zf.namelist()
+                   if n.startswith("xl/worksheets/")
+                   and n.endswith(".xml") and "_rels" not in n) == 1
+
+    # the same deficit WITHOUT registration refuses
+    wb = openpyxl.Workbook()
+    wb.active.title = "Keep"
+    wb.create_sheet("Drop")
+    path2 = tmp_path / "two2.xlsx"
+    wb.save(path2)
+    wb.close()
+    pkg = WorkbookPackage.open(str(path2))
+    del pkg.workbook["Drop"]          # no expect_removal call
+    with pytest.raises(ValidationFailed) as exc_info:
+        pkg.save()
+    assert "worksheet part(s) missing" in str(exc_info.value)

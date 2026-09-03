@@ -434,6 +434,10 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
 
     elif action == "to_range":
         del ws.tables[table.name]
+        # Deliberate removal of the table part; declare it so the default-fail
+        # inventory verify does not read the vanished xl/tables/ part as
+        # silent loss. The cell data stays on the sheet.
+        pkg.expect_removal("xl/tables/")
         detail.update(converted_to_range=True)
 
     else:  # set_style

@@ -226,6 +226,14 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
                 "others are hidden) and a workbook needs one visible sheet; "
                 "unhide another sheet first")
         del wb[name]
+        # A deleted sheet takes its own part plus any per-sheet companion
+        # parts (comments, comment VML anchors, tables) with it; declare the
+        # removal so the default-fail inventory verify does not read it as
+        # silent loss. Fragile per-sheet parts (charts, pivots) stay under
+        # the hazard gate and still need allow_loss or COM.
+        pkg.expect_removal("xl/worksheets/", "xl/chartsheets/",
+                           "xl/comments", "xl/drawings/commentsdrawing",
+                           "xl/tables/")
         detail.update(sheet=name)
     elif action == "rename":
         name = _need(sheet, "the sheet to rename")

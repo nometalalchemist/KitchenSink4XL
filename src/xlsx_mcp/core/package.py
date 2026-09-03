@@ -14,11 +14,15 @@ per-tool wiring (DESIGN Sections 2.4, 3; PLAN reuse ledger 1.2). It integrates:
     the pre-mutation state immediately before promotion, plus the per-file
     write lock held across the whole read-modify-verify-save cycle.
   - ATOMIC VALIDATED SAVE with VERIFY-AFTER-WRITE (core.verify): the mutation
-    is written to a temp path and verified (structural re-open, no unexpected
-    fragile-part loss vs the pre-write scan, content read-back against intent)
-    BEFORE the original is touched. A failed verify leaves the original
-    unmodified and refuses with VALIDATION_FAILED. After promotion a second
-    verify runs; if it fails, the pre-mutation backup is restored.
+    is written to a temp path and verified (structural re-open, DEFAULT-FAIL
+    part-inventory diff vs the pre-write scan so ANY unexplained part loss
+    refuses, the fragile-part checks, content read-back against intent)
+    BEFORE the original is touched. Ops that deliberately remove parts at the
+    model level (sheet delete, table to_range, comment delete) declare it via
+    expect_removal() so the inventory diff does not mistake the removal for
+    silent loss. A failed verify leaves the original unmodified and refuses
+    with VALIDATION_FAILED. After promotion a second verify runs; if it
+    fails, the pre-mutation backup is restored.
   - FORMULA-WRITE SAFETY: any formula written through the package is
     normalized (core.calc._xlfn/_xlpm shim) and the workbook is marked
     fullCalcOnLoad so the next Excel/LibreOffice open recalculates.
@@ -73,6 +77,7 @@ class WorkbookPackage:
         self._formula_written = False
         self._structural: list[_refs.RefEdit] = []
         self._changed: dict[str, Any] = {}
+        self._expected_removals: set[str] = set()
 
     # ------------------------------------------------------------- open
 
@@ -176,6 +181,16 @@ class WorkbookPackage:
             {"kind": edit.kind, "sheet": edit.sheet, "index": edit.index,
              "count": edit.count, "rewrites": report.as_dict()})
         return report
+
+    def expect_removal(self, *prefixes: str) -> None:
+        """Register part-name prefixes an op DELIBERATELY removes at the model
+        level (sheet delete, table to_range, comment delete), so the default-
+        fail inventory check in verify-after-write does not flag the removal
+        as silent loss. Scoped to the next successful save only; cleared with
+        the other pending-edit state. This is the narrow, per-operation escape
+        hatch; nothing else excuses a non-fragile part from the inventory
+        diff."""
+        self._expected_removals.update(p.lower() for p in prefixes)
 
     # ------------------------------------------------------------- save
 
@@ -285,7 +300,8 @@ class WorkbookPackage:
 
             pre = _verify.verify_after_write(
                 tmp, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss, pre_sizes=self._pre_sizes)
+                allow_loss=allow_loss, pre_sizes=self._pre_sizes,
+                expected_removals=frozenset(self._expected_removals))
             if not pre.ok:
                 _silent_remove(tmp)
                 raise ValidationFailed(
@@ -306,7 +322,8 @@ class WorkbookPackage:
 
             post = _verify.verify_after_write(
                 path, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss, pre_sizes=self._pre_sizes)
+                allow_loss=allow_loss, pre_sizes=self._pre_sizes,
+                expected_removals=frozenset(self._expected_removals))
             if not post.ok:
                 restored = False
                 if backup:
@@ -331,6 +348,7 @@ class WorkbookPackage:
             self._formula_written = False
             self._structural = []
             self._changed = {}
+            self._expected_removals = set()
             return {
                 "ok": True,
                 "file": path,

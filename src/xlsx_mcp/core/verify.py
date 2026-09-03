@@ -10,14 +10,28 @@ user's path, the server re-opens it and confirms three things:
      well-formed XML (a streaming parse, so a truncated or garbage sheet
      cannot pass just because openpyxl's lazy read-only load never touched
      it), and openpyxl can parse the package.
-  2. NO UNEXPECTED PART LOSS OR REPLACEMENT: the produced package's part
-     list is diffed against the pre-write scan. A fragile part (one the
-     hazard table knows openpyxl can drop) that was present before and
-     vanished, and was NOT covered by an explicit allow_loss, fails the
-     write. A fragile part that is still PRESENT but was replaced with
-     empty content, or whose XML no longer parses, also fails (loss by
-     replacement, not just by omission). Routine, expected drops
-     (calcChain.xml, printer settings) are ignored.
+  2. NO UNEXPECTED PART LOSS OR REPLACEMENT, DEFAULT-FAIL: the produced
+     package's part inventory (names and uncompressed sizes) is diffed
+     against the pre-write scan, and the default is REFUSAL. ANY part that
+     was present before and is missing or empty afterward fails the write
+     unless its loss is explained by one of four documented excuses:
+       (a) the legitimate-rewrite pass-list (_PASS_EXACT / _PASS_PREFIX),
+           each entry justified by an observed, harmless round-trip
+           behavior recorded next to it;
+       (b) a model-regenerated family (_RENUMBERED_FAMILIES) whose part
+           NAMES openpyxl reassigns on every save, judged by family COUNT
+           instead of name identity (a renumber is not a loss; a shrinking
+           count still fails unless explained);
+       (c) an explicit allow_loss override, which excuses ONLY parts that
+           match a named hazard family the user was warned about, never an
+           unrelated surprise loss;
+       (d) a deliberate model-level removal the mutating op registered via
+           WorkbookPackage.expect_removal (sheet delete, table to_range,
+           comment delete).
+     Fragile parts (hazard table) additionally keep their stricter checks:
+     a fragile part still PRESENT but replaced with empty content, or
+     whose XML no longer parses, also fails (loss by replacement, not just
+     by omission).
   3. CONTENT READ-BACK: the specific cells the tool claimed to write are
      re-read and compared against intent (literal values or formula strings).
      A mismatch fails the write.
@@ -32,8 +46,10 @@ server's own writes; it cannot certify a file the server did not produce.
 
 from __future__ import annotations
 
+import re
 import zipfile
 from dataclasses import dataclass, field
+from typing import Iterable
 
 from . import hazard as _hazard
 
@@ -45,6 +61,93 @@ EXPECTED_DROPPABLE = frozenset({
     "xl/calcchain.xml",
     "docprops/thumbnail.jpeg",
 })
+
+# --------------------------------------------------------------------------
+# THE LEGITIMATE-REWRITE PASS-LIST for the default-fail inventory check.
+#
+# Every entry below is justified by an OBSERVED openpyxl round-trip behavior,
+# measured on this machine against the fixture corpus (and targeted synthetic
+# injections) with the package's own load flags (keep_vba per extension,
+# rich_text=False, data_only=False). An entry with no observation does not
+# belong here; an uncataloged part type that vanishes must FAIL, that is the
+# whole point of the default-fail posture.
+
+#: Exact part names (compared lowercase) whose absence after a save is a
+#: harmless, observed rewrite behavior.
+_PASS_EXACT: dict[str, str] = {
+    "xl/calcchain.xml": (
+        "OBSERVED: injected xl/calcChain.xml into clean.xlsx, round-trip "
+        "dropped it. It is a rebuildable calculation-order cache; Excel "
+        "regenerates it on the next open, no user content lives in it."),
+    "xl/sharedstrings.xml": (
+        "OBSERVED: pivot.xlsx / pivot_slicer.xlsx / shape.xlsx (Excel-"
+        "authored) round-trips drop xl/sharedStrings.xml; the strings are "
+        "re-emitted INLINE in the sheet XML (t=\"inlineStr\", read back and "
+        "confirmed intact). A representation change, not a loss."),
+}
+
+#: Part-name prefixes (compared lowercase) whose absence after a save is a
+#: harmless, observed rewrite behavior.
+_PASS_PREFIX: dict[str, str] = {
+    "xl/printersettings/": (
+        "OBSERVED: injected xl/printerSettings/printerSettings1.bin, round-"
+        "trip dropped it. Device page-setup blobs; the pageSetup element in "
+        "the sheet XML survives. Policy documented in core/hazard.py."),
+    "docprops/thumbnail.": (
+        "OBSERVED: injected docProps/thumbnail.jpeg, round-trip dropped it. "
+        "A preview image Excel regenerates; openpyxl never writes one."),
+}
+
+#: Model-regenerated part FAMILIES whose names openpyxl reassigns from live
+#: model ids on every save, so name identity is meaningless across a save and
+#: the check compares family COUNTS instead. A member 'lost' while the family
+#: count holds is a renumber, not a loss; a count that SHRANK fails unless an
+#: expected_removals registration explains it.
+_RENUMBERED_FAMILIES: tuple[tuple[str, re.Pattern, str], ...] = (
+    ("worksheet", re.compile(r"^xl/worksheets/sheet\d+\.xml$"),
+     "OBSERVED: a workbook carrying xl/worksheets/sheet5.xml round-trips to "
+     "xl/worksheets/sheet1.xml, content intact (openpyxl assigns sequential "
+     "ids at load, not original part names)."),
+    ("chartsheet", re.compile(r"^xl/chartsheets/sheet\d+\.xml$"),
+     "OBSERVED: xl/chartsheets/sheet9.xml round-trips to "
+     "xl/chartsheets/sheet1.xml, same sequential-id mechanism."),
+    ("legacy comment", re.compile(
+        r"^(xl/comments\d+\.xml|xl/comments/comment\d+\.xml)$"),
+     "OBSERVED: Excel-style xl/comments1.xml round-trips to openpyxl-style "
+     "xl/comments/comment1.xml with the comment intact (a rename AND a "
+     "relocation, so both spellings are one family)."),
+    ("comment VML anchor",
+     re.compile(r"^xl/drawings/commentsdrawing\d+\.vml$"),
+     "OBSERVED: comment anchors are written with model-assigned sequential "
+     "ids like the comment parts they accompany (removing a comment via the "
+     "model dropped xl/drawings/commentsDrawing1.vml alongside its comment "
+     "part). Excel-authored vmlDrawing*.vml stays under the drawings hazard "
+     "spec and is not excused here."),
+)
+
+
+def _passlisted(low: str) -> bool:
+    return (low in _PASS_EXACT
+            or any(low.startswith(p) for p in _PASS_PREFIX))
+
+
+def _is_rels_part(low: str) -> bool:
+    """Relationship parts are derived metadata openpyxl regenerates from the
+    model on every save; a rels part legitimately vanishes when its last
+    relationship does (OBSERVED: shape.xlsx round-trip drops
+    xl/worksheets/_rels/sheet1.xml.rels once its only target, the dropped
+    drawing, is gone). Every rels TARGET is itself a part in this same
+    inventory, so excusing the rels part loses no coverage, and a rels loss
+    that breaks package resolution still fails the structural check."""
+    return low.endswith(".rels") and (low == "_rels/.rels"
+                                      or "/_rels/" in low)
+
+
+def _family_label(low: str) -> str | None:
+    for label, rex, _obs in _RENUMBERED_FAMILIES:
+        if rex.match(low):
+            return label
+    return None
 
 #: Ceiling for the per-part XML well-formedness re-parse in the replacement
 #: check. Fragile parts are typically small; anything bigger is skipped there
@@ -160,6 +263,88 @@ def _is_fragile(name: str) -> bool:
     return any(spec.matcher(name) for spec in _hazard.HAZARD_SPECS)
 
 
+def part_inventory_check(pre_sizes, path: str, *,
+                         expected_removals: Iterable[str] = (),
+                         ) -> tuple[bool, list[str]]:
+    """The DEFAULT-FAIL part-inventory diff: any part present before the save
+    and missing or empty afterward fails unless its loss is explained.
+
+    Jurisdiction: NON-fragile parts only. Fragile parts (hazard table) are
+    part_loss_check's and part_content_check's job, where allow_loss governs;
+    allow_loss deliberately does NOT reach this check, because the user who
+    accepted the loss of a NAMED fragile family did not accept unrelated
+    surprise losses.
+
+    Excuses, in order: the legitimate-rewrite pass-list (_PASS_EXACT /
+    _PASS_PREFIX), regenerated relationship parts (_is_rels_part), an
+    expected_removals prefix registered by the mutating op for a deliberate
+    model-level delete, and renumbered families (judged by count, below).
+
+    pre_sizes maps part name to uncompressed size at open time; sizes of -1
+    mean 'name known, size unknown' (the emptied check skips those). An empty
+    mapping checks nothing and passes."""
+    if not pre_sizes:
+        return True, []
+    try:
+        with zipfile.ZipFile(path) as zf:
+            post = {i.filename: i.file_size for i in zf.infolist()}
+    except Exception:  # noqa: BLE001
+        return False, ["could not re-read produced package parts"]
+
+    exp = tuple(e.lower() for e in expected_removals)
+
+    def _expected(low: str) -> bool:
+        return any(low.startswith(e) for e in exp)
+
+    problems: list[str] = []
+    missing = [n for n in pre_sizes if n not in post]
+
+    # --- missing parts (name-based, families deferred to the count stage) ---
+    for name in sorted(missing):
+        low = name.lower()
+        if _is_fragile(name):
+            continue  # part_loss_check's jurisdiction (allow_loss governs)
+        if _passlisted(low) or _is_rels_part(low) or _expected(low):
+            continue
+        if _family_label(low) is not None:
+            continue  # judged by family count below
+        problems.append(
+            f"{name} was present before the save and is missing after it, "
+            "and its loss is not on the legitimate-rewrite list")
+
+    # --- renumbered families: count comparison ------------------------------
+    for label, rex, _obs in _RENUMBERED_FAMILIES:
+        pre_n = sum(1 for n in pre_sizes if rex.match(n.lower()))
+        if not pre_n:
+            continue
+        post_n = sum(1 for n in post if rex.match(n.lower()))
+        if post_n >= pre_n:
+            continue  # renumber or growth, never a loss
+        lost = [n for n in missing if rex.match(n.lower())]
+        if lost and all(_expected(n.lower()) for n in lost):
+            continue  # a registered deliberate removal explains the deficit
+        problems.append(
+            f"{pre_n - post_n} {label} part(s) missing after the save "
+            f"({pre_n} before, {post_n} after; lost: {', '.join(sorted(lost))})")
+
+    # --- parts shrunk to empty ---------------------------------------------
+    for name, pre_size in sorted(pre_sizes.items()):
+        if name not in post or not isinstance(pre_size, int) or pre_size <= 0:
+            continue
+        if post[name] != 0:
+            continue
+        low = name.lower()
+        if _is_fragile(name):
+            continue  # part_content_check reports fragile replacement
+        if _passlisted(low) or _is_rels_part(low) or _expected(low):
+            continue
+        problems.append(
+            f"{name} was replaced with empty content "
+            f"(was {pre_size} bytes)")
+
+    return (not problems), problems
+
+
 def part_content_check(pre_sizes, path: str) -> tuple[bool, list[str]]:
     """Catch loss by REPLACEMENT, which a presence diff cannot see: a fragile
     part that still exists but was written back empty when it had content
@@ -232,7 +417,8 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
 
 def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
                        allow_loss: bool = False,
-                       pre_sizes: dict | None = None) -> VerifyResult:
+                       pre_sizes: dict | None = None,
+                       expected_removals: Iterable[str] = ()) -> VerifyResult:
     """Run the full verify gate on a produced (temp) package. Returns a
     VerifyResult; the caller raises ValidationFailed and refuses to promote on
     ``ok is False``."""
@@ -251,6 +437,17 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
         result.reasons.append(
             "the write would drop fragile part(s) that were present before: "
             + ", ".join(lost))
+
+    # default-fail inventory diff over everything the fragile checks do not
+    # own; falls back to a name-only inventory when no pre-scan sizes exist.
+    inventory = pre_sizes or {n: -1 for n in pre_parts}
+    ok, unexplained = part_inventory_check(
+        inventory, path, expected_removals=expected_removals)
+    if not ok:
+        result.ok = False
+        result.reasons.append(
+            "unexplained part loss (refusing by default): "
+            + "; ".join(unexplained))
 
     ok, replaced = part_content_check(pre_sizes or {}, path)
     if not ok:
@@ -271,6 +468,6 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
 
 __all__ = [
     "VerifyResult", "verify_after_write", "structural_check",
-    "part_loss_check", "part_content_check", "content_readback",
-    "EXPECTED_DROPPABLE",
+    "part_loss_check", "part_inventory_check", "part_content_check",
+    "content_readback", "EXPECTED_DROPPABLE",
 ]
