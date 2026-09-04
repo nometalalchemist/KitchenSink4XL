@@ -170,15 +170,43 @@ def com_retry(fn: Callable[[], Any], *, attempts: int = 4,
         f"({type(last).__name__ if last else 'unknown'})")
 
 
+#: The HRESULTs Excel actually hands back, in plain English. Without this a
+#: refusal read "com_error (HRESULT -2147352567)" -- a pywin32 repr inside an
+#: otherwise clean envelope, which tells a caller nothing about what to do
+#: (insane round, L-3).
+_HRESULT_TEXT = {
+    -2147352567: ("Excel rejected the call and supplied no message of its "
+                  "own. That is what Excel returns when the arguments are "
+                  "not valid for the current state of the workbook (a range "
+                  "that does not fit the operation, a cell that holds no "
+                  "formula, a value it cannot use)"),
+    -2147418111: ("Excel was busy and rejected the call; it is running a "
+                  "command or showing a dialog"),
+    -2147417846: "Excel asked the caller to retry later; it stayed busy",
+    -2146777998: ("Excel is in cell-edit mode or otherwise ignoring "
+                  "automation; press Escape in Excel and retry"),
+    -2147221164: "the Excel COM class is not registered on this machine",
+    -2147023174: "the Excel process stopped answering (RPC server unavailable)",
+}
+
+
 def excel_error_message(exc: Exception) -> str:
     """A human-facing message for a pywin32 com_error: Excel's own text when
-    present, else the exception class and HRESULT."""
+    present, else a plain-English rendering of the HRESULT. Never a raw
+    pywin32 repr."""
     excepinfo = getattr(exc, "excepinfo", None)
     if excepinfo and len(excepinfo) > 2 and excepinfo[2]:
         return str(excepinfo[2]).strip()
     hr = getattr(exc, "hresult", None)
+    if hr is None:
+        args = getattr(exc, "args", ())
+        hr = args[0] if args and isinstance(args[0], int) else None
     if hr is not None:
-        return f"{type(exc).__name__} (HRESULT {hr})"
+        known = _HRESULT_TEXT.get(hr)
+        if known:
+            return known
+        return (f"Excel rejected the call and supplied no message "
+                f"(error code 0x{hr & 0xFFFFFFFF:08X})")
     return f"{type(exc).__name__}: {exc}"
 
 
@@ -337,17 +365,34 @@ class ComExecutor:
 
     @staticmethod
     def _sweep_stale_journal(manager: ExcelInstanceManager) -> None:
-        """Reclaim journal-owned PIDs older than STALE_JOURNAL_SECONDS that
-        are still alive (crash leftovers from a prior session). BY OWNED PID
-        ONLY; fresh records (a possibly-concurrent live session) are left."""
+        """JOURNAL REPLAY at startup: reclaim owned Excel PIDs that no live
+        server is responsible for. BY OWNED PID ONLY, always.
+
+        Two populations, and the first one is the fix for H-4:
+
+          - ABANDONED: the record names an owning SERVER process that is gone
+            (crash, or a clean exit whose Quit never landed). Nobody is
+            coming back for these, so they are reclaimed at once. Waiting out
+            the 15-minute age window instead is how an invisible EXCEL.EXE
+            survived a clean shutdown, outlived the grace period, and could
+            not be reaped by the next server.
+          - AGED: older than STALE_JOURNAL_SECONDS with no owner recorded
+            (a record written before owner tracking). Unchanged.
+
+        A record whose owner is STILL ALIVE belongs to a concurrent session
+        and is never touched."""
         from .instances import pid_alive, taskkill
 
-        data = manager.journal._load()
+        data = manager.journal.records()
+        abandoned = manager.journal.abandoned_pids()
         now = time.time()
         for pid_s, rec in list(data.items()):
-            pid = int(pid_s)
+            try:
+                pid = int(pid_s)
+            except ValueError:
+                continue
             age = now - float(rec.get("spawned_at", now))
-            if age < STALE_JOURNAL_SECONDS:
+            if pid not in abandoned and age < STALE_JOURNAL_SECONDS:
                 continue
             if pid_alive(pid):
                 taskkill(pid)
@@ -512,33 +557,93 @@ class ComExecutor:
         pooled = None
         owned: list[int] = []
         journaled: list[int] = []
-        if manager is not None:
-            try:
+        abandoned: list[int] = []
+        try:
+            # The JOURNAL is on disk and is the record of what this server has
+            # spawned; reading it through the live manager only made
+            # journaled_pids honest AFTER a worker existed, so a fresh server
+            # reported "journaled_pids: []" next to a stranded EXCEL.EXE it
+            # had every record of (insane round, H-4).
+            jm = manager if manager is not None else \
+                ExcelInstanceManager(self._journal_path)
+            journaled = sorted(jm.journal.owned_pids())
+            abandoned = sorted(jm.journal.abandoned_pids())
+            if manager is not None:
                 pooled = manager._pool.pid if manager._pool else None
                 owned = sorted({w.pid for w in manager._workers})
-                journaled = sorted(manager.journal.owned_pids())
-            except Exception:
-                pass
+        except Exception:
+            pass
         out["pooled_instance_pid"] = pooled
         out["tracked_worker_pids"] = owned
         out["journaled_pids"] = journaled
+        out["abandoned_journal_pids"] = abandoned
+        if abandoned:
+            out["note"] = (
+                "journaled Excel PIDs whose owning server process is gone; "
+                "the next COM call's startup sweep reclaims them, or call "
+                "com_status after any com_ tool to trigger it")
         return out
 
-    def shutdown(self) -> None:
-        """Best-effort teardown: quit pooled workers and drop the thread.
-        Deferred process exit (minutes-scale, exp 7) is tolerated; the PID
-        journal lets the next session's startup sweep reclaim stragglers."""
+    def shutdown(self, *, reclaim: bool = True,
+                 graceful_timeout: float = 8.0) -> None:
+        """Teardown that actually ends the worker process.
+
+        TWO STEPS, and the second one is why this exists. The old shutdown
+        called ``manager.quit(w)`` straight from the calling thread, which at
+        interpreter exit is the MAIN thread -- a different COM apartment from
+        the single worker thread that created the proxy. The cross-apartment
+        call raised, the ``except Exception: pass`` swallowed it, Quit never
+        reached Excel, and the invisible worker outlived the server
+        indefinitely: the insane round watched one stay alive through a clean
+        shutdown and past the 210s grace, with a fresh server unable to reap
+        it (H-4).
+
+        So: ask the WORKER THREAD to Quit (in its own apartment, bounded), and
+        then reclaim by owned PID, which needs no apartment at all and is the
+        only step that can be trusted at interpreter exit. Foreign EXCEL.EXE
+        processes are never touched -- reclaim walks the journal, and the
+        journal only ever holds PIDs this manager spawned."""
         with self._state:
             manager = self._manager
+            thread = self._thread
+            worker_live = bool(thread and thread.is_alive())
+        if manager is None:
+            self._retire_generation()
+            return
+        if worker_live:
+            done = threading.Event()
+
+            def _quit_in_apartment(mgr: ExcelInstanceManager) -> None:
+                for w in list(mgr._workers):
+                    try:
+                        mgr.quit(w)
+                    except Exception:
+                        pass
+                done.set()
+
+            job = _Job(label="shutdown", fn=_quit_in_apartment,
+                       generation=self._generation)
+            self._queue.put(job)
+            job.done.wait(graceful_timeout)
+        self._retire_generation()
+        if not reclaim:
+            return
+        # Excel defers process exit by minutes after Quit (exp 7). Waiting
+        # that out at shutdown is not an option, and leaving the process to
+        # "probably exit" is exactly what stranded one per session, so the
+        # owned PIDs are reclaimed now. force_reclaim forgets a PID only once
+        # it is confirmed gone, so a kill that fails stays journaled for the
+        # next startup sweep.
+        try:
+            manager.force_reclaim()
+        except Exception:
+            pass
+
+    def _retire_generation(self) -> None:
+        with self._state:
             self._generation += 1
             self._thread = None
             self._manager = None
-        if manager is not None:
-            for w in list(manager._workers):
-                try:
-                    manager.quit(w)
-                except Exception:
-                    pass
 
 
 _EXECUTOR: ComExecutor | None = None

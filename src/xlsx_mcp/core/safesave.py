@@ -36,10 +36,20 @@ Write serialization (fixes the parallel read-modify-save race):
 - In-process: one threading.RLock per file, keyed on
   normcase(realpath(path)).
 - Cross-process: an advisory lockfile inside the workbook's slot folder
-  carrying PID + timestamp. Stale locks (dead PID, or older than
-  LOCK_STALE_SECONDS) are broken; otherwise acquisition waits up to
-  LOCK_WAIT_SECONDS and then refuses with MutationLockTimeout naming the
-  holder.
+  carrying PID + a per-process-instance TOKEN + a timestamp minted at
+  publication. The file is written complete and linked into place, so it is
+  never observable half-written. Stale locks (dead PID, our own recycled PID
+  under a foreign token, or older than LOCK_STALE_SECONDS) are broken;
+  otherwise acquisition waits up to LOCK_WAIT_SECONDS and then refuses with
+  MutationLockTimeout naming the holder. Release removes the file only while
+  it still carries our token.
+
+  The token and the atomic publish are the fix for the contention leak the
+  insane round reproduced 2/2 at four or more concurrent writers (H-5): with
+  a two-syscall create, a concurrent acquirer read the empty file, saw no
+  PID, called it stale, deleted a LIVE lock and took its own; two holders
+  then unlinked each other's files, the lock outlived every writer, and the
+  refusal named a PID that had never written anything.
 """
 
 from __future__ import annotations
@@ -310,6 +320,28 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
+#: A token unique to THIS process instance, minted once at import. A bare PID
+#: is not an identity: PIDs are recycled, so a process that inherited a dead
+#: writer's number read that writer's leaked lockfile as its OWN (the
+#: re-entrancy amnesty below) and never cleaned it up, while a process that
+#: merely shared the number with some unrelated python.exe was reported as
+#: the holder in the refusal message. The token settles both: re-entrancy is
+#: token equality, and a lock carrying our PID but a foreign token is a
+#: recycled-PID leftover, which is stale by definition.
+_OWNER_TOKEN = f"{os.getpid()}-{uuid.uuid4().hex}"
+
+#: A lockfile whose content we cannot parse is only assumed abandoned after
+#: this long. Zero grace was the bug that made the lock leak under load: the
+#: old acquire created the file with O_CREAT|O_EXCL and wrote the payload as
+#: a SECOND syscall, so a concurrent acquirer that read it in between saw an
+#: EMPTY file, parsed no pid, declared it stale, deleted a LIVE lock and took
+#: its own. Two writers then believed they held it, and each one's release
+#: unlinked the other's file. Writing the payload before the file is visible
+#: (below) makes the window impossible; this grace covers a torn write from
+#: any other source.
+_UNREADABLE_GRACE_SECONDS = 30.0
+
+
 def _read_lock_info(lock_path: Path) -> dict:
     try:
         info = json.loads(lock_path.read_text(encoding="utf-8"))
@@ -320,53 +352,131 @@ def _read_lock_info(lock_path: Path) -> dict:
     return {}
 
 
-def _acquire_lockfile(lock_path: Path, doc_name: str) -> bool:
-    """Create the advisory lockfile. Returns True when this call created it
-    (and must therefore remove it); False for a re-entrant same-process hold.
-    Raises MutationLockTimeout when a live holder does not release in time."""
-    deadline = time.monotonic() + LOCK_WAIT_SECONDS
-    payload = json.dumps(
-        {"pid": os.getpid(), "time": time.time(), "host": os.environ.get("COMPUTERNAME", "")}
-    )
-    while True:
+def _publish_lockfile(lock_path: Path) -> bool:
+    """Make a COMPLETE lockfile appear atomically, or report that one is
+    already there. The payload is written to a private temp file first and
+    linked into place, so the lockfile is never observable in a half-written
+    state and its timestamp is minted at the instant it becomes visible (the
+    old code computed the payload once BEFORE the retry loop, so a lock
+    acquired after a wait was born already aged)."""
+    payload = json.dumps({
+        "pid": os.getpid(),
+        "token": _OWNER_TOKEN,
+        "time": time.time(),
+        "host": os.environ.get("COMPUTERNAME", ""),
+    })
+    tmp = lock_path.parent / f".lock-{uuid.uuid4().hex}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(payload)
         try:
-            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.link(str(tmp), str(lock_path))
+            return True
+        except FileExistsError:
+            return False
+        except OSError:
+            # No hardlink support (non-NTFS, some network shares): fall back
+            # to the exclusive-create path, still writing the payload before
+            # closing the handle.
+            try:
+                fd = os.open(str(lock_path),
+                             os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                return False
             try:
                 os.write(fd, payload.encode("utf-8"))
             finally:
                 os.close(fd)
             return True
-        except FileExistsError:
-            info = _read_lock_info(lock_path)
-            pid = info.get("pid", -1)
-            stamp = info.get("time", 0.0)
-            age = time.time() - stamp if isinstance(stamp, (int, float)) else None
-            if pid == os.getpid():
-                # Same process: the in-process mutex (already held) is the
-                # real serializer; a nested acquisition must not deadlock.
-                return False
-            stale = (
-                not isinstance(pid, int)
-                or not _pid_alive(pid)
-                or age is None
-                or age > LOCK_STALE_SECONDS
-            )
-            if stale:
-                try:
-                    lock_path.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                continue
-            if time.monotonic() > deadline:
-                holder = f"PID {pid}"
-                if age is not None:
-                    holder += f", held for {int(age)}s"
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _is_ours(info: dict) -> bool:
+    return info.get("token") == _OWNER_TOKEN
+
+
+def _acquire_lockfile(lock_path: Path, doc_name: str) -> bool:
+    """Create the advisory lockfile. Returns True when this call created it
+    (and must therefore remove it); False for a re-entrant same-process hold.
+    Raises MutationLockTimeout when a live holder does not release in time."""
+    deadline = time.monotonic() + LOCK_WAIT_SECONDS
+    while True:
+        if _publish_lockfile(lock_path):
+            return True
+        info = _read_lock_info(lock_path)
+        if _is_ours(info):
+            # This process instance already holds it; the in-process mutex
+            # (held by the caller) is the real serializer and a nested
+            # acquisition must not deadlock.
+            return False
+        pid = info.get("pid", -1)
+        stamp = info.get("time", 0.0)
+        age = time.time() - stamp if isinstance(stamp, (int, float)) else None
+        if not info:
+            # Unparseable: give a torn write a moment to settle, then treat a
+            # persistently unreadable lock as abandoned.
+            try:
+                born = lock_path.stat().st_mtime
+            except OSError:
+                continue                      # it vanished; try again
+            if time.time() - born > _UNREADABLE_GRACE_SECONDS:
+                _break_lock(lock_path)
+            elif time.monotonic() > deadline:
                 raise MutationLockTimeout(
-                    f"{doc_name} is being modified by another kitchensink4xl "
-                    f"process ({holder}). Waited {int(LOCK_WAIT_SECONDS)}s; "
-                    "retry once that operation finishes."
-                )
-            time.sleep(0.1)
+                    f"{doc_name} is locked by a write.lock this process "
+                    "cannot read. Waited "
+                    f"{int(LOCK_WAIT_SECONDS)}s; retry, or delete "
+                    f"{lock_path} if no other kitchensink4xl process is "
+                    "running.")
+            else:
+                time.sleep(0.1)
+            continue
+        stale = (
+            not isinstance(pid, int)
+            or not _pid_alive(pid)
+            or age is None
+            or age > LOCK_STALE_SECONDS
+            # Our own PID with someone else's token: the number was recycled
+            # and this lock belongs to a process that is gone.
+            or pid == os.getpid()
+        )
+        if stale:
+            _break_lock(lock_path)
+            continue
+        if time.monotonic() > deadline:
+            holder = f"PID {pid}"
+            if age is not None:
+                holder += f", held for {int(age)}s"
+            raise MutationLockTimeout(
+                f"{doc_name} is being modified by another kitchensink4xl "
+                f"process ({holder}). Waited {int(LOCK_WAIT_SECONDS)}s; "
+                "retry once that operation finishes."
+            )
+        time.sleep(0.1)
+
+
+def _break_lock(lock_path: Path) -> None:
+    try:
+        lock_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _release_lockfile(lock_path: Path) -> None:
+    """Remove the lockfile ONLY while it is still ours.
+
+    Unconditional unlink is how a leaked lock outlived every writer: once two
+    processes believed they held the lock, each release deleted whichever file
+    happened to be there, including a live one, and the last writer to publish
+    was left with nobody to clean up after it."""
+    info = _read_lock_info(lock_path)
+    if info and not _is_ours(info):
+        return
+    _break_lock(lock_path)
 
 
 @contextmanager
@@ -398,8 +508,5 @@ def write_lock(doc_path: str | os.PathLike):
         yield
     finally:
         if owns_lockfile and lock_path is not None:
-            try:
-                lock_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            _release_lockfile(lock_path)
         mutex.release()

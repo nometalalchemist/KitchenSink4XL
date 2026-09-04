@@ -77,7 +77,39 @@ def _tasklist_pids() -> set[int]:
 
 
 def pid_alive(pid: int) -> bool:
+    """True when this PID is a LIVE EXCEL.EXE. Deliberately image-scoped: a
+    recycled PID belonging to some other program must never look like one of
+    our workers."""
     return pid in list_excel_pids()
+
+
+def _process_alive(pid: int) -> bool:
+    """True when ANY process holds this PID. Used only to ask whether the
+    SERVER that journaled a worker is still running; never to decide whether
+    to kill an Excel."""
+    if pid <= 0:
+        return False
+    try:
+        import psutil  # type: ignore
+
+        return psutil.pid_exists(pid)
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV",
+                            "/NH"], capture_output=True, text=True, timeout=30)
+        return str(pid) in r.stdout
+    except Exception:
+        return True  # cannot tell: assume alive, never reap on a guess
+
+
+def _own_start_time() -> float | None:
+    try:
+        import psutil  # type: ignore
+
+        return float(psutil.Process(os.getpid()).create_time())
+    except Exception:
+        return None
 
 
 def taskkill(pid: int) -> bool:
@@ -116,7 +148,16 @@ class PidJournal:
 
     def record(self, pid: int) -> None:
         data = self._load()
-        data[str(pid)] = {"spawned_at": time.time(), "status": "owned"}
+        data[str(pid)] = {"spawned_at": time.time(), "status": "owned",
+                          # The SERVER process that owns this Excel. A record
+                          # whose owner is gone is a crash/exit leftover and
+                          # the next startup can reclaim it AT ONCE, instead
+                          # of waiting out the 15-minute age window while an
+                          # invisible EXCEL.EXE sits on the machine (insane
+                          # round, H-4). A record whose owner is still alive
+                          # belongs to a concurrent session and is left alone.
+                          "owner_pid": os.getpid(),
+                          "owner_started": _own_start_time()}
         self._save(data)
 
     def forget(self, pid: int) -> None:
@@ -127,6 +168,28 @@ class PidJournal:
 
     def owned_pids(self) -> set[int]:
         return {int(p) for p in self._load()}
+
+    def records(self) -> dict[str, dict]:
+        """The raw journal, for the startup sweep and for honest status."""
+        return self._load()
+
+    def abandoned_pids(self) -> set[int]:
+        """Owned Excel PIDs whose OWNING SERVER is gone: crash or clean-exit
+        leftovers that nobody is going to reap. Records with a live owner (a
+        concurrent session) and records from before owner tracking are left
+        to the age-based sweep."""
+        out: set[int] = set()
+        me = os.getpid()
+        for pid_s, rec in self.records().items():
+            owner = rec.get("owner_pid")
+            if not isinstance(owner, int) or owner == me:
+                continue
+            if not _process_alive(owner):
+                try:
+                    out.add(int(pid_s))
+                except ValueError:
+                    pass
+        return out
 
 
 # ------------------------------------------------------------ the manager
