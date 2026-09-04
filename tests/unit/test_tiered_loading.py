@@ -70,6 +70,17 @@ LITE = {
 }
 
 
+# One hidden canary per pack for the lite-enforcement proof. Args are
+# deliberately minimal: a hidden tool is refused at the transport boundary
+# before any body runs, so nothing touches a file and the com canary never
+# spawns Excel.
+_CANARIES = {
+    "design": ("manage_chart", {"path": "x.xlsx", "action": "list"}),
+    "io": ("set_page_layout", {"path": "x.xlsx"}),
+    "com": ("com_export_pdf", {"path": "x.xlsx"}),
+}
+
+
 @pytest.fixture
 def restore_enabled():
     """Snapshot and restore the process-global enabled bookkeeping."""
@@ -387,3 +398,62 @@ def test_enable_result_json_serializable():
     report = packs.surface_report()
     json.dumps(report)
     assert report["active_tools"] >= 40
+
+
+# -------------------------------------------- wire: lite enforcement proof
+
+
+def test_lite_enforcement_constraint_proof(restore_enabled):
+    """Promoted from the Phase 7 discoverability harness: the constraint
+    that round proves BEFORE any scenario runs, frozen as a regression.
+
+    A default (KS4XL_MODE unset) session serves EXACTLY the lite registry
+    and nothing else, every pack member is hidden, and a tools/call to any
+    hidden member names its owning pack and the exact enable_tools call.
+    Deterministic and COM-free: the com canary is refused by the signpost
+    at the transport boundary, so no Excel instance is ever spawned.
+    """
+
+    async def run():
+        out = {}
+        _reset_to_lite()
+        server._PENDING_VISIBILITY.clear()
+        transform = Visibility(
+            False, names=server._startup_disabled_names()
+        )
+        server.mcp.add_transform(transform)
+        try:
+            async with Client(server.mcp) as c:
+                out["visible"] = sorted(t.name for t in await c.list_tools())
+                out["signposts"] = {}
+                for pack, (tool, args) in _CANARIES.items():
+                    with pytest.raises(ToolError) as exc:
+                        await c.call_tool(tool, args)
+                    out["signposts"][pack] = str(exc.value)
+        finally:
+            server.mcp._transforms.remove(transform)
+        return out
+
+    out = asyncio.run(run())
+
+    # 1. The served surface IS the lite registry: 40 tools, no more, no less.
+    assert out["visible"] == sorted(packs.pack_tools("lite"))
+    assert len(out["visible"]) == 40
+
+    # 2. Every pack member is hidden, at the counts the pack map fixes.
+    visible = set(out["visible"])
+    for pack, count in (("design", 9), ("io", 9), ("com", 11)):
+        members = packs.pack_tools(pack)
+        assert len(members) == count, pack
+        assert not (visible & set(members)), (
+            f"{pack} leaked into the lite surface: "
+            f"{sorted(visible & set(members))}"
+        )
+
+    # 3. Each hidden tool signposts its pack AND the exact enable call.
+    for pack, (tool, _args) in _CANARIES.items():
+        message = out["signposts"][pack]
+        assert tool in message, (pack, message)
+        assert f"'{pack}' pack" in message, (pack, message)
+        assert f"enable_tools(packs=['{pack}'])" in message, (pack, message)
+        assert "retry this call" in message, (pack, message)
