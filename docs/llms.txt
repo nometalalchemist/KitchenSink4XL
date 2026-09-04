@@ -1,0 +1,100 @@
+# KitchenSink4XL
+
+<!--
+  PRE-PRODUCTION SKELETON, staged on branch site-preprod. Not published.
+  Fill every {PLACEHOLDER} and re-derive every number before the first deploy.
+  Numbers come from scripts, never from hand-math:
+    tools / packs / tokens : .venv/Scripts/python.exe -X utf8 scripts/measure_surface.py
+    tests                  : .venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q
+  Unlike index.html, THIS file is written for machines: the operation inventory belongs
+  here in full. The web page stays lay-facing.
+-->
+
+> Everything plus the kitchen sink for Microsoft Excel: the KitchenSink-family .xlsx MCP server. 69 tools organized as a lite core plus three capability packs with tiered loading from day one. Headline capability: an honest calculation story, meaning every value a read returns is labeled calculated, cached, or absent, a read that touches stale cells names them by address, and the COM pack recalculates through Excel itself. Also structural row and column edits that carry formulas, tables, named ranges, charts, and cross-sheet references with them, verified against Excel's own recalculation; Excel-exact sort ranking; correct _xlfn and _xlpm prefixing so modern functions including LAMBDA open without a repair prompt; and server-side query and aggregation so large workbooks do not arrive as raw cells. Engineered not to corrupt: atomic validated saves, automatic backups before every mutation, a round-trip hazard scan, verify-after-write.
+
+This file describes v{VERSION}.
+Status: BETA. Every internal gate is green (adversarial, fidelity, numbers-safety, discoverability); field exposure is what it still lacks.
+Platform: the file tier is cross-platform and needs no Excel installation. The COM pack requires Windows with Microsoft Excel installed; it drives a private hidden Excel instance and never touches the user's open session.
+MCP transport: stdio.
+
+## Install
+
+- Claude Desktop: download the .mcpb bundle from the latest release and double-click it (requires `uv` on PATH)
+- pip: `pip install kitchensink4xl` (COM pack: `pip install kitchensink4xl[com]`, a no-op off Windows)
+- uvx (no install): `uvx kitchensink4xl`
+- Claude Code: `claude mcp add xl -s user -- uvx kitchensink4xl`
+- Any other MCP client: run the `kitchensink4xl` (or `xl-mcp`) executable over stdio, e.g. `{"mcpServers": {"xl": {"command": "kitchensink4xl"}}}`
+- MCP registry name: `io.github.nometalalchemist/kitchensink4xl`
+
+## The calculation contract (read this first)
+
+An .xlsx file stores each formula cell's value as of the last time Excel calculated it. No pure-Python engine recomputes it. This server therefore never returns a bare number:
+
+- `calculated` the value was produced by a real recalculation in this session
+- `cached` the value is what the file carried from its last save, and may be stale
+- `absent` the formula cell carries no value at all (common in files written by other tools)
+
+Reads name the affected addresses when anything they touch is cached or absent, and aggregations say plainly which cells a filter skipped. `recalculate` (com pack) asks Excel itself to compute, and the values it returns are labeled `calculated`. Formula detection is by cell TYPE, not by a leading "=", so text that merely looks like a formula is never re-armed as one on copy, move, sort, or reference rewrite.
+
+## Tiered loading (day one, not a roadmap item)
+
+Sessions start in a lite core of 40 tools (about 10,800 tokens; the full surface is about 19,000). Packs are enabled mid-session with `enable_tools(["pack-name"])`; the server emits tools/list_changed and reports the token cost added. The lite core contains no degraded stand-ins for pack capabilities, and any refusal for out-of-scope work names the exact pack and the exact enable_tools call that unlocks it.
+
+Environment pins for clients without list_changed support, or for power users:
+- `KS4XL_MODE=lite` (default) | `KS4XL_MODE=full` | `KS4XL_MODE=design,com` (comma-separated pack list)
+- `KS4XL_PACK_POLICY=locked` prevents runtime pack changes (administrator setting)
+- `KS4XL_ALLOWED_ROOTS` confines file access to named directories
+- `KS4XL_COM_TIMEOUT` bounds how long a COM call may take
+
+## Capabilities by pack
+
+Lite core (always on, 40 tools, ~10.8k tokens):
+`get_grid_view` (anchored grid projection of a sheet), `read_range`, `get_cells`, `query_range` (server-side filter, group, aggregate), `find_cells`, `get_table`, `get_workbook_metadata`, `set_cell`, `set_cells`, `write_range`, `apply_edits` (batched, one backup and one save per batch), `replace_cells`, `clear_range`, `copy_range`, `move_range`, `modify_grid_structure` (insert and delete rows and columns with reference carry), `sort_range`, `set_filter`, `clear_filter`, `set_formula`, `audit_formulas`, `format_cells`, `set_dimensions`, `set_merge`, `set_view`, `create_table`, `manage_worksheet`, `create_workbook`, `copy_workbook`, `set_workbook_properties`, `manage_hyperlink`, `import_data`, `export_range`, `manage_backups`, `diagnose_workbook`, `validate`, `get_workflows`, `get_server_info`, `enable_tools`, `disable_tools`
+
+design (9 tools, ~3.2k tokens):
+`apply_style`, `copy_format`, `audit_styles`, `manage_conditional_format`, `manage_data_validation`, `manage_image`, `manage_chart`, `manage_table` (columns, totals, resize, banding), `manage_name` (define, scope, LAMBDA, cleanup)
+
+io (9 tools, ~2.4k tokens):
+`set_page_layout`, `set_header_footer`, `set_protection` (advisory), `manage_comment`, `export_file` (multi-sheet), `get_external_links`, `inspect_vba`, `get_pivot`, `get_connections`
+
+com (11 tools, ~2.6k tokens, Windows with Excel only):
+`recalculate` (real values, labeled), `com_manage_pivot` (real PivotTables), `com_goal_seek`, `com_export_pdf`, `com_render_sheet`, `com_convert_format`, `com_save_with_password`, `com_set_sparkline`, `com_autofit`, `com_validate_opens_clean`, `com_status`
+
+## Recommended workflows
+
+{POPULATE FROM get_workflows AT SHIP: one paragraph per task recipe, in the same shape as the KS4PPT llms.txt, so an agent can read the whole recipe without a tool call.}
+
+## Safety model
+
+- Atomic validated saves; a failed operation leaves the original byte-identical.
+- Automatic timestamped backup before every mutation, managed through `manage_backups`.
+- Round-trip hazard scan before a mutating save: parts the writer cannot preserve are named to the caller, and a loss is refused unless the caller explicitly allows the specific classes the gate named.
+- Verify-after-write, exception-safe, with restore-from-backup on failure.
+- Ambiguous targets are refused with candidates rather than guessed.
+- Structural edits are checked against an independent expectation of Excel's own behavior for formulas, tables, named ranges, charts, and cross-sheet references.
+- Formula text is never inferred from a leading "=" character; cell type decides, and writers re-assert text type on strings that look like formulas.
+- The COM tier opens its own hidden instance, journals PIDs, and leaves no orphan processes.
+
+## Evidence
+
+- {TESTS} tests (pytest, tests/unit)
+- {STRESS-CALLS} adversarial calls through the raw MCP transport across {ROUNDS} rounds
+- {CORRUPTIONS} corruptions across the fixture corpus
+- Numbers-safety gate: 61 checks against a real Excel, all passing, covering insert and delete of rows and columns, sort, move, merge, and an insert-plus-delete composition, each compared to Excel's own recalculation
+- 80 formulas across every documented function family, written through all four writers, opened with zero repair prompts and 80/80 correct values
+- Discoverability gate: six fresh agents starting from a 40-tool lite surface found the right pack six times out of six
+
+## License
+
+AGPL-3.0-only. Free for individuals and personal use. Companies embedding it in their own products need a commercial license: https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml
+
+## Links
+
+- Site: https://nometalalchemist.github.io/KitchenSink4XL/
+- Source: https://github.com/nometalalchemist/KitchenSink4XL
+- PyPI: https://pypi.org/project/kitchensink4xl/
+- Family: https://nometalalchemist.github.io/
+
+## Trademarks and affiliation
+
+Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel are trademarks of Microsoft Corporation. KitchenSink4XL works with Microsoft Excel files; the trademarks are used nominatively to describe that compatibility, and no Microsoft logos or trade dress are used.
