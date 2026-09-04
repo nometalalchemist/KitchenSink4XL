@@ -47,6 +47,7 @@ from typing import Any, Callable
 
 from . import calc as _calc
 from . import hazard as _hazard
+from . import limits as _limits
 from . import locate as _locate
 from . import refs as _refs
 from . import safesave as _safesave
@@ -98,6 +99,9 @@ class WorkbookPackage:
         #: they passed allow_loss; the verify gate excuses these and nothing
         #: else (allow_loss is not a blanket amnesty for fragile parts).
         self._warned_loss_keys: set[str] = set()
+        #: Worksheet parts whose ca="1" always-calculate flags and cached
+        #: values the save put back (core.calc.restore_always_calc_cache).
+        self._restored_calc_cache = 0
 
     # ------------------------------------------------------------- open
 
@@ -189,6 +193,10 @@ class WorkbookPackage:
         if isinstance(value, str) and value.startswith("="):
             self.set_formula(sheet, coord, value)
             return
+        # Control characters and lone surrogates: refuse in-envelope here
+        # rather than let openpyxl's IllegalCharacterError escape the Section
+        # 7 shape (and rather than accept a value the reply cannot encode).
+        _limits.check_text_storable(value, what=f"the value for {coord}")
         ws = self._ws(sheet)
         ws[coord] = value
         self._intended[(ws.title, coord.upper())] = ("value", value)
@@ -197,6 +205,7 @@ class WorkbookPackage:
         """Write a formula, normalized so modern functions do not land as
         #NAME? and the workbook recalculates on open."""
         ws = self._ws(sheet)
+        _limits.check_text_storable(formula, what=f"the formula for {coord}")
         normalized, _prefixed = _calc.normalize_formula(formula)
         ws[coord] = normalized
         self._intended[(ws.title, coord.upper())] = ("formula", normalized)
@@ -435,6 +444,18 @@ class WorkbookPackage:
             _calc.strip_empty_cached_values(tmp)
         except Exception:  # noqa: BLE001
             pass  # cosmetic-plus: never fail a save over this
+        # The ADJACENT case: openpyxl also drops the always-calculate flag
+        # and any REAL cached value from every formula cell. Harmless under
+        # normal calculation (fullCalcOnLoad fills it back in), fatal under
+        # ITERATIVE calculation, where the iteration seeds from the current
+        # value and a seedless circular formula sticks on #VALUE! forever.
+        # Untouched formulas get their ca="1" and their <v> back; an edited
+        # one never does (insane round, M-4).
+        try:
+            self._restored_calc_cache = _calc.restore_always_calc_cache(
+                self.path, tmp)
+        except Exception:  # noqa: BLE001
+            self._restored_calc_cache = 0
 
     def _run_verify(self, target: str, allow_loss: bool) -> _verify.VerifyResult:
         """Run the verify gate and NEVER let it raise.
@@ -471,13 +492,23 @@ class WorkbookPackage:
 
     def save(self, *, allow_loss: bool = False, backup: bool = True,
              saver: Callable[[str], None] | None = None,
-             verify_com: bool = False) -> dict:
+             verify_com: bool | None = None) -> dict:
         """Persist pending mutations through the full safety pipeline and
         return the mutation-success envelope. Raises HazardRefused,
         ValidationFailed, or WorkbookLocked (all mapped to closed codes by the
         envelope). On any refusal the original file is left as it was (a failed
         pre-promote verify never touches it; a failed post-promote verify
-        restores it from the backup)."""
+        restores it from the backup).
+
+        verify_com is the DEEP, authoritative check: after promotion the file
+        is opened in a private hidden Excel worker and a repair-free open is
+        required. It is the third layer of the "Excel will refuse this" gate
+        (core.limits is the first, honest reporting the second), and it stays
+        OPT-IN because it costs a COM round trip and needs Excel installed.
+        None means "take the default", which is False unless KS4XL_VERIFY_COM
+        is set."""
+        if verify_com is None:
+            verify_com = com_verify_default()
         path = self.path
         with _safesave.write_lock(path):
             self._check_unchanged()
@@ -620,6 +651,28 @@ class WorkbookPackage:
         self.close()
 
 
+#: Environment switch making the deep Excel verification the DEFAULT for
+#: every save on this server, rather than a per-call opt-in.
+#:
+#: The insane round's headline was that verify-after-write has no notion of
+#: "Excel will refuse this": it proves the produced package is valid OOXML
+#: that reads back as intended, and a file Excel throws out can be exactly
+#: that. core.limits closes the known routes cheaply, but only Excel can
+#: answer for the unknown ones, and com_validate_opens_clean answers
+#: correctly (it got all ten of the round's unopenable files right). This is
+#: the switch that puts it on the write path. It stays OFF by default because
+#: it costs a COM round trip per save and needs Excel installed; a headless
+#: CI run and a Linux install must keep working. Per-call verify_com:true is
+#: unchanged and always wins over the default.
+VERIFY_COM_ENV = "KS4XL_VERIFY_COM"
+
+
+def com_verify_default() -> bool:
+    """Whether saves deep-verify through Excel unless told otherwise."""
+    return os.environ.get(VERIFY_COM_ENV, "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def _file_stamp(path: str) -> tuple[int, int] | None:
     """(mtime_ns, size) identity of the file on disk, or None if it is gone."""
     try:
@@ -652,4 +705,4 @@ def _silent_remove(path: str) -> None:
         pass
 
 
-__all__ = ["WorkbookPackage"]
+__all__ = ["WorkbookPackage", "com_verify_default", "VERIFY_COM_ENV"]

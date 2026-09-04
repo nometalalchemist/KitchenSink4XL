@@ -20,6 +20,7 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
+from ..core import limits as _limits
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 from . import gridio
@@ -79,13 +80,15 @@ def manage_comment(path: str, action: str, location: Any = None,
         if cell.comment is not None:
             raise XlMcpError(
                 f"{grid.a1} already has a comment; use action 'edit'")
+        _limits.check_comment_text(text)
         cell.comment = Comment(text, author or _DEFAULT_AUTHOR)
         detail = {"added": grid.a1}
     elif action == "edit":
         if cell.comment is None:
             raise TargetNotFound(f"{grid.a1} has no comment to edit")
-        cell.comment = Comment(text if text is not None else cell.comment.text,
-                               author or cell.comment.author)
+        new_text = text if text is not None else cell.comment.text
+        _limits.check_comment_text(new_text)
+        cell.comment = Comment(new_text, author or cell.comment.author)
         detail = {"edited": grid.a1}
     else:  # delete
         if cell.comment is None:
@@ -139,10 +142,17 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
     ws = pkg.workbook[grid.sheet]
     cell = ws.cell(grid.min_row, grid.min_col)
 
+    hl_warnings: list[str] = []
     if action == "add":
         if not target:
             raise XlMcpError(
                 "add needs target (a URL, or an in-workbook 'Sheet!A1' ref)")
+        # A target Excel cannot parse makes the workbook unopenable, and an
+        # unsafe scheme is the injection posture the server already takes on
+        # cell text (core.limits).
+        hl_warnings = _limits.check_hyperlink_target(target)
+        if tooltip is not None:
+            _limits.check_text_storable(tooltip, what="the hyperlink tooltip")
         from openpyxl.worksheet.hyperlink import Hyperlink
         internal = "!" in target and "://" not in target
         hl = Hyperlink(ref=grid.a1,
@@ -162,7 +172,10 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
         cell.hyperlink = None
         pkg._changed["hyperlink"] = {"sheet": ws.title, "removed": grid.a1}
 
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    if hl_warnings:
+        result["warnings"] = list(result.get("warnings", [])) + hl_warnings
+    return result
 
 
 __all__ = [

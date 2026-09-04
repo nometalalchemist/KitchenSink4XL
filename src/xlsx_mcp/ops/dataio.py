@@ -28,6 +28,7 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
+from ..core import limits as _limits
 from ..core.errors import RangeOutOfBounds, XlMcpError
 from ..core.package import WorkbookPackage
 from ..core.sandbox import check_path
@@ -129,6 +130,8 @@ def import_data(path: str, source: str | None = None,
         for j, val in enumerate(row):
             r, c = top + i, left + j
             if isinstance(val, str) and val[:1] in _INJECTION and not formulas:
+                _limits.check_text_storable(
+                    val, what=f"the imported value for {gridio.a1(r, c)}")
                 cell = ws.cell(r, c)
                 cell.value = val
                 cell.data_type = "s"

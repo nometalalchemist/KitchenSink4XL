@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core import limits as _limits
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 
@@ -90,16 +91,22 @@ def manage_data_validation(path: str, action: str, location: Any = None,
         if dv_type == "list":
             f1, _is_range = _list_formula(values if values is not None else
                                           formula1)
-            if len(str(f1)) > 255:
+            if len(str(f1)) > _limits.DV_FORMULA_SOFT_CHARS:
                 warnings.append(
-                    "the inline list is over 255 characters; Excel may reject "
-                    "it. Point the list at a range instead.")
+                    f"the inline list is over "
+                    f"{_limits.DV_FORMULA_SOFT_CHARS} characters; Excel may "
+                    "reject it. Point the list at a range instead.")
             op = None
         elif dv_type == "custom":
             if not formula1:
                 raise XlMcpError("custom validation needs formula1")
-            f1 = str(formula1)[1:] if str(formula1).startswith("=") else \
-                str(formula1)
+            # A custom rule is a real formula in a real workbook, so it takes
+            # the same storage normalization (and the same refusals) as a
+            # cell formula. It was the sixth write surface the LET/LAMBDA
+            # prefix bugs reached (insane round, C-1/C-2).
+            from ..core import calc as _calc
+            normalized, _p = _calc.normalize_formula(str(formula1))
+            f1 = normalized[1:] if normalized.startswith("=") else normalized
             op = None
         else:
             if op is None:
@@ -109,6 +116,16 @@ def manage_data_validation(path: str, action: str, location: Any = None,
             if f1 is None:
                 raise XlMcpError(
                     f"{dv_type} validation needs formula1 (a bound)")
+        # A formula1 long enough to stop the FILE from opening is a hard
+        # refusal, separate from the 255-character authoring warning above:
+        # the round's 10,000-item inline list produced a workbook that
+        # returned ok/saved/verified and would not open (core.limits).
+        _limits.check_dv_formula(f1, field="formula1")
+        _limits.check_dv_formula(f2, field="formula2")
+        for label, msg in (("prompt", prompt), ("error", error)):
+            if msg is not None:
+                _limits.check_text_storable(
+                    msg, what=f"the data-validation {label} message")
         dv = DataValidation(type=dv_type, operator=op,
                             formula1=None if f1 is None else str(f1),
                             formula2=None if f2 is None else str(f2),

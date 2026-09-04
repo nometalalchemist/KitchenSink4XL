@@ -1552,11 +1552,11 @@ def com_validate_opens_clean(path: str, password: str | None = None,
     """The authoritative corruption smoke test: open the file in a private
     hidden Excel and report whether it is accepted WITHOUT a repair prompt
     (a repair demand surfaces as a refusal carrying Excel's own message).
-    Read-only; nothing saved; also runs inside file-tier saves as the
-    verify_com option. password opens encrypted files; without one an
-    encrypted file reports encrypted, and a wrong one surfaces as the
-    operation timeout (Excel re-prompts modally). Serialized and
-    timeout-bounded."""
+    Read-only. Also runs inside file-tier saves as the verify_com option,
+    which KS4XL_VERIFY_COM=1 turns on for every save. password opens
+    encrypted files; without one an encrypted file reports encrypted, and a
+    wrong one surfaces as the operation timeout (Excel re-prompts modally).
+    Serialized and timeout-bounded."""
     return _comtier.com_validate_opens_clean(
         path, password=password, timeout_seconds=timeout_seconds)
 

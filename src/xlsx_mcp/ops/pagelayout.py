@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 
+from ..core import limits as _limits
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 
@@ -233,16 +234,33 @@ def set_header_footer(path: str, sheet: str | None = None,
                              ("footer", footer, ftr_obj)):
         if block is None:
             continue
+        # Excel's limit is on the WHOLE assembled &L/&C/&R string, not on a
+        # section, and a longer one makes the workbook unopenable. Encode
+        # first (the & escaping is part of the stored length), check the
+        # assembled result, and only then write anything (core.limits).
+        encoded_sections: dict[str, str | None] = {}
+        for section in _HF_SECTIONS:
+            if section not in block:
+                # a section not being set still occupies its existing text
+                current = getattr(getattr(obj, section), "text", None)
+                if current:
+                    encoded_sections[section] = current
+                continue
+            text = block[section]
+            encoded_sections[section] = (
+                None if text is None or text == ""
+                else _encode_section(str(text), raw))
+        _limits.check_header_footer(
+            {k: v for k, v in encoded_sections.items() if v}, which=name)
         done = {}
         for section in _HF_SECTIONS:
             if section not in block:
                 continue
-            text = block[section]
-            if text is None or text == "":
+            encoded = encoded_sections.get(section)
+            if encoded is None:
                 getattr(obj, section).text = None
                 done[section] = "cleared"
             else:
-                encoded = _encode_section(str(text), raw)
                 getattr(obj, section).text = encoded
                 done[section] = encoded
         changed[name] = done

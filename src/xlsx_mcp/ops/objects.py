@@ -236,6 +236,11 @@ def manage_image(path: str, action: str, image_file: str | None = None,
                 f"{ip} could not be read as an image ({exc})")
         grid = pkg.resolve(location if location is not None
                            else {"cell": "A1"}, default_sheet=sheet)
+        # A negative extent is not representable in the drawing XML and Excel
+        # REFUSES TO OPEN the workbook; 0 and any positive size are fine
+        # (measured, core.limits).
+        from ..core import limits as _limits
+        _limits.check_image_extents(width, height)
         if width is not None:
             img.width = int(width)
         if height is not None:

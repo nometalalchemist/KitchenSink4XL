@@ -40,6 +40,40 @@ DEFAULT_CHECKS = ("structure", "references", "calc_staleness")
 # --------------------------------------------------------------- the checks
 
 
+#: What the structure check can honestly say about ``opens_clean`` when
+#: nothing asked Excel. openpyxl loading a package is NOT Excel accepting it:
+#: the insane round produced ten files that openpyxl read happily and Excel
+#: answered "Open method of Workbooks class failed" for, and every one of
+#: them was reported here as ``opens_clean: true`` because the field was
+#: hard-coded (M-1). The field now carries this string instead of a claim,
+#: and becomes a real boolean only when the COM check actually ran.
+NOT_CHECKED = "not checked (no Excel verdict was requested)"
+
+#: Set KS4XL_VALIDATE_COM=1 to make the structure check route to
+#: com_validate_opens_clean whenever the com pack is available.
+_COM_ENV = "KS4XL_VALIDATE_COM"
+
+
+def _com_opens_clean(path: str):
+    """Excel's own verdict, or None when it was not asked / not available.
+    com_validate_opens_clean is the authoritative corruption smoke test and
+    got every one of the round's ten unopenable files right; this is the
+    wire from the file-tier check to it."""
+    import os
+
+    if os.environ.get(_COM_ENV, "").strip().lower() not in ("1", "true",
+                                                            "yes", "on"):
+        return None
+    try:
+        from ..com import session as _com_session
+        ok, _why = _com_session.com_available()
+        if not ok:
+            return None
+        return bool(_com_session.opens_clean(path).get("opens_clean"))
+    except Exception:  # noqa: BLE001 - an unavailable check is 'not checked'
+        return None
+
+
 def _check_structure(path: str) -> tuple[bool, dict]:
     issues: list[str] = []
     try:
@@ -50,11 +84,13 @@ def _check_structure(path: str) -> tuple[bool, dict]:
                 issues.append(f"package is missing {required}")
     except zipfile.BadZipFile:
         return False, {"opens_clean": False,
+                       "opens_clean_source": "the file is not a zip at all",
                        "issues": ["not a valid zip / OOXML package"]}
     try:
         wb = gridio.open_wb(path)
     except Exception as exc:  # noqa: BLE001
         return False, {"opens_clean": False,
+                       "opens_clean_source": "openpyxl could not load it",
                        "issues": issues + [f"openpyxl cannot load it: {exc}"]}
     try:
         visible = [ws for ws in wb.worksheets
@@ -69,8 +105,20 @@ def _check_structure(path: str) -> tuple[bool, dict]:
                     f"sheet names collide case-insensitively: "
                     f"{seen[low]!r} and {name!r}")
             seen[low] = name
+        excel_verdict = _com_opens_clean(path)
+        if excel_verdict is False:
+            issues.append(
+                "Excel refuses to open this file or demands a repair "
+                "(com_validate_opens_clean)")
         findings = {
-            "opens_clean": True,
+            "opens_clean": (NOT_CHECKED if excel_verdict is None
+                            else excel_verdict),
+            "opens_clean_source": (
+                "Excel (com_validate_opens_clean)" if excel_verdict is not None
+                else "openpyxl loaded the package; Excel was NOT asked. Run "
+                     "com_validate_opens_clean, or set "
+                     f"{_COM_ENV}=1, for an Excel verdict"),
+            "openpyxl_loads": True,
             "sheet_count": len(wb.sheetnames),
             "visible_sheets": len(visible),
             "issues": issues,
