@@ -241,9 +241,13 @@ def diagnose_workbook(path: str) -> dict:
     verdict means every mutating tool will refuse unless you route through
     Excel (com pack) or pass allow_loss:true (an explicit, backed-up
     acceptance of the loss). A clean verdict means file-based edits are
-    round-trip safe. Limit:
-    the scan sees PARTS, so features living inside surviving parts (x14
-    conditional formats, sparklines) are outside its sight. Read-only."""
+    round-trip safe. Content with no part of its own is covered too: the scan
+    reads each worksheet's extLst, so x14 conditional formats (data bars, icon
+    sets), sparkline groups and slicer lists come back as a would-lose verdict
+    like any other drop-risk hazard. Limit: the extLst walk looks at the
+    worksheet's top level, and an extension openpyxl drops from anywhere else
+    is caught at save time by openpyxl's own load warning rather than
+    here. Read-only."""
     return _lifecycle.diagnose_workbook(path)
 
 

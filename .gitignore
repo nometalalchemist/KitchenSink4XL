@@ -8,13 +8,18 @@ __pycache__/
 # Backups created by the server (two-slot folders next to each workbook)
 .ks4xl-backups/
 
-# PRIVATE test corpus: synthetic fixture workbooks are generated for CI; any
-# real sample workbooks stay private and out of the repo. Tests skip cleanly
-# when the corpus is absent.
-tests/corpus/*.xlsx
-tests/corpus/*.xlsm
-tests/corpus/*.xlsb
-tests/corpus/*.xls
+# The fixture corpus at tests/fixtures/corpus/ is DELIBERATELY IN-TREE and
+# committed: the hazard, fidelity and adversarial tests need real Excel-
+# authored workbooks (pivots, slicers, shapes, x14 conditional formatting)
+# that openpyxl cannot author, so CI cannot regenerate them. Excel stamps the
+# signed-in user into docProps, the threaded-comment persons registry and
+# absolute paths, so every fixture is run through
+# tests/fixtures/build_corpus.scrub_corpus() after each build; the corpus
+# carries no authoring identity and test_corpus_fixtures_carry_no_authoring_
+# identity locks that down. Do NOT add an ignore rule for it.
+#
+# (The old rule here pointed at tests/corpus/*, a path that has never existed
+# in this repo. It was dead, and it read as though the corpus were private.)
 
 # Corpus build byproducts (PID journal, scratch sources), never fixtures.
 tests/fixtures/corpus/_*

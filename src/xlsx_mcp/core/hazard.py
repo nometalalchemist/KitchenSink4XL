@@ -27,18 +27,36 @@ Two deliberate NON-flags, verified empirically (re-audit round-trips):
   cosmetic (page-setup device settings; the pageSetup element itself
   survives). It stays unflagged by policy and is treated as a routine drop.
 
-KNOWN LIMIT, now measured: hazards that live INSIDE surviving parts (x14
-conditional formatting, sparklines, in-sheet extLst extensions) are invisible
-to a part-level scan; the container parts that can be detected (metadata.xml,
-charts) are flagged conservatively instead. The adversarial + fidelity gate
-turned that limit into evidence: an Excel-authored data bar plus icon set
-(tests/fixtures corpus x14_condformat.xlsx) adds NO part at all, so this scan
-reports CLEAN, a mutation is applied without a murmur, and the x14 rules are
-gone from the saved file. The compensating control is not here (a namelist
-cannot see it) but in core/package.py: the openpyxl load captures openpyxl's
-own "... extension is not supported and will be removed" warnings and the
-save reports them, so the loss is announced rather than silent. Whether that
-should escalate from a warning to a refusal is an open author decision.
+IN-PART HAZARDS (the former known limit, now closed). Some fragile content
+does not live in a part of its own: x14 conditional formatting (every modern
+data bar and icon set), sparkline groups, worksheet slicer lists and the rest
+of the worksheet-level extLst extensions sit INSIDE xl/worksheets/sheetN.xml,
+which survives the save at full size. The fidelity gate measured what that
+cost: an Excel-authored data bar plus icon set (tests/fixtures corpus
+x14_condformat.xlsx) added no part at all, the namelist scan reported CLEAN,
+the mutation applied without a murmur, and the x14 rules were gone from the
+saved file. openpyxl's worksheet reader warns "<name> extension is not
+supported and will be removed" for every ext it meets and writes none of them
+back, so the whole block is DROP-class, not degrade-class.
+
+The scan therefore reads the worksheet parts and looks at the top-level
+extLst itself (EXT_DROP_LABELS / the "in_part_extensions" spec below). That
+costs a decompress-and-parse of each worksheet, so scan_path is no longer
+namelist-only for workbooks with sheets; the parse is a streaming expat walk
+with no tree built, but the read is linear in sheet size and that is the price
+of not destroying rules in silence. scan_names WITHOUT a part reader cannot
+see in-part content and reports only the name-detectable hazards; core/
+package.py keeps openpyxl's own load-time warnings as a second, independent
+detector and refuses on those too, so a URI this table has never heard of is
+still caught.
+
+The author's package policy governs the outcome (ratified): drop-risk refuses
+without allow_loss, degrade-risk warns and proceeds. In-part extensions are
+drop-risk, so a mutation that would lose them now raises HAZARD_REFUSED naming
+the rules at risk and the two ways out (the COM route, or allow_loss with a
+backup). Under allow_loss the loss is still announced item by item. This
+replaces the previous warn-and-proceed behavior, which announced the loss but
+let it happen.
 """
 
 from __future__ import annotations
@@ -106,6 +124,17 @@ def _basename_or_prefix(basenames: tuple[str, ...], prefixes: tuple[str, ...]):
     return m
 
 
+def _never(_name: str) -> bool:
+    """Matcher for a hazard that has no part of its own. The in-part
+    extension hazard is detected by READING worksheet content, never by a
+    member name, and this matters beyond the scan: verify.part_loss_check
+    walks HAZARD_SPECS matchers over the parts that VANISHED, and the
+    worksheet part does not vanish (its extLst does). A never-matching
+    matcher keeps that check honest instead of teaching it to excuse a lost
+    worksheet."""
+    return False
+
+
 def _drawings_matcher(name: str) -> bool:
     """Match drawing parts under xl/drawings/, EXCEPT legacy-comment VML
     anchors (commentsDrawing*.vml). openpyxl models legacy notes and
@@ -120,6 +149,116 @@ def _drawings_matcher(name: str) -> bool:
     if base.startswith("commentsdrawing") and base.endswith(".vml"):
         return False
     return True
+
+
+# ------------------------------------------------- in-part extension blocks
+
+#: Hazard key for worksheet-level extLst content. It has no part of its own,
+#: so scan_names detects it by reading the worksheet rather than by matching a
+#: member name (see _never and _detect_in_part_extensions).
+IN_PART_EXT_KEY = "in_part_extensions"
+
+#: Worksheet extLst URIs and what each one carries, mirroring
+#: openpyxl.xml.constants.EXT_TYPES so these labels line up with the
+#: "... extension is not supported and will be removed" warnings the package
+#: surfaces from the load. openpyxl drops EVERY worksheet-level ext, listed or
+#: not, so a URI missing from this table is still reported (as an
+#: unrecognized extension) rather than passed over.
+EXT_DROP_LABELS: dict[str, str] = {
+    "{78C0D931-6437-407D-A8EE-F0AAD7539E65}":
+        "x14 conditional formatting (data bars, icon sets)",
+    "{CCE6A557-97BC-4B89-ADB6-D9C93CAAB3DF}": "x14 data validation",
+    "{05C60535-1F16-4FD2-B633-F4F36F0B64E0}": "sparkline groups",
+    "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}": "worksheet slicer list",
+    "{3A4CF648-6AED-40F4-86FF-DC5316D8AED3}": "worksheet slicer list",
+    "{FC87AEE6-9EDD-4A0A-B7FB-166176984837}": "protected ranges",
+    "{01252117-D84E-4E92-8308-4BE1C098FCBB}": "ignored-error markers",
+    "{F7C9EE02-42E1-4005-9D12-6889AFFD525C}": "web extensions",
+    "{7E03D99C-DC04-49D9-9315-930204A7B6E9}": "timeline references",
+}
+
+
+def _top_level_ext_uris(data: bytes) -> list[str]:
+    """URIs of the <ext> elements directly under the worksheet's top-level
+    <extLst>, in document order, de-duplicated.
+
+    Depth matters. A cfRule carries its OWN nested extLst holding the x14 rule
+    id ({B025F937-...}), and that one is not a dropped extension block, it is
+    a pointer into the block. Matching URIs with a regex over the whole part
+    would report it as a second hazard and misdescribe what is at risk, so the
+    walk only accepts worksheet > extLst > ext.
+
+    Streaming expat, no tree: a worksheet can be hundreds of megabytes and
+    this runs on every open. A malformed part yields whatever was read before
+    the error, which is the conservative direction (report, do not swallow)."""
+    import xml.parsers.expat
+
+    uris: list[str] = []
+    stack: list[str] = []
+
+    def start(name: str, attrs: dict) -> None:
+        local = name.rsplit(":", 1)[-1]
+        stack.append(local)
+        if len(stack) == 3 and stack[1] == "extLst" and local == "ext":
+            uri = attrs.get("uri")
+            if uri and uri not in uris:
+                uris.append(uri)
+
+    def end(_name: str) -> None:
+        if stack:
+            stack.pop()
+
+    parser = xml.parsers.expat.ParserCreate()
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    try:
+        parser.Parse(data, True)
+    except Exception:  # noqa: BLE001
+        return uris
+    return uris
+
+
+def _is_worksheet_part(name: str) -> bool:
+    low = _normalized(name).lower()
+    return (low.startswith("xl/worksheets/") and low.endswith(".xml")
+            and "/_rels/" not in low)
+
+
+def _detect_in_part_extensions(
+    found: dict[str, "Hazard"], names: Iterable[str],
+    part_reader: Callable[[str], bytes] | None,
+) -> None:
+    """Add the in-part extension hazard when a worksheet carries a top-level
+    extLst. Needs part content, so it is a no-op on the namelist-only path."""
+    if part_reader is None:
+        return
+    labels: list[str] = []
+    parts: list[str] = []
+    for name in names:
+        if not _is_worksheet_part(name):
+            continue
+        try:
+            data = part_reader(name)
+        except Exception:  # noqa: BLE001
+            continue
+        if b"extLst" not in data:
+            continue  # cheap reject before the parse
+        uris = _top_level_ext_uris(data)
+        if not uris:
+            continue
+        parts.append(name)
+        for uri in uris:
+            label = EXT_DROP_LABELS.get(
+                uri.upper(), f"unrecognized extension {uri}")
+            if label not in labels:
+                labels.append(label)
+    if not parts:
+        return
+    spec = _SPEC_BY_KEY[IN_PART_EXT_KEY]
+    found[IN_PART_EXT_KEY] = Hazard(
+        spec.key, f"{spec.label}: {', '.join(labels)}", spec.severity,
+        spec.survives_openpyxl, spec.note, parts,
+    )
 
 
 # The knowledge table. survives_openpyxl is the CLAIM the fidelity harness
@@ -211,6 +350,16 @@ HAZARD_SPECS: tuple[HazardSpec, ...] = (
         "values lose their backing.",
         _basename_or_prefix(("metadata.xml", "richdata.xml"),
                             ("xl/richdata/",)),
+    ),
+    HazardSpec(
+        IN_PART_EXT_KEY, "in-sheet extension blocks", SEV_DROPS, False,
+        "worksheet-level extLst blocks (x14 conditional formatting, sparkline "
+        "groups, slicer lists, protected ranges) live inside the worksheet "
+        "part, which survives the save at full size. openpyxl parses them, "
+        "warns that each is unsupported, and writes none of them back, so the "
+        "rules are gone from a file that looks untouched. Detected by reading "
+        "the worksheet, not by a part name.",
+        _never,
     ),
     HazardSpec(
         "pivot", "pivot tables / caches", SEV_DEGRADES, True,
@@ -456,11 +605,20 @@ def _normalized(name: str) -> str:
 
 
 def scan_names(names: Iterable[str], path: str = "<names>", *,
-               rels_reader: Callable[[str], bytes] | None = None) -> HazardReport:
+               part_reader: Callable[[str], bytes] | None = None,
+               rels_reader: Callable[[str], bytes] | None = None,
+               ) -> HazardReport:
     """Classify a pre-listed set of archive member names. Split out so the
-    detection logic is testable without a real file on disk. `rels_reader`,
-    when supplied (scan_path does), reads a drawing's tiny rels part so a
-    chart-only drawing is not misflagged as shape loss (chart-vs-shape fix)."""
+    detection logic is testable without a real file on disk.
+
+    `part_reader`, when supplied (scan_path always does), reads a member's
+    bytes. It serves two content-dependent checks that a namelist cannot
+    answer: whether a drawing is a pure chart anchor rather than shape loss
+    (chart-vs-shape fix), and whether a worksheet carries a top-level extLst
+    whose contents openpyxl drops. Without it the scan reports only the
+    name-detectable hazards; `rels_reader` is the former name of the same
+    argument and is still accepted."""
+    reader = part_reader or rels_reader
     names = list(names)
     nameset = set(names)
     found: dict[str, Hazard] = {}
@@ -476,42 +634,51 @@ def scan_names(names: Iterable[str], path: str = "<names>", *,
                     )
                     found[spec.key] = h
                 h.parts.append(name)
-    _refine_drawings(found, nameset, rels_reader)
+    _refine_drawings(found, nameset, reader)
+    _detect_in_part_extensions(found, names, reader)
     ordered = [found[s.key] for s in HAZARD_SPECS if s.key in found]
     return HazardReport(path=path, parts=names, hazards=ordered)
 
 
 def scan_path(path: str) -> HazardReport:
-    """Open the .xlsx/.xlsm as a zip, read ONLY the central directory (the
-    namelist, no decompression, no XML parse), and classify. Milliseconds."""
+    """Open the .xlsx/.xlsm as a zip, classify its members, and return the
+    report.
+
+    The member list comes from the central directory alone (no decompression),
+    and that is still all most hazards need. Two checks read part content: the
+    chart-vs-shape refinement reads a drawing and its tiny rels part, and the
+    in-part extension detector reads each worksheet to see whether openpyxl
+    would drop a top-level extLst. The worksheet read is what makes this scan
+    proportional to sheet size rather than the old flat milliseconds; the
+    alternative is a data bar that vanishes without a word, so the read
+    stays."""
     try:
         with zipfile.ZipFile(path) as zf:
             infos = zf.infolist()
             names = [i.filename for i in infos]
             sizes = {i.filename: i.file_size for i in infos}
-            has_drawings = any(
-                n.lower().startswith("xl/drawings/") for n in names)
-            reader = None
-            if has_drawings:
-                cache: dict[str, bytes] = {}
+            # Only drawings are cached: the refinement reads a drawing and
+            # its rels part and may revisit them. Worksheets are read once
+            # and released, so a big workbook is not held in memory whole
+            # just to look at its extLst.
+            cache: dict[str, bytes] = {}
 
-                def reader(member: str, _zf=zf, _cache=cache) -> bytes:
-                    if member not in _cache:
-                        _cache[member] = _zf.read(member)
-                    return _cache[member]
+            def reader(member: str, _zf=zf, _cache=cache) -> bytes:
+                if not member.lower().startswith("xl/drawings/"):
+                    return _zf.read(member)
+                if member not in _cache:
+                    _cache[member] = _zf.read(member)
+                return _cache[member]
 
-                rep = scan_names(names, path=path, rels_reader=reader)
-                rep.sizes = sizes
-                return rep
+            rep = scan_names(names, path=path, part_reader=reader)
+            rep.sizes = sizes
+            return rep
     except zipfile.BadZipFile:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="not a valid zip / OOXML package")
     except FileNotFoundError:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="file not found")
-    rep = scan_names(names, path=path)
-    rep.sizes = sizes
-    return rep
 
 
 def route(
@@ -583,6 +750,7 @@ def _raw_safe(report: HazardReport) -> bool:
 
 __all__ = [
     "HazardReport", "Hazard", "HazardSpec", "HAZARD_SPECS",
+    "EXT_DROP_LABELS", "IN_PART_EXT_KEY",
     "scan_path", "scan_names", "route",
     "ROUTE_OPENPYXL", "ROUTE_RAW_OOXML", "ROUTE_COM", "ROUTE_REFUSE",
     "SEV_DROPS", "SEV_DEGRADES", "SEV_CONDITIONAL",

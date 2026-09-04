@@ -18,7 +18,8 @@ Findings covered here:
               silently ignored; sheet add inventing a name; a list validation
               with no source; a ragged write block
   hazard      part-name spellings that walked past the scan
-  fidelity    x14 (in-part) extension blocks openpyxl discards in silence
+  fidelity    x14 (in-part) extension blocks openpyxl discards in silence,
+              now detected by the scan and REFUSED as drop-class
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ from fastmcp import Client
 from xlsx_mcp import server
 from xlsx_mcp.core import hazard, locate, verify
 from xlsx_mcp.core.errors import (
+    HazardRefused,
     RangeOutOfBounds,
     StaleAnchor,
     UnsupportedStructure,
@@ -383,21 +385,47 @@ def test_part_name_spellings_do_not_evade_the_scan(member):
 
 @pytest.mark.skipif(not (CORPUS / "x14_condformat.xlsx").exists(),
                     reason="COM fixture corpus not built")
-def test_x14_extension_drop_is_reported_not_silent(tmp_path):
-    """THE FIDELITY-GATE FINDING: an Excel-authored data bar / icon set puts
-    its real rule in the worksheet's x14 extLst. The part survives the save
-    at full size, so the hazard scan calls the workbook CLEAN and the
-    part-inventory verify sees nothing, yet openpyxl discards the rule. The
-    only signal is openpyxl's own load-time warning, which is now captured
-    and surfaced in the save warnings."""
+def test_x14_extension_loss_refuses(tmp_path):
+    """THE FIDELITY-GATE FINDING, now drop-class. An Excel-authored data bar /
+    icon set puts its real rule in the worksheet's x14 extLst. The part
+    survives the save at full size, so the part-inventory verify sees nothing,
+    yet openpyxl discards the rule: the rules VANISH. Under the ratified
+    package policy that is drop-risk, not degrade-risk, so the mutation
+    refuses rather than warning and proceeding. The scan reads the worksheet
+    extLst, so it no longer reports the workbook CLEAN either."""
     src = tmp_path / "x14.xlsx"
     shutil.copy2(CORPUS / "x14_condformat.xlsx", src)
-    assert hazard.scan_path(str(src)).clean  # still invisible to the scan
+    before = src.read_bytes()
+    rep = hazard.scan_path(str(src))
+    assert not rep.clean
+    assert hazard.IN_PART_EXT_KEY in rep.lossy_keys
+
     pkg = WorkbookPackage.open(str(src))
     pkg.set_cell(None, "D1", "probe")
-    out = pkg.save()
+    with pytest.raises(HazardRefused) as exc:
+        pkg.save()
+    msg = str(exc.value)
+    assert "x14 conditional formatting" in msg   # names the rules at risk
+    assert "allow_loss" in msg and "com" in msg.lower()   # names both outs
+    assert src.read_bytes() == before            # refusal touched nothing
+
+
+@pytest.mark.skipif(not (CORPUS / "x14_condformat.xlsx").exists(),
+                    reason="COM fixture corpus not built")
+def test_x14_extension_loss_is_announced_under_allow_loss(tmp_path):
+    """allow_loss is the sanctioned way through, and it still has to say what
+    it destroyed: the itemized announcement from openpyxl's own load-time
+    warnings survives the policy flip."""
+    src = tmp_path / "x14.xlsx"
+    shutil.copy2(CORPUS / "x14_condformat.xlsx", src)
+    pkg = WorkbookPackage.open(str(src))
+    pkg.set_cell(None, "D1", "probe")
+    out = pkg.save(allow_loss=True)
     joined = " ".join(out["warnings"])
-    assert "extension" in joined and "NOT in the saved file" in joined
+    assert "NOT in the saved file" in joined
+    assert "Conditional Formatting" in joined
+    assert "allow_loss: proceeding despite" in joined
+    assert openpyxl.load_workbook(src)["CF"]["D1"].value == "probe"
 
 
 @pytest.mark.skipif(not CORPUS.exists(), reason="corpus not built")

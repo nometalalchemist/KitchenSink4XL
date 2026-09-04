@@ -9,7 +9,10 @@ per-tool wiring (DESIGN Sections 2.4, 3; PLAN reuse ledger 1.2). It integrates:
     naming the at-risk parts and the remedy (the COM route when it exists, or
     an explicit allow_loss override), unless the mutation goes through a loss-
     safe path (a clean workbook, or a .xlsm whose only hazard is VBA, preserved
-    via keep_vba).
+    via keep_vba). Drop-risk includes content with no part of its own: a
+    worksheet extLst carrying x14 conditional formatting, sparklines or a
+    slicer list refuses on the same terms, since openpyxl writes the worksheet
+    back without it.
   - BACKUP-BEFORE-MUTATION (core.safesave two-slot backups) captured against
     the pre-mutation state immediately before promotion, plus the per-file
     write lock held across the whole read-modify-verify-save cycle.
@@ -86,8 +89,10 @@ class WorkbookPackage:
         self._stamp: tuple[int, int] | None = None
         #: extensions openpyxl announced it was discarding at load time
         #: (x14 conditional formatting, sparkline and slicer-list extLst
-        #: blocks); they live INSIDE surviving parts, so no part-level scan
-        #: and no part-level verify can see them.
+        #: blocks); they live INSIDE surviving parts, so no part-level verify
+        #: can see them. hazard.scan_path detects them up front by reading the
+        #: worksheet extLst; this list is the independent second detector, and
+        #: the gate refuses on either unless allow_loss covers it.
         self._dropped_extensions: list[str] = []
         #: hazard keys the caller was explicitly warned would be dropped when
         #: they passed allow_loss; the verify gate excuses these and nothing
@@ -274,17 +279,17 @@ class WorkbookPackage:
         return present, writable
 
     def _extension_warnings(self) -> list[str]:
-        """Surface the in-part extension blocks openpyxl discarded at load.
+        """The announced-loss line for in-part extension blocks openpyxl
+        discarded at load. Reported only on the allow_loss path, because
+        without allow_loss the gate now REFUSES instead (see _hazard_gate).
 
-        A part-level hazard scan cannot see these: x14 conditional formatting
-        (every modern data bar and icon set), sparkline and slicer-list
-        extLst blocks live INSIDE xl/worksheets/sheetN.xml, which survives the
-        save at full size, so neither the scan nor the part-inventory verify
-        can flag them. openpyxl itself announces each drop as a warning at
-        load time, and that announcement is the only signal there is. The
-        fidelity gate proved the silent case: an Excel-authored data-bar
-        workbook scans CLEAN, mutates without a murmur, and comes back with
-        the x14 rules gone."""
+        These blocks live INSIDE xl/worksheets/sheetN.xml, which survives the
+        save at full size, so no part-level check can catch them: x14
+        conditional formatting (every modern data bar and icon set),
+        sparkline groups, slicer lists. The hazard scan reads the worksheet
+        extLst and flags them up front; openpyxl's own load-time
+        announcement, captured here, is the independent second detector and
+        the one that names the exact extensions it threw away."""
         if not self._dropped_extensions:
             return []
         return ["openpyxl discarded in-part extension blocks on load, so "
@@ -295,12 +300,49 @@ class WorkbookPackage:
                   "check can catch them; use the com pack to edit this "
                   "workbook with full fidelity."]
 
+    def _refuse_extension_loss(self) -> None:
+        """Backstop refusal for extension blocks openpyxl announced dropping
+        that the hazard scan did not flag.
+
+        The scan is the primary detector and normally fires first, so this
+        path is reached only when the two disagree: a worksheet extLst the
+        scan could not read, or an extension openpyxl drops from somewhere
+        the scan does not look. Drop-class content must not go through on a
+        detector disagreement, so the announcement alone refuses."""
+        exc = HazardRefused(
+            "openpyxl discarded in-part extension blocks when it loaded this "
+            "workbook, so a file-based save would write it back without them: "
+            + "; ".join(self._dropped_extensions)
+            + ". These live inside the worksheet part (x14 conditional "
+              "formatting, sparklines, slicer lists), so no part-level check "
+              "can catch the loss after the fact. Refusing the mutation "
+              "rather than destroy them. Remedy: use the com pack (Excel "
+              "saves with everything intact), or pass allow_loss:true to "
+              "proceed with a backup and accept the loss.")
+        exc.detail = {"dropped_extensions": list(self._dropped_extensions),
+                      "routes": ["enable COM (com pack)",
+                                 "allow_loss:true with backup"]}
+        raise exc
+
     def _hazard_gate(self, allow_loss: bool) -> list[str]:
         """Apply the routing decision. Returns advisory warnings; raises
-        HazardRefused when a drop-risk mutation has no loss-safe path."""
+        HazardRefused when a drop-risk mutation has no loss-safe path.
+
+        In-part extension blocks are drop-class under the ratified package
+        policy (drop-risk refuses without allow_loss, degrade-risk warns and
+        proceeds), so they raise here like any other SEV_DROPS hazard. They
+        used to warn and proceed, which announced the loss but still let a
+        data bar disappear from a workbook the user never agreed to sacrifice.
+        With allow_loss the announcement survives as a warning."""
         rep = self.hazard
-        warnings: list[str] = self._extension_warnings()
+        warnings: list[str] = []
         if rep.clean:
+            if self._dropped_extensions:
+                # The scan saw nothing but openpyxl still threw extensions
+                # away; the backstop governs.
+                if not allow_loss:
+                    self._refuse_extension_loss()
+                warnings.extend(self._extension_warnings())
             return warnings
         drop_keys = list(rep.lossy_keys)  # SEV_DROPS
         degradable = [h.label for h in rep.hazards
@@ -357,6 +399,15 @@ class WorkbookPackage:
                 "allow_loss: proceeding despite " + ", ".join(labels)
                 + " which the file-based save drops; the backup is the safety "
                 "net")
+        # The in-part extension backstop, same rule as the clean path. Without
+        # allow_loss, reaching this line means drop_keys was empty (a
+        # populated one already raised above), so an announcement the scan
+        # missed is the only thing standing between the caller and a lost data
+        # bar: refuse on it. With allow_loss it becomes the itemized warning.
+        if self._dropped_extensions:
+            if not allow_loss:
+                self._refuse_extension_loss()
+            warnings.extend(self._extension_warnings())
         if degradable:
             warnings.append(
                 ", ".join(degradable) + " are re-serialized through openpyxl's "

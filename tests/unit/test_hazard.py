@@ -140,6 +140,78 @@ def test_mixed_chart_and_shape_drawing_is_a_drop():
     assert "drawings" in [h.key for h in r.hazards]
 
 
+_SHEET_WITH_X14 = (
+    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/'
+    b'2006/main"><sheetData/>'
+    b'<conditionalFormatting sqref="A1:A9"><cfRule type="dataBar" priority="1">'
+    b'<dataBar/><extLst><ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}">'
+    b'<x14:id>{DEAD}</x14:id></ext></extLst></cfRule></conditionalFormatting>'
+    b'<extLst><ext uri="{78C0D931-6437-407d-A8EE-F0AAD7539E65}">'
+    b'<x14:conditionalFormattings/></ext></extLst></worksheet>')
+
+
+def test_in_part_extension_needs_a_part_reader():
+    """x14 conditional formatting has no part of its own, so a namelist-only
+    scan cannot see it and must not pretend to. With a part reader the same
+    names come back drop-class."""
+    names = ["xl/workbook.xml", "xl/worksheets/sheet1.xml"]
+    blind = hazard.scan_names(names)
+    assert blind.clean is True
+    seeing = hazard.scan_names(names, part_reader=lambda m: _SHEET_WITH_X14)
+    assert hazard.IN_PART_EXT_KEY in seeing.lossy_keys
+    assert seeing.would_lose is True
+    label = next(h.label for h in seeing.hazards
+                 if h.key == hazard.IN_PART_EXT_KEY)
+    assert "x14 conditional formatting" in label
+    parts = next(h.parts for h in seeing.hazards
+                 if h.key == hazard.IN_PART_EXT_KEY)
+    assert parts == ["xl/worksheets/sheet1.xml"]
+
+
+def test_in_part_extension_ignores_the_nested_cfrule_pointer():
+    """The cfRule's own extLst holds a POINTER to the x14 rule, not a dropped
+    block. Counting it would report a phantom second hazard, so only
+    worksheet > extLst > ext is collected."""
+    uris = hazard._top_level_ext_uris(_SHEET_WITH_X14)
+    assert uris == ["{78C0D931-6437-407d-A8EE-F0AAD7539E65}"]
+
+
+def test_worksheet_without_extlst_is_not_flagged():
+    """A classic (non-x14) conditional format lives in the sheet body with no
+    extLst at all; flagging it would refuse edits on ordinary workbooks."""
+    sheet = (b'<worksheet><sheetData/><conditionalFormatting sqref="A1">'
+             b'<cfRule type="cellIs" priority="1"/></conditionalFormatting>'
+             b'</worksheet>')
+    r = hazard.scan_names(["xl/worksheets/sheet1.xml"],
+                          part_reader=lambda m: sheet)
+    assert r.clean is True
+
+
+def test_unrecognized_extension_uri_is_still_reported():
+    """openpyxl drops every worksheet-level ext, listed in the label table or
+    not, so an unknown URI is named rather than waved through."""
+    sheet = (b'<worksheet><sheetData/><extLst>'
+             b'<ext uri="{00000000-0000-0000-0000-000000000000}"/>'
+             b'</extLst></worksheet>')
+    r = hazard.scan_names(["xl/worksheets/sheet1.xml"],
+                          part_reader=lambda m: sheet)
+    assert hazard.IN_PART_EXT_KEY in r.lossy_keys
+    label = next(h.label for h in r.hazards
+                 if h.key == hazard.IN_PART_EXT_KEY)
+    assert "unrecognized extension" in label
+
+
+def test_in_part_extension_matcher_never_claims_a_part_name():
+    """verify.part_loss_check walks these matchers over the parts that
+    VANISHED. The worksheet part does not vanish, so this spec must never
+    match a name, or an allow_loss on x14 would excuse a lost worksheet."""
+    spec = next(s for s in hazard.HAZARD_SPECS
+                if s.key == hazard.IN_PART_EXT_KEY)
+    for name in ("xl/worksheets/sheet1.xml", "xl/workbook.xml",
+                 "xl/slicers/slicer1.xml"):
+        assert spec.matcher(name) is False
+
+
 def test_bad_zip_refuses():
     r = hazard.scan_names([])  # empty namelist is clean; error path is scan_path
     assert r.clean is True
