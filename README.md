@@ -5,12 +5,15 @@
 Everything plus the kitchen sink for Microsoft Excel files: a round-trip-safe
 `.xlsx` MCP server with an honest calculation story and tiered loading.
 
-> Status: PRE-RELEASE (file tier built: safety core, cells and ranges,
-> query, formatting, tables, names, conditional formatting, validation,
-> sort/filter, comments, hyperlinks, import/export). The COM application
-> tier and the gated families (pivots, charts, images, Power Query) land in
-> later build phases. Counts are published only once
-> `scripts/measure_surface.py` measures the final surface.
+> Status: PRE-RELEASE (file tier COMPLETE: safety core, cells and ranges,
+> query, formulas with write and audit, formatting, tables, names,
+> conditional formatting, data validation, sort/filter, comments,
+> hyperlinks, import/export, images and charts, protection, page layout,
+> inspectors, backups, document properties, sheet views, a multiplex
+> validate battery, and workflow recipes). The COM application tier
+> (recalculation, real pivots, and the rest) lands in a later build phase.
+> Counts are published only once `scripts/measure_surface.py` measures the
+> final surface.
 
 ## What it is
 
