@@ -11,13 +11,17 @@ This manager therefore:
   - spawns isolated workers with DispatchEx and identifies each new PID by
     diffing the EXCEL.EXE process set across the spawn (robust for invisible,
     workbook-less instances whose Hwnd is 0),
-  - JOURNALS every spawned PID to disk at spawn time, so a crash still leaves
-    an owned-PID record for the next startup sweep,
+  - JOURNALS every spawned PID to disk at spawn time, TOGETHER WITH THAT
+    PROCESS'S CREATION TIME, so a crash still leaves an owned-PID record for
+    the next startup sweep and the sweep can prove the PID still names the
+    same process,
   - EXCLUDES self-spawned PIDs from GetActiveObject when locating the user's
     instance,
   - pools one worker for reuse (a pooled instance saves ~2s per op),
   - sweeps zombies in two phases: a minutes-scale grace window, then taskkill
-    BY OWNED PID ONLY. It never touches a foreign EXCEL.EXE.
+    BY OWNED PID ONLY, and only after the PID's creation time still matches
+    what was journaled. It never touches a foreign EXCEL.EXE, including one
+    that Windows has handed our old PID to.
 
 IMPORTANT: pywin32 is imported lazily inside the methods that need it, so the
 module imports cleanly on any platform and in headless CI. Nothing here spawns
@@ -27,6 +31,7 @@ Excel at import time.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import time
@@ -36,6 +41,10 @@ from pathlib import Path
 EXCEL_IMAGE = "EXCEL.EXE"
 # Minutes-scale grace: com_ground_truth exp 7 saw Quit defer exit by 1-3 min.
 DEFAULT_GRACE_SECONDS = 210.0
+
+#: Warnings only; silent unless the host configures logging. A COM server on
+#: stdio must never print to stdout, so nothing here does.
+_log = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------- PID plumbing
@@ -103,13 +112,62 @@ def _process_alive(pid: int) -> bool:
         return True  # cannot tell: assume alive, never reap on a guess
 
 
-def _own_start_time() -> float | None:
+def process_create_time(pid: int) -> float | None:
+    """The creation time of the process holding this PID, or None when it
+    cannot be read (no psutil, the process is gone, access denied).
+
+    This is the IDENTITY of a PID. Windows recycles PIDs, so "PID 30092 is a
+    live EXCEL.EXE" does not mean "PID 30092 is the EXCEL.EXE we spawned";
+    creation time is what distinguishes them."""
+    if pid <= 0:
+        return None
     try:
         import psutil  # type: ignore
 
-        return float(psutil.Process(os.getpid()).create_time())
+        return float(psutil.Process(int(pid)).create_time())
     except Exception:
         return None
+
+
+def _own_start_time() -> float | None:
+    return process_create_time(os.getpid())
+
+
+#: psutil reports creation time as a POSIX float and the JSON round trip is
+#: exact, so this tolerance only absorbs clock/platform jitter. It is far
+#: below the interval in which a PID could plausibly be recycled.
+CREATE_TIME_TOLERANCE = 0.05
+
+
+def journal_create_time(rec: object) -> float | None:
+    """The Excel creation time stored in a journal record, or None for a
+    LEGACY record written before identity tracking existed."""
+    if not isinstance(rec, dict):
+        return None
+    ct = rec.get("create_time")
+    if isinstance(ct, bool) or not isinstance(ct, (int, float)):
+        return None
+    return float(ct)
+
+
+def identity_verdict(pid: int, rec: object) -> str:
+    """Does this PID still name the Excel the journal recorded?
+
+      ``"match"``     the creation times agree: this is our process.
+      ``"mismatch"``  the creation times differ: Windows recycled the PID onto
+                      a DIFFERENT Excel, which we have no claim to.
+      ``"unknown"``   no recorded creation time (a legacy record) or none
+                      readable now (no psutil, access denied). The caller
+                      falls back to the pre-identity behaviour.
+    """
+    expected = journal_create_time(rec)
+    if expected is None:
+        return "unknown"
+    actual = process_create_time(pid)
+    if actual is None:
+        return "unknown"
+    return ("match" if abs(actual - expected) <= CREATE_TIME_TOLERANCE
+            else "mismatch")
 
 
 def taskkill(pid: int) -> bool:
@@ -149,6 +207,14 @@ class PidJournal:
     def record(self, pid: int) -> None:
         data = self._load()
         data[str(pid)] = {"spawned_at": time.time(), "status": "owned",
+                          # The IDENTITY of the Excel process itself. Without
+                          # it a record was a bare PID, and a sweep that found
+                          # "some EXCEL.EXE holds this PID" force-killed it:
+                          # after a PID recycle that Excel is the USER'S, with
+                          # their unsaved work in it (live COM stress, M-1).
+                          # The owner side below already did exactly this;
+                          # the Excel side never got it.
+                          "create_time": process_create_time(pid),
                           # The SERVER process that owns this Excel. A record
                           # whose owner is gone is a crash/exit leftover and
                           # the next startup can reclaim it AT ONCE, instead
@@ -192,6 +258,52 @@ class PidJournal:
         return out
 
 
+# --------------------------------------------------- the one reclaim point
+
+def reclaim_journaled_pid(journal: PidJournal, pid: int,
+                          rec: object = None) -> str:
+    """Reap ONE journal-owned Excel, and the ONLY sanctioned way to do it.
+    Every kill path (sweep, force_reclaim, the startup journal replay, the
+    restart-transient reap) goes through here so the identity check cannot be
+    forgotten in one of them.
+
+    Returns what happened:
+
+      ``"gone"``         no live EXCEL.EXE holds the PID; the record is
+                         released.
+      ``"killed"``       identity verified (or a legacy record with no
+                         recorded identity); taskkilled and released.
+      ``"kill_failed"``  still alive after taskkill; the record is KEPT so
+                         the next sweep retries (forgetting a live zombie
+                         orphans it forever).
+      ``"pid_reuse"``    a DIFFERENT Excel now holds this PID. NOTHING is
+                         killed and the record is dropped, because the
+                         process we journaled is already gone and the one
+                         standing there is somebody else's, most likely the
+                         user's with unsaved work in it.
+    """
+    if rec is None:
+        rec = journal.records().get(str(pid))
+    if not pid_alive(pid):
+        journal.forget(pid)
+        return "gone"
+    if identity_verdict(pid, rec) == "mismatch":
+        _log.warning(
+            "ks4xl: journaled Excel PID %s is now a different process "
+            "(recorded creation time %s, actual %s); Windows recycled the "
+            "PID. Killing nothing and dropping the record.",
+            pid, journal_create_time(rec), process_create_time(pid))
+        journal.forget(pid)
+        return "pid_reuse"
+    if taskkill(pid):
+        journal.forget(pid)
+        return "killed"
+    if not pid_alive(pid):
+        journal.forget(pid)
+        return "gone"
+    return "kill_failed"
+
+
 # ------------------------------------------------------------ the manager
 
 @dataclass
@@ -208,6 +320,9 @@ class SweepResult:
     exited_on_own: list[int] = field(default_factory=list)
     still_waiting: list[int] = field(default_factory=list)
     skipped_foreign: list[int] = field(default_factory=list)
+    #: Journaled PIDs that Windows recycled onto a different Excel. Nothing
+    #: was killed for these and their records were dropped.
+    pid_reuse_dropped: list[int] = field(default_factory=list)
 
 
 class ExcelInstanceManager:
@@ -370,45 +485,36 @@ class ExcelInstanceManager:
                     pending.discard(pid)
             if pending:
                 time.sleep(poll)
-        # Grace elapsed: taskkill any owned PID still alive. A pid is
-        # forgotten ONLY once it is confirmed gone; a failed taskkill keeps
-        # its journal record so the next sweep can retry (forgetting a live
-        # zombie would orphan it forever).
+        # Grace elapsed: taskkill any owned PID still alive, identity first.
         for pid in sorted(pending):
-            if pid_alive(pid):
-                if taskkill(pid):
-                    res.killed.append(pid)
-                    self.journal.forget(pid)
-                else:
-                    res.still_waiting.append(pid)
-            else:
-                res.exited_on_own.append(pid)
-                self.journal.forget(pid)
+            self._record_reclaim(res, pid, reclaim_journaled_pid(
+                self.journal, pid))
         return res
+
+    @staticmethod
+    def _record_reclaim(res: SweepResult, pid: int, outcome: str) -> None:
+        {"gone": res.exited_on_own, "killed": res.killed,
+         "kill_failed": res.still_waiting,
+         "pid_reuse": res.pid_reuse_dropped}[outcome].append(pid)
 
     def force_reclaim(self) -> SweepResult:
         """Immediate reclaim for tests / shutdown: taskkill every owned PID
         still alive with NO grace wait (used when we accept the deferred-exit
-        cost is not worth waiting for). Foreign PIDs untouched."""
+        cost is not worth waiting for). Foreign PIDs untouched, and a PID
+        Windows recycled onto somebody else's Excel is dropped, not killed."""
         res = SweepResult()
         owned = self.owned_pids()
         res.checked = sorted(owned)
+        records = self.journal.records()
         for pid in sorted(owned):
-            if pid_alive(pid):
-                if taskkill(pid):
-                    res.killed.append(pid)
-                    self.journal.forget(pid)
-                else:
-                    # keep the journal record: a kill that failed leaves a
-                    # live owned zombie, and forgetting it would orphan it
-                    res.still_waiting.append(pid)
-            else:
-                res.exited_on_own.append(pid)
-                self.journal.forget(pid)
+            self._record_reclaim(res, pid, reclaim_journaled_pid(
+                self.journal, pid, records.get(str(pid))))
         return res
 
 
 __all__ = [
     "ExcelInstanceManager", "Worker", "SweepResult", "PidJournal",
     "list_excel_pids", "pid_alive", "taskkill", "DEFAULT_GRACE_SECONDS",
+    "process_create_time", "journal_create_time", "identity_verdict",
+    "reclaim_journaled_pid", "CREATE_TIME_TOLERANCE",
 ]

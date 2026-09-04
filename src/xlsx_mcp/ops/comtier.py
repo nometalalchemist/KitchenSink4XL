@@ -36,6 +36,7 @@ from ..core import hazard as _hazard
 from ..core import safesave as _safesave
 from ..core import verify as _verify
 from ..core.errors import (
+    ExcelDisconnected,
     TargetNotFound,
     ValidationFailed,
     XlMcpError,
@@ -104,26 +105,70 @@ def _ws(wb, sheet: str | None):
             f"no sheet named {sheet!r}; sheets: {names}") from None
 
 
+def _op_of(label: str) -> str:
+    """The operation name out of an executor label like
+    ``recalculate(book.xlsx)``, for use in a refusal message."""
+    return str(label).split("(", 1)[0].strip() or "the operation"
+
+
 def _wrap_com_error(exc: Exception, doing: str) -> XlMcpError:
+    """Turn any COM failure into one of this server's errors, with Excel's
+    own words in it and never a pywin32 tuple repr.
+
+    Two outcomes, and the split is the live COM stress round's M-2. A COM
+    failure that means EXCEL DIED (the taskkilled-mid-write case, HRESULT
+    0x800706BE) is not a bad parameter and must not be coded as one: an
+    unattended orchestrator reading BAD_PARAMS will not retry, it will go
+    "fix" a call that was correct. Those raise ExcelDisconnected, which the
+    envelope maps to CONFLICT. Everything else stays the plain refusal."""
     msg = _session.excel_error_message(exc)
-    err = XlMcpError(f"Excel refused while {doing}: {msg}")
-    return err
+    if _session.excel_process_died(exc):
+        return ExcelDisconnected(
+            f"the Excel worker process stopped answering while {doing}: "
+            f"{msg}. The operation did not complete. Retry: the COM layer "
+            "re-arms with a fresh Excel on the next call.")
+    return XlMcpError(f"Excel refused while {doing}: {msg}")
+
+
+def _guarded(body: Callable[[Any, Any], dict], doing: str
+             ) -> Callable[[Any, Any], dict]:
+    """Run an operation body with the same COM-error translation the open and
+    save steps get. Before this, only open_workbook and wb.Save were wrapped,
+    so a com_error raised by any COM call inside a body (CalculateFull, a
+    Range assignment, a Worksheets lookup) propagated untranslated and
+    envelope.refusal() rendered it with str() as the raw pywin32 tuple
+    ``(-2147023170, 'The remote procedure call failed.', None, None)``
+    (live COM stress, M-2)."""
+    def run(app, wb) -> dict:
+        try:
+            return body(app, wb)
+        except XlMcpError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise _wrap_com_error(exc, doing) from exc
+    return run
 
 
 def _refuse_encrypted_without_password(path: str,
                                        password: str | None) -> None:
-    """An encrypted (CFB) file opened without a password HANGS Excel on a
-    modal prompt (probe-proven: no supplied argument suppresses it), so it
-    is refused by signature BEFORE any COM call. A WRONG supplied password
-    hangs the same way and surfaces as the bounded operation timeout."""
+    """An encrypted (CFB) file opened with NO password HANGS Excel on a modal
+    prompt (probe-proven: no supplied argument suppresses it), so it is
+    refused by signature BEFORE any COM call.
+
+    A WRONG password is a different case and this message used to describe it
+    wrongly. It said a wrong password surfaces as the operation timeout,
+    which taught callers to budget 60 seconds for a mistyped password. The
+    positional-password delivery in session.open_workbook fixed that: a wrong
+    password now comes back in about a tenth of a second as Excel's own
+    "The password you supplied is not correct" (live COM stress, L-2)."""
     if password is None and _session.is_encrypted_package(path):
         from ..core.errors import WorkbookProtected
         raise WorkbookProtected(
             f"{Path(path).name} is password-protected (encrypted package); "
             "this operation needs the password. "
             "com_validate_opens_clean and com_save_with_password accept "
-            "one; note a WRONG password surfaces as the operation timeout "
-            "because Excel re-prompts modally.")
+            "one; a WRONG password comes back at once with Excel's own "
+            "wrong-password message, so there is nothing to wait out.")
 
 
 def _run_readonly(label: str, path: str,
@@ -133,6 +178,7 @@ def _run_readonly(label: str, path: str,
     """Open the workbook read-only in the pooled worker, run body(app, wb),
     close without saving. Serialized, alert-suppressed, timeout-bounded."""
     _refuse_encrypted_without_password(path, password)
+    body = _guarded(body, f"running {_op_of(label)} in the workbook")
 
     def job(manager) -> dict:
         w = manager.acquire()
@@ -169,6 +215,7 @@ def _run_mutation(label: str, path: str,
     open in the pooled worker, run body(app, wb), save with retry, close,
     structural verify (restore the backup on failure)."""
     _refuse_encrypted_without_password(path, password)
+    body = _guarded(body, f"running {_op_of(label)} in the workbook")
     warnings = _session.guard_target_closed(path)
     pre_report = None
     try:
@@ -200,7 +247,12 @@ def _run_mutation(label: str, path: str,
                     raise
                 except Exception as exc:  # noqa: BLE001
                     raise _wrap_com_error(exc, "saving the workbook") from exc
-            wb.Close(False)
+            try:
+                wb.Close(False)
+            except XlMcpError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise _wrap_com_error(exc, "closing the workbook") from exc
             wb = None
             return {"changed": changed, "instance_pid": w.pid}
         finally:
