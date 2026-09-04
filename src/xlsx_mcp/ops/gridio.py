@@ -190,8 +190,29 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None,
             if formula is not None:
                 has_formula = True
             if mode == "formula":
-                out = fws.cell(r, c).value
-                label = _calc.label_cell(formula, None)
+                # The value returned here IS the formula text, so the label is
+                # LABEL_FORMULA -- the cache was never consulted and nothing is
+                # stale. Labelling it 'absent' (what label_cell(formula, None)
+                # returns) fired the absent-cache warning on a read that had
+                # asked for formulas in the first place, and left the
+                # LABEL_FORMULA constant dead (edge audit 2026-09-04, S4).
+                #
+                # The text comes from formula_text_of, not cell.value: an
+                # ARRAY formula's value is an openpyxl ArrayFormula OBJECT,
+                # and returning it handed the transport a repr instead of a
+                # formula. Every LAMBDA Excel itself authors is stored
+                # t="array", so reading back a real Excel workbook was the
+                # common case, not the corner. denormalize_formula then does
+                # the job it was written for and never wired to: the reader
+                # sees =LAMBDA(x,[y],...), which is what Excel's own formula
+                # bar shows, instead of the stored
+                # _xlfn.LAMBDA(_xlpm.x,_xlop.y,...).
+                if formula is not None:
+                    out = _calc.denormalize_formula(formula)
+                    label = _calc.LABEL_FORMULA
+                else:
+                    out = fws.cell(r, c).value
+                    label = _calc.LABEL_VALUE
             elif mode == "cached":
                 # The probe (when available) is what lets this mode say
                 # 'absent' instead of handing back a silent blank; without

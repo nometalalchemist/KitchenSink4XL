@@ -227,6 +227,11 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
             (dst.min_col + src.max_col - src.min_col) > gridio._locate.MAX_COL:
         raise RangeOutOfBounds("the paste would extend past the grid limits")
     wrote_formula = False
+    #: values-mode sources that are formulas with NO cached value: they paste
+    #: as BLANKS, which used to happen silently -- the one write surface the
+    #: absent-cache honesty pass missed (edge audit 2026-09-04). Same
+    #: ABSENT_WARNING the read surfaces use, plus the cell list.
+    absent_sources: list[str] = []
     for i, row in enumerate(block):
         for j, (val, style, cached, is_text) in enumerate(row):
             tcell = dws.cell(dst.min_row + i, dst.min_col + j)
@@ -234,9 +239,12 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
                 out = val
                 as_text = is_text
                 if what == "values":
-                    out = cached if (isinstance(val, str)
-                                     and val.startswith("=")
-                                     and not is_text) else val
+                    is_live = (isinstance(val, str) and val.startswith("=")
+                               and not is_text)
+                    out = cached if is_live else val
+                    if is_live and cached is None:
+                        absent_sources.append(
+                            gridio.a1(src.min_row + i, src.min_col + j))
                 elif isinstance(val, str) and val.startswith("=") \
                         and not is_text:
                     if adjust_formulas:
@@ -254,6 +262,19 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
         "from": f"{src.sheet}!{src.a1}",
         "to": f"{dst.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
         "what": what}
+    if absent_sources:
+        shown = absent_sources[:25]
+        result["changed"]["copied"]["pasted_blank_absent_cache"] = shown
+        warnings = list(result.get("warnings", []))
+        warnings.append(
+            f"{len(absent_sources)} source cell(s) held a formula with NO "
+            "cached value and therefore pasted as BLANK: "
+            + ", ".join(shown)
+            + (f" (+{len(absent_sources) - 25} more)"
+               if len(absent_sources) > 25 else "")
+            + ". " + gridio.ABSENT_WARNING
+            + ", then copy again to capture real numbers")
+        result["warnings"] = warnings
     return result
 
 
@@ -681,7 +702,12 @@ def _sort_key(v, *, reverse: bool = False):
         return (0, _excel_serial(v), "")
     s = str(v)
     if s in _ERROR_LITERALS:
-        return (3, 0.0, s)
+        # Excel treats every error as EQUAL in a sort and leaves them in their
+        # original order: a column reading #VALUE!, #REF!, #N/A, #DIV/0! comes
+        # back in exactly that order (COM ground truth, edge audit 2026-09-04,
+        # S2). Keying on the literal alphabetized them; an identical key makes
+        # Python's stable sort reproduce Excel's leave-them-alone behaviour.
+        return (3, 0.0, "")
     return (1, 0.0, s.casefold())
 
 

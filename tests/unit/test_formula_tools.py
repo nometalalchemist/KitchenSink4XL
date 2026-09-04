@@ -78,7 +78,15 @@ def test_set_formula_accepts_missing_equals(tmp_path):
 def test_set_formula_normalizes_modern_functions(tmp_path):
     p = _make(tmp_path)
     _formulas.set_formula(p, {"cell": "A1"}, "=XLOOKUP(1,B1:B3,C1:C3)")
-    assert _read_formulas(p)[0][0] == "=_xlfn.XLOOKUP(1,B1:B3,C1:C3)"
+    # STORED with the prefix (that is the whole point of the shim) ...
+    with zipfile.ZipFile(p) as zf:
+        sheet = next(n for n in zf.namelist()
+                     if n.startswith("xl/worksheets/sheet"))
+        assert "_xlfn.XLOOKUP(1,B1:B3,C1:C3)" in zf.read(sheet).decode("utf-8")
+    # ... and DISPLAYED the way Excel's own formula bar shows it (edge audit
+    # 2026-09-04: denormalize_formula existed for exactly this and was never
+    # wired to a read path, so every read leaked the storage prefixes).
+    assert _read_formulas(p)[0][0] == "=XLOOKUP(1,B1:B3,C1:C3)"
 
 
 def test_set_formula_range_fill_shifts_relative_refs(tmp_path):

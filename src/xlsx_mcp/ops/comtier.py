@@ -342,7 +342,18 @@ def _reseed_iterative_errors(app, wb) -> int:
     Re-entering the formula through Excel restores a numeric seed. Cells whose
     error is genuine (#REF!, #DIV/0!) are unharmed: re-entering the same
     formula recomputes the same error. Legacy CSE array cells are skipped,
-    since assigning .Formula would break the array."""
+    since assigning .Formula would break the array.
+
+    The re-entry goes through .Formula2, NOT .Formula. HasArray is False for a
+    DYNAMIC array, so the CSE skip above never covered them, and assigning
+    legacy .Formula re-enters in implicit-intersection mode: an Excel probe
+    (edge audit follow-up, 2026-09-04) took an error-valued
+    =FILTER(A1:A3,A1:A3>99), assigned .Formula = .Formula, and Excel then
+    reported the formula as =@FILTER(A1:A3,A1:A3>99) and stored it as a plain
+    <f> with the t="array" ref= spill attributes GONE. The formula had been
+    silently converted. .Formula2 round-trips it unchanged. Pre-2019 Excel has
+    no .Formula2 (and no dynamic arrays either), so the fallback below is the
+    old path where it is still the correct one."""
     xl_cell_type_formulas, xl_errors = -4123, 16
     total = 0
     for ws in wb.Worksheets:
@@ -355,7 +366,10 @@ def _reseed_iterative_errors(app, wb) -> int:
                 try:
                     if cell.HasArray:
                         continue
-                    cell.Formula = cell.Formula
+                    try:
+                        cell.Formula2 = cell.Formula2
+                    except Exception:  # noqa: BLE001 - pre-2019 Excel
+                        cell.Formula = cell.Formula
                     total += 1
                 except Exception:  # noqa: BLE001
                     continue

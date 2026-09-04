@@ -241,8 +241,12 @@ def _detect_in_part_extensions(
             data = part_reader(name)
         except Exception:  # noqa: BLE001
             continue
-        if b"extLst" not in data:
-            continue  # cheap reject before the parse
+        # Cheap reject before the parse. It is a UTF-8 byte scan, so a part
+        # with a UTF-16 byte-order mark (legal XML, and openpyxl loads one)
+        # skips the reject and goes straight to expat, which reads the
+        # declared encoding itself (edge audit 2026-09-04, S3).
+        if not data[:2] in (b"\xff\xfe", b"\xfe\xff") and b"extLst" not in data:
+            continue
         uris = _top_level_ext_uris(data)
         if not uris:
             continue

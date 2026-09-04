@@ -885,6 +885,126 @@ def item2b(scratch: Path) -> None:
           "2b.4 no empty cached-value element is left on a formula cell")
 
 
+def item2c(scratch: Path) -> None:
+    """The edge-audit follow-up defects (2026-09-04), against real Excel."""
+    print("\n=== ITEM 2c: optional LAMBDA params, dynamic-array reseed, "
+          "error sort ===")
+
+    # ---- C1: OPTIONAL lambda parameters. Excel stores the declaration under
+    #      a THIRD prefix, _xlop., with the brackets removed, and every use
+    #      site under _xlpm. A bare [y] used to be dropped entirely, which is
+    #      the class where Excel REFUSES TO OPEN the workbook.
+    p = scratch / "optlambda.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "L"
+    wb.save(p)
+    wb.close()
+    want = {"L!A1": 3, "L!A2": 1, "L!A3": 6, "L!A4": 2, "L!A5": 6, "L!A6": 5}
+    for addr, f in (
+            ("A1", "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)"),
+            ("A2", "=LAMBDA(x,[y],x)(1)"),
+            ("A3", "=LAMBDA(x,[f],f(x))(2,LAMBDA(a,a*3))"),
+            ("A4", "=LET(q,1,LAMBDA(y,[z],y+q)(q,2))"),
+            ("A5", "=LAMBDA(x,[y],[z],IF(ISOMITTED(z),x+y,x+y+z))(1,2,3)"),
+            ("A6", "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(5)")):
+        formulas.set_formula(str(p), addr, f, sheet="L", backup=False)
+    stored = str(formulas_of(p, {"L": ["A1"]})["L!A1"])
+    check("_xlop.y" in stored and "_xlpm.y" in stored and "[y]" not in stored,
+          f"2c.1 an optional LAMBDA parameter is stored _xlop. at the "
+          f"declaration and _xlpm. at every use ({stored})")
+    oc = comtier.com_validate_opens_clean(str(p))
+    check(oc["opens_clean"] is True,
+          f"2c.2 Excel OPENS the optional-LAMBDA workbook "
+          f"({oc.get('excel_says', '')[:60]})")
+    comtier.recalculate(str(p))
+    got = cached_many(p, {"L": ["A1", "A2", "A3", "A4", "A5", "A6"]})
+    check(got == want,
+          f"2c.3 every optional-LAMBDA formula EVALUATES correctly "
+          f"(got {got}, want {want})")
+    shown = cells.read_range(str(p), "A1:A6", values="formula",
+                             sheet="L")["values"]
+    check(all("_xl" not in str(r[0]) for r in shown)
+          and str(shown[0][0]) == "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)",
+          f"2c.4 the read-back displays the formula the way Excel's formula "
+          f"bar does, brackets restored ({shown[0][0]!r})")
+
+    # ---- S1: the iterative reseed must not convert a DYNAMIC array. HasArray
+    #      is False for one, so the CSE skip never covered it, and assigning
+    #      legacy .Formula re-enters in implicit-intersection mode.
+    def _reseed_body(manager):
+        w = manager.acquire()
+        wb2 = None
+        try:
+            app = w.app
+            wb2 = app.Workbooks.Add()
+            s = wb2.Worksheets(1)
+            for r, v in enumerate((1, 2, 3), start=1):
+                s.Cells(r, 1).Value = v
+            s.Range("C1").Formula2 = "=FILTER(A1:A3,A1:A3>99)"   # #CALC!
+            app.CalculateFull()
+            before = str(s.Range("C1").Formula2)
+            touched = comtier._reseed_iterative_errors(app, wb2)
+            after = str(s.Range("C1").Formula2)
+            return before, after, touched
+        finally:
+            if wb2 is not None:
+                try:
+                    wb2.Close(SaveChanges=False)
+                except Exception:  # noqa: BLE001
+                    pass
+            manager.release_to_pool(w)
+
+    before, after, touched = com_session.run_com("reseed probe", _reseed_body)
+    check(after == before and "@" not in after,
+          f"2c.5 the iterative reseed leaves a DYNAMIC-array formula "
+          f"unchanged (before={before!r} after={after!r}, "
+          f"{touched} cell(s) reseeded)")
+    note(f"S1 confirmed and fixed: legacy .Formula assignment turned "
+         f"{before!r} into '=@FILTER(A1:A3,A1:A3>99)' and dropped the "
+         f"t=\"array\" spill attributes in a pre-fix probe; .Formula2 "
+         f"round-trips it ({after!r})")
+
+    # ---- S2: does Excel order error values among themselves in a sort?
+    def _errsort_body(manager):
+        w = manager.acquire()
+        wb3 = None
+        try:
+            app = w.app
+            wb3 = app.Workbooks.Add()
+            s = wb3.Worksheets(1)
+            # deliberately NOT alphabetical, so a sort that reorders the
+            # error run is distinguishable from one that does not
+            for r, f in enumerate(("=\"a\"+1", "=A99+#REF!", "=NA()",
+                                   "=1/0"), start=1):
+                try:
+                    s.Cells(r, 1).Formula = f
+                except Exception:  # noqa: BLE001
+                    s.Cells(r, 1).Value = f
+            app.CalculateFull()
+            pre = [str(s.Cells(r, 1).Text) for r in range(1, 5)]
+            s.Range("A1:A4").Sort(Key1=s.Range("A1"), Order1=1,
+                                  Header=2)
+            post = [str(s.Cells(r, 1).Text) for r in range(1, 5)]
+            return pre, post
+        finally:
+            if wb3 is not None:
+                try:
+                    wb3.Close(SaveChanges=False)
+                except Exception:  # noqa: BLE001
+                    pass
+            manager.release_to_pool(w)
+
+    pre, post = com_session.run_com("error sort probe", _errsort_body)
+    ours = sorted(pre, key=cells._sort_key)
+    check(post == pre,
+          f"2c.6 Excel preserves the original order of error values in a "
+          f"sort (before={pre}, after={post})")
+    check(ours == post,
+          f"2c.7 _sort_key reproduces that: every error keys equal, so the "
+          f"stable sort leaves them alone (ours={ours}, excel={post})")
+
+
 # --------------------------------------- item 6: verify_com end to end
 
 def item6(scratch: Path) -> None:
@@ -961,7 +1081,7 @@ def main() -> int:
     print(f"excel: {_excel_version()}")
 
     try:
-        for fn in (item1, item2, item2b, item3, item4, item5, item6):
+        for fn in (item1, item2, item2b, item2c, item3, item4, item5, item6):
             try:
                 fn(scratch)
             except Exception as exc:  # noqa: BLE001

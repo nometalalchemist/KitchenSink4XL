@@ -102,14 +102,64 @@ _DECLARER = re.compile(
     r"(?<![A-Za-z0-9_.])(?:_xlfn\.)?(LAMBDA|LET)\s*\(", re.IGNORECASE)
 _NAME_TOKEN = re.compile(r"^[A-Za-z_\\][A-Za-z0-9_.?\\]*$")
 
-#: Names that are also function names are left alone at a call site, so a
-#: variable unluckily called "sum" cannot capture a real SUM( call.
-_CLASSIC_FUNCS = frozenset({
+#: A LAMBDA OPTIONAL parameter declaration: the name in square brackets,
+#: =LAMBDA(x,[y],...). Excel stores it WITHOUT the brackets and under a third
+#: prefix, _xlop. (see _OPT_PREFIX below).
+_OPT_TOKEN = re.compile(r"^\[\s*([A-Za-z_\\][A-Za-z0-9_.?\\]*)\s*\]$")
+
+#: The optional-parameter prefix Excel writes at a LAMBDA DECLARATION site.
+#: Use sites in the body still take _xlpm. (COM ground truth, edge audit
+#: 2026-09-04 follow-up: Excel authored =LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))
+#: and stored
+#:   _xlfn.LAMBDA(_xlpm.x,_xlop.y,IF(_xlfn.ISOMITTED(_xlpm.y),
+#:                                   _xlpm.x,_xlpm.x+_xlpm.y))
+#: -- brackets gone, _xlop. at the declaration, _xlpm. everywhere else,
+#: including at a call site when the optional parameter is lambda-valued
+#: (_xlpm.f(_xlpm.x)). A bare [y] was dropped by the name regex before this,
+#: so every y landed unprefixed and the workbook would not OPEN.)
+_OPT_PREFIX = "_xlop."
+
+#: Every name a call site could mean instead of a declared parameter. Excel's
+#: rule at a call site is BUILTIN WINS: =LET(mod,2,mod+MOD(7,3)) is stored
+#: _xlfn.LET(_xlpm.mod,2,_xlpm.mod+MOD(7,3)) and evaluates 3 (COM ground
+#: truth, edge audit 2026-09-04). Enforcing that rule needs the WHOLE builtin
+#: catalog, not a sample: the hand-written 30-name list below left MOD, TRIM,
+#: TODAY, COUNTIF, SUMIF, CONCATENATE, ROUNDUP and several hundred others
+#: outside the guard, so any of them could be captured into _xlpm.MOD(7,3).
+#: openpyxl.utils.FORMULAE is the ECMA-376 classic function catalog (355
+#: names) and ships with a hard dependency, so it is used as the catalog; the
+#: hand list stays as a floor in case that export ever moves. The classic set
+#: is CLOSED by construction -- every function Excel has added since 2007 is
+#: stored with an _xlfn. prefix and lives in XLFN_FUNCS / XLFN_XLWS_FUNCS --
+#: so the union below is complete, not a subset that has to keep growing.
+_CLASSIC_SEED = frozenset({
     "SUM", "IF", "AND", "OR", "NOT", "MIN", "MAX", "AVERAGE", "COUNT",
     "COUNTA", "INDEX", "MATCH", "VLOOKUP", "HLOOKUP", "LOOKUP", "TEXT",
     "LEN", "LEFT", "RIGHT", "MID", "ROUND", "ABS", "NA", "ROW", "COLUMN",
     "ROWS", "COLUMNS", "IFERROR", "SUMPRODUCT", "OFFSET", "INDIRECT",
 })
+
+
+def _classic_catalog() -> frozenset[str]:
+    try:
+        from openpyxl.utils import FORMULAE  # type: ignore
+        return frozenset(str(n).upper() for n in FORMULAE)
+    except Exception:  # noqa: BLE001 - the seed still guards the common names
+        return frozenset()
+
+
+_CLASSIC_FUNCS = _CLASSIC_SEED | _classic_catalog()
+
+#: Every name that is a function call, not a parameter use, when followed by
+#: "(" -- the call-site guard's whole vocabulary.
+_BUILTIN_FUNCS = _CLASSIC_FUNCS | XLFN_FUNCS | XLFN_XLWS_FUNCS
+
+#: A single-quoted sheet-name span ('Sales x'!A1), with '' as the escape.
+#: Excel never writes a parameter prefix inside one: =LET(x,1,x+'Sales x'!A1)
+#: is stored with 'Sales x'!A1 untouched (COM ground truth, edge audit
+#: 2026-09-04). The "!" lookahead does not cover this, because the occurrence
+#: inside the quotes is followed by an apostrophe, not a "!".
+_SHEET_QUOTE_RE = re.compile(r"'(?:[^']|'')*'")
 
 
 def _blank_strings(body: str) -> str:
@@ -122,11 +172,13 @@ def _blank_strings(body: str) -> str:
     return "".join(out)
 
 
-def _top_level_args(text: str, open_idx: int) -> tuple[list[str], int]:
+def _top_level_args(text: str, open_idx: int) -> tuple[list[tuple[str, int]], int]:
     """Split the argument list of a call whose '(' is at open_idx. Returns
-    (arg_texts, index_of_matching_close) or ([], -1) when unbalanced."""
+    ([(arg_text, start_offset), ...], index_of_matching_close) or ([], -1)
+    when unbalanced. The offsets are what lets an optional-parameter
+    declaration be rewritten in place."""
     depth = 0
-    args: list[str] = []
+    args: list[tuple[str, int]] = []
     start = open_idx + 1
     i = open_idx
     while i < len(text):
@@ -136,23 +188,28 @@ def _top_level_args(text: str, open_idx: int) -> tuple[list[str], int]:
         elif ch == ")":
             depth -= 1
             if depth == 0:
-                args.append(text[start:i])
+                args.append((text[start:i], start))
                 return args, i
         elif ch == "," and depth == 1:
-            args.append(text[start:i])
+            args.append((text[start:i], start))
             start = i + 1
         i += 1
     return [], -1
 
 
-def _declared_names(body: str) -> list[str]:
-    """Every name declared by a LET or LAMBDA anywhere in the formula.
+def _declarations(body: str) -> tuple[list[str], list[tuple[int, int, str]]]:
+    """Every name declared by a LET or LAMBDA anywhere in the formula, plus
+    the spans of the OPTIONAL LAMBDA declarations ([y]) that need the _xlop.
+    treatment.
 
     Shadowing does not matter: Excel prefixes every occurrence of a declared
     name with _xlpm. regardless of scope, so collecting them all and
-    substituting globally reproduces exactly what Excel stores."""
+    substituting globally reproduces exactly what Excel stores. Returns
+    (names, [(start, end, name), ...]) where the spans index into `body` and
+    cover the bracketed token including its brackets."""
     blanked = _blank_strings(body)
     names: list[str] = []
+    optional: list[tuple[int, int, str]] = []
     for m in _DECLARER.finditer(blanked):
         kind = m.group(1).upper()
         args, close = _top_level_args(blanked, m.end() - 1)
@@ -162,14 +219,58 @@ def _declared_names(body: str) -> list[str]:
             declared = args[:-1]
         else:  # LET: name, value, name, value, ..., calculation
             declared = [a for i, a in enumerate(args[:-1]) if i % 2 == 0]
-        for tok in declared:
-            tok = tok.strip()
-            if tok and _NAME_TOKEN.match(tok):
+        for raw, at in declared:
+            tok = raw.strip()
+            if not tok:
+                continue
+            if _NAME_TOKEN.match(tok):
                 names.append(tok)
-    return names
+                continue
+            # Only LAMBDA takes optional parameters; LET names cannot be
+            # bracketed.
+            om = _OPT_TOKEN.match(tok) if kind == "LAMBDA" else None
+            if om:
+                lead = len(raw) - len(raw.lstrip())
+                names.append(om.group(1))
+                optional.append((at + lead, at + lead + len(tok), om.group(1)))
+    return names, optional
+
+
+def _mark_optional_declarations(
+        body: str, spans: list[tuple[int, int, str]]) -> str:
+    """Rewrite each `[y]` LAMBDA declaration to `_xlop.y` in place. Done
+    BEFORE the _xlpm pass, which then leaves the result alone (the name is
+    preceded by a '.', which the lookbehind excludes) and prefixes only the
+    body's use sites."""
+    out: list[str] = []
+    pos = 0
+    for start, end, name in sorted(spans):
+        if start < pos:
+            continue
+        out.append(body[pos:start])
+        out.append(_OPT_PREFIX + name)
+        pos = end
+    out.append(body[pos:])
+    return "".join(out)
 
 
 def _prefix_params(segment: str, names: list[str]) -> str:
+    # Single-quoted sheet names are spans the _xlpm pass must not enter
+    # ('Sales x'!A1 stays bare in Excel's own storage), so the substitution
+    # runs only on the stretches between them.
+    pieces: list[str] = []
+    pos = 0
+    for qm in _SHEET_QUOTE_RE.finditer(segment):
+        if qm.start() > pos:
+            pieces.append(_prefix_params_span(segment[pos:qm.start()], names))
+        pieces.append(qm.group(0))
+        pos = qm.end()
+    if pos < len(segment):
+        pieces.append(_prefix_params_span(segment[pos:], names))
+    return "".join(pieces)
+
+
+def _prefix_params_span(segment: str, names: list[str]) -> str:
     for name in sorted(set(names), key=len, reverse=True):
         # The trailing "!" exclusion: a token followed by "!" is a SHEET
         # qualifier (Sales!A1), never a parameter use; Excel stores it bare
@@ -182,8 +283,7 @@ def _prefix_params(segment: str, names: list[str]) -> str:
 
         def rep(m: re.Match) -> str:
             tail = segment[m.end():m.end() + 1]
-            if tail == "(" and m.group(1).upper() in (
-                    _CLASSIC_FUNCS | XLFN_FUNCS | XLFN_XLWS_FUNCS):
+            if tail == "(" and m.group(1).upper() in _BUILTIN_FUNCS:
                 return m.group(0)   # a real function call, not the variable
             return "_xlpm." + m.group(1)
 
@@ -230,17 +330,36 @@ def normalize_formula(formula: str) -> tuple[str, list[str]]:
 
     body = formula[1:] if formula.startswith("=") else formula
     out = _outside_strings(body, lambda seg: _CALL.sub(sub, seg))
-    names = [n for n in _declared_names(out) if not n.startswith("_xlpm.")]
+    raw_names, optional = _declarations(out)
+    # Already-prefixed declarations are skipped so the pass is idempotent.
+    names = [n for n in raw_names
+             if not n.startswith("_xlpm.") and not n.startswith(_OPT_PREFIX)]
+    if optional:
+        out = _mark_optional_declarations(out, optional)
     if names:
         out = _outside_strings(out, lambda seg: _prefix_params(seg, names))
     return ("=" + out if formula.startswith("=") else out), prefixed
 
 
+#: An optional-parameter declaration as Excel stores it, for the read side.
+_XLOP_RE = re.compile(re.escape(_OPT_PREFIX) + r"([A-Za-z0-9_.?\\]+)")
+
+
 def denormalize_formula(formula: str) -> str:
-    """Strip the _xlfn._xlws. / _xlfn. prefixes for a human-facing display of a
-    formula read back from a workbook."""
-    return formula.replace("_xlfn._xlws.", "").replace("_xlfn.", "") \
+    """Strip the storage prefixes for a human-facing display of a formula read
+    back from a workbook.
+
+    All three of Excel's prefixes are handled: _xlfn._xlws. and _xlfn. for
+    future functions, _xlpm. for LET/LAMBDA parameter uses, and _xlop. for a
+    LAMBDA OPTIONAL parameter declaration. The last one is restored to its
+    bracketed source form (_xlop.y -> [y]) rather than merely stripped: that
+    is what Excel's own formula bar shows, it is the only form that says the
+    parameter is optional, and it round-trips back through normalize_formula
+    to the same stored string. Before this, every read of a real Excel
+    workbook using optional lambda parameters displayed a raw _xlop.y."""
+    out = formula.replace("_xlfn._xlws.", "").replace("_xlfn.", "") \
         .replace("_xlpm.", "")
+    return _XLOP_RE.sub(lambda m: "[" + m.group(1) + "]", out)
 
 
 # ------------------------------------------------ what IS a formula cell
@@ -312,6 +431,23 @@ def label_cell(formula: str | None, cached, *, computed: bool = False) -> str:
 
 # ------------------------------------------------------ fullCalcOnLoad flag
 
+def part_encoding(data: bytes) -> str:
+    """The codec an OOXML part is stored in, from its byte-order mark.
+
+    Every part this server has ever seen is UTF-8, but a UTF-16 part is legal
+    XML and openpyxl loads one without complaint (verified: a hand-built
+    UTF-16 worksheet part round-trips through load_workbook with its formula
+    intact). The raw-zip surgery below used to assume UTF-8 and raised
+    UnicodeDecodeError on the first byte of such a part, so a legal workbook
+    crashed the save rather than merely evading a scan (edge audit 2026-09-04,
+    S3)."""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return "utf-16"
+    if data[:3] == b"\xef\xbb\xbf":
+        return "utf-8-sig"
+    return "utf-8"
+
+
 def inject_full_calc_on_load(path: str) -> bool:
     """Set <calcPr fullCalcOnLoad="1"/> in xl/workbook.xml so the next Excel /
     LibreOffice open recalculates rather than showing an empty/stale cache.
@@ -325,7 +461,9 @@ def inject_full_calc_on_load(path: str) -> bool:
     src = Path(path)
     with zipfile.ZipFile(src) as zf:
         names = zf.namelist()
-        wb = zf.read("xl/workbook.xml").decode("utf-8")
+        raw = zf.read("xl/workbook.xml")
+    enc = part_encoding(raw)
+    wb = raw.decode(enc)
 
     new_wb, changed = _set_full_calc(wb)
     if not changed:
@@ -339,7 +477,7 @@ def inject_full_calc_on_load(path: str) -> bool:
         for item in zin.infolist():
             data = zin.read(item.filename)
             if item.filename == "xl/workbook.xml":
-                data = new_wb.encode("utf-8")
+                data = new_wb.encode(enc)
             zout.writestr(item, data)
     shutil.move(tmp, src)
     return True
@@ -376,10 +514,15 @@ def strip_empty_cached_values(path: str) -> int:
             if not name.startswith("xl/worksheets/") or \
                     not name.endswith(".xml"):
                 continue
-            data = zf.read(name).decode("utf-8")
+            raw = zf.read(name)
+            enc = part_encoding(raw)
+            try:
+                data = raw.decode(enc)
+            except UnicodeDecodeError:
+                continue  # an encoding nobody declared: leave the part alone
             new, n = _EMPTY_CACHED_VALUE.subn(r"\1", data)
             if n:
-                targets[name] = new
+                targets[name] = (new, enc)
     if not targets:
         return 0
 
@@ -390,7 +533,8 @@ def strip_empty_cached_values(path: str) -> int:
         for item in zin.infolist():
             data = zin.read(item.filename)
             if item.filename in targets:
-                data = targets[item.filename].encode("utf-8")
+                text, enc = targets[item.filename]
+                data = text.encode(enc)
             zout.writestr(item, data)
     shutil.move(tmp, src)
     return len(targets)

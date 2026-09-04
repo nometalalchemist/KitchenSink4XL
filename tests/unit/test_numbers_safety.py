@@ -70,6 +70,104 @@ def test_xlpm_leaves_a_sheet_qualifier_bare():
     assert out == "=_xlfn.LET(_xlpm.Sales,1,_xlpm.Sales+Sales!A1)"
 
 
+# ---------------------------------------- optional LAMBDA params (_xlop.)
+#
+# Every `want` below is the string EXCEL ITSELF STORED for the corresponding
+# `src`, read out of xl/worksheets/sheet1.xml after Excel authored the formula
+# through COM (edge audit follow-up, 2026-09-04). Optional parameters take a
+# THIRD prefix, _xlop., at the declaration site with the brackets removed;
+# every use site in the body stays _xlpm., including a call site when the
+# optional parameter is lambda-valued. Before this, `[y]` failed the name
+# regex and was dropped, so every y landed bare -- and a bare lambda parameter
+# is the class where Excel REFUSES TO OPEN the workbook at all.
+
+@pytest.mark.parametrize("src,want", [
+    ("=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)",
+     "=_xlfn.LAMBDA(_xlpm.x,_xlop.y,IF(_xlfn.ISOMITTED(_xlpm.y),"
+     "_xlpm.x,_xlpm.x+_xlpm.y))(1,2)"),
+    ("=LAMBDA(x,[y],x)(1)", "=_xlfn.LAMBDA(_xlpm.x,_xlop.y,_xlpm.x)(1)"),
+    ("=LAMBDA(x,[f],f(x))(2,LAMBDA(a,a*3))",
+     "=_xlfn.LAMBDA(_xlpm.x,_xlop.f,_xlpm.f(_xlpm.x))"
+     "(2,_xlfn.LAMBDA(_xlpm.a,_xlpm.a*3))"),
+    ("=LET(q,1,LAMBDA(y,[z],y+q)(q,2))",
+     "=_xlfn.LET(_xlpm.q,1,_xlfn.LAMBDA(_xlpm.y,_xlop.z,"
+     "_xlpm.y+_xlpm.q)(_xlpm.q,2))"),
+    ("=LAMBDA(x,[y],[z],IF(ISOMITTED(z),x+y,x+y+z))(1,2,3)",
+     "=_xlfn.LAMBDA(_xlpm.x,_xlop.y,_xlop.z,IF(_xlfn.ISOMITTED(_xlpm.z),"
+     "_xlpm.x+_xlpm.y,_xlpm.x+_xlpm.y+_xlpm.z))(1,2,3)"),
+])
+def test_optional_lambda_parameters_get_the_xlop_prefix(src, want):
+    assert core_calc.normalize_formula(src)[0] == want
+    # and no bare occurrence of the parameter survives anywhere
+    assert core_calc.normalize_formula(src)[0].count("_xlop.") >= 1
+
+
+def test_optional_lambda_normalization_is_idempotent():
+    once, _ = core_calc.normalize_formula(
+        "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)")
+    twice, _ = core_calc.normalize_formula(once)
+    assert once == twice
+
+
+def test_a_bracket_outside_a_lambda_declaration_is_left_alone():
+    # structured table references are brackets too, and are not parameters
+    out, _ = core_calc.normalize_formula("=SUM(Table1[Amount])")
+    assert out == "=SUM(Table1[Amount])"
+    out2, _ = core_calc.normalize_formula("=LET(x,1,x+SUM(Table1[Amount]))")
+    assert "_xlop." not in out2 and "Table1[Amount]" in out2
+
+
+def test_denormalize_restores_the_bracketed_optional_parameter():
+    stored = ("=_xlfn.LAMBDA(_xlpm.x,_xlop.y,IF(_xlfn.ISOMITTED(_xlpm.y),"
+              "_xlpm.x,_xlpm.x+_xlpm.y))(1,2)")
+    shown = core_calc.denormalize_formula(stored)
+    assert shown == "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)"
+    # the display form round-trips back to exactly what Excel stored
+    assert core_calc.normalize_formula(shown)[0] == stored
+
+
+def test_denormalize_strips_every_storage_prefix():
+    shown = core_calc.denormalize_formula(
+        "=_xlfn._xlws.FILTER(A1:A3,_xlfn.LET(_xlpm.q,1,_xlpm.q)>0)")
+    assert "_xlfn" not in shown and "_xlpm" not in shown
+    assert "_xlop" not in core_calc.denormalize_formula("=_xlop.y")
+
+
+# ------------------------------------------- builtin wins at a call site
+
+@pytest.mark.parametrize("name,call", [
+    ("mod", "MOD(7,3)"), ("trim", "TRIM(A1)"), ("today", "TODAY()"),
+    ("countif", "COUNTIF(A:A,1)"), ("concatenate", "CONCATENATE(A1,B1)"),
+    ("roundup", "ROUNDUP(A1,2)"), ("sumif", "SUMIF(A:A,1,B:B)"),
+])
+def test_a_builtin_wins_at_a_call_site_beyond_the_seed_list(name, call):
+    # COM ground truth: Excel stores =LET(mod,2,mod+MOD(7,3)) as
+    # _xlfn.LET(_xlpm.mod,2,_xlpm.mod+MOD(7,3)) and evaluates 3 -- the
+    # builtin wins at a call site even when the name is declared. The guard
+    # used to hold a 30-name sample, so every function outside it (MOD,
+    # TRIM, TODAY, ...) was captured into _xlpm.MOD(7,3).
+    out, _ = core_calc.normalize_formula(f"=LET({name},2,{name}+{call})")
+    assert f"+{call}" in out, out
+    assert f"_xlpm.{name},2" in out, out
+
+
+def test_the_call_site_guard_covers_the_whole_builtin_catalog():
+    # the catalog is the ECMA-376 classic set plus the _xlfn families, not a
+    # hand-kept sample
+    assert len(core_calc._BUILTIN_FUNCS) > 400
+    for n in ("MOD", "TRIM", "TODAY", "COUNTIF", "SUMIF", "CONCATENATE",
+              "ROUNDUP", "SUM", "XLOOKUP", "LAMBDA", "FILTER"):
+        assert n in core_calc._BUILTIN_FUNCS, n
+
+
+def test_xlpm_leaves_a_quoted_sheet_name_bare():
+    # COM ground truth: Excel stores =LET(x,1,x+'Sales x'!A1) with the quoted
+    # sheet name untouched. The "!" lookahead does not reach it -- the
+    # occurrence inside the quotes is followed by an apostrophe.
+    out, _ = core_calc.normalize_formula("=LET(x,1,x+'Sales x'!A1)")
+    assert out == "=_xlfn.LET(_xlpm.x,1,_xlpm.x+'Sales x'!A1)"
+
+
 def test_normalizing_is_idempotent():
     once, _ = core_calc.normalize_formula("=LET(x,A1,x+1)")
     twice, _ = core_calc.normalize_formula(once)
@@ -354,3 +452,168 @@ def test_sort_range_puts_blanks_last_on_a_descending_sort(tmp_path):
     wb = openpyxl.load_workbook(p)
     assert [wb["S"].cell(r, 1).value for r in range(2, 5)] == [9, 5, None]
     wb.close()
+
+
+# ------------------------------- absent cache on the one WRITE surface
+
+def test_copy_range_values_announces_the_blanks_it_pastes(tmp_path):
+    # copy_range(what="values") substitutes the CACHED value, which is None
+    # for a formula openpyxl just wrote: the paste is blank. Every read
+    # surface was taught to say so; this write surface was the one the pass
+    # missed, and it stayed silent (edge audit 2026-09-04, C6).
+    p = tmp_path / "cv.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "S"
+    ws["A1"] = 2
+    wb.save(p)
+    wb.close()
+    formulas.set_formula(str(p), "B1", "=A1*2", sheet="S")
+    out = cells.copy_range(str(p), "B1", "D1", what="values", sheet="S")
+    warn = " ".join(out.get("warnings", []))
+    assert "pasted as BLANK" in warn, out
+    assert "B1" in warn
+    assert out["changed"]["copied"]["pasted_blank_absent_cache"] == ["B1"]
+    wb = openpyxl.load_workbook(p)
+    assert wb["S"]["D1"].value is None      # the blank is real
+    wb.close()
+
+
+def test_copy_range_values_stays_quiet_when_every_source_has_a_value(tmp_path):
+    p = tmp_path / "cv2.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "S"
+    ws["A1"] = 2
+    ws["B1"] = 4
+    wb.save(p)
+    wb.close()
+    out = cells.copy_range(str(p), "A1:B1", "D1", what="values", sheet="S")
+    assert not [w for w in out.get("warnings", []) if "BLANK" in w]
+    assert "pasted_blank_absent_cache" not in out["changed"]["copied"]
+
+
+# ---------------------------------------------- formula-mode label honesty
+
+def test_formula_mode_labels_a_formula_cell_formula_not_absent(tmp_path):
+    # values="formula" hands back the formula TEXT; the cache was never
+    # consulted, so 'absent' (and the staleness warning it fires) was a lie
+    # and LABEL_FORMULA sat unused (edge audit 2026-09-04, S4).
+    p = tmp_path / "fm.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "S"
+    ws["A1"] = 2
+    wb.save(p)
+    wb.close()
+    formulas.set_formula(str(p), "B1", "=A1*2", sheet="S")
+    out = cells.get_cells(str(p), ["A1", "B1"], values="formula", sheet="S")
+    assert [c["label"] for c in out["cells"]] == ["value",
+                                                 core_calc.LABEL_FORMULA]
+    assert out["cells"][1]["value"] == "=A1*2"
+    assert "warning" not in out
+    both = cells.get_cells(str(p), ["B1"], values="both", sheet="S")
+    assert both["cells"][0]["label"] == "absent"  # unchanged where it is true
+    assert "warning" in both
+
+
+# -------------------------------------------- part encoding (raw-zip surgery)
+
+def _to_utf16_worksheet(src, dst):
+    """Re-pack a package with its first worksheet part stored as UTF-16."""
+    with zipfile.ZipFile(src) as zin:
+        target = next(n for n in zin.namelist()
+                      if n.startswith("xl/worksheets/sheet"))
+        with zipfile.ZipFile(dst, "w") as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == target:
+                    data = data.decode("utf-8").replace(
+                        'encoding="UTF-8"', 'encoding="UTF-16"',
+                        1).encode("utf-16")
+                zout.writestr(item, data)
+
+
+def test_strip_empty_cached_values_handles_a_utf16_worksheet_part(tmp_path):
+    # A UTF-16 part is legal XML and openpyxl loads one. The raw-zip surgery
+    # assumed UTF-8 and raised UnicodeDecodeError on its first byte, so a
+    # legal workbook crashed the save (edge audit 2026-09-04, S3).
+    p = tmp_path / "u8.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws["A1"] = 1
+    ws["B1"] = "=A1+1"
+    wb.save(p)
+    wb.close()
+    u16 = tmp_path / "u16.xlsx"
+    _to_utf16_worksheet(p, u16)
+    assert openpyxl.load_workbook(u16)[
+        openpyxl.load_workbook(u16).sheetnames[0]]["B1"].value == "=A1+1"
+    assert core_calc.strip_empty_cached_values(str(u16)) == 1
+    with zipfile.ZipFile(u16) as zf:
+        name = next(n for n in zf.namelist()
+                    if n.startswith("xl/worksheets/sheet"))
+        text = zf.read(name).decode("utf-16")
+    assert "<v></v>" not in text and "<v/>" not in text
+    assert "A1+1" in text
+
+
+def test_part_encoding_reads_the_byte_order_mark():
+    assert core_calc.part_encoding(b"<?xml") == "utf-8"
+    assert core_calc.part_encoding(b"\xef\xbb\xbf<?xml") == "utf-8-sig"
+    assert core_calc.part_encoding(b"\xff\xfe<") == "utf-16"
+    assert core_calc.part_encoding(b"\xfe\xff\x00<") == "utf-16"
+
+
+# ----------------------------------- optional-LAMBDA server round trip
+
+def test_optional_lambda_round_trips_through_the_server(tmp_path):
+    p = tmp_path / "optlambda.xlsx"
+    wb = openpyxl.Workbook()
+    wb.active.title = "S"
+    wb.save(p)
+    wb.close()
+    src = "=LAMBDA(x,[y],IF(ISOMITTED(y),x,x+y))(1,2)"
+    formulas.set_formula(str(p), "A1", src, sheet="S")
+    # stored exactly as Excel stores it
+    with zipfile.ZipFile(p) as zf:
+        sheet = next(n for n in zf.namelist()
+                     if n.startswith("xl/worksheets/sheet"))
+        stored = zf.read(sheet).decode("utf-8")
+    assert "_xlop.y" in stored
+    assert "_xlfn.LAMBDA(_xlpm.x,_xlop.y," in stored
+    assert ",[y]," not in stored          # no bare bracket reaches the file
+    # and read back the way Excel's formula bar shows it
+    out = cells.read_range(str(p), "A1", values="formula", sheet="S")
+    assert out["values"][0][0] == src
+
+
+def test_formula_mode_returns_a_string_for_an_array_formula(tmp_path):
+    # openpyxl types an array formula's value as an ArrayFormula OBJECT, and
+    # every LAMBDA Excel authors is stored t="array": returning cell.value
+    # handed the transport a repr (edge audit 2026-09-04).
+    from openpyxl.worksheet.formula import ArrayFormula
+    p = tmp_path / "arr.xlsx"
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "S"
+    ws["A1"] = ArrayFormula("A1:A2", "=_xlfn._xlws.SORT(B1:B2)")
+    wb.save(p)
+    wb.close()
+    out = cells.read_range(str(p), "A1", values="formula", sheet="S")
+    assert out["values"][0][0] == "=SORT(B1:B2)"
+    gc = cells.get_cells(str(p), ["A1"], values="formula", sheet="S")
+    assert gc["cells"][0]["value"] == "=SORT(B1:B2)"
+
+
+def test_errors_keep_their_original_order_in_a_sort_like_excel(tmp_path):
+    # COM ground truth (edge audit 2026-09-04, S2): Excel treats all errors as
+    # equal in a sort, so a column reading #VALUE!, #REF!, #N/A, #DIV/0! comes
+    # back in exactly that order. Keying on the literal alphabetized them.
+    errs = ["#VALUE!", "#REF!", "#N/A", "#DIV/0!"]
+    assert sorted(errs, key=cells._sort_key) == errs
+    assert sorted(errs, key=lambda v: cells._sort_key(v, reverse=True),
+                  reverse=True) == errs
+    # the error RUN still lands after text and booleans, and before blanks
+    mixed = [None, "#REF!", "b", 2, True]
+    assert sorted(mixed, key=cells._sort_key) == [2, "b", True, "#REF!", None]
