@@ -24,6 +24,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .errors import FormulaRejected
+
 # ---------------------------------------------------------- the _xlfn shim
 
 # Functions Excel stores with a _xlfn. prefix (post-2007 "future functions").
@@ -162,21 +164,95 @@ _BUILTIN_FUNCS = _CLASSIC_FUNCS | XLFN_FUNCS | XLFN_XLWS_FUNCS
 _SHEET_QUOTE_RE = re.compile(r"'(?:[^']|'')*'")
 
 
-def _blank_strings(body: str) -> str:
-    """The formula with every string literal replaced by same-length filler,
-    so a scan can use the offsets of the original text."""
+def literal_spans(body: str) -> list[tuple[int, int, str]]:
+    """Every INERT span of a formula, left to right: double-quoted string
+    literals and single-quoted sheet-name spans, each with '' / "" as its own
+    escape. Returns [(start, end, kind)] with kind 'string' or 'sheet'; an
+    unterminated quote runs to the end of the text.
+
+    ONE scan handling BOTH quote characters is the load-bearing part. Scanning
+    for double quotes alone (what this module did before) misreads two legal
+    shapes, and the insane round proved both produce a workbook Excel REFUSES
+    TO OPEN:
+
+      - a '"' inside a single-quoted sheet name starts a phantom string that
+        swallows the rest of the argument list, hiding later declarations, so
+        =LET(x,'a"b'!A1,y,"c",x&y) lost its `y` and wrote it bare. Excel's own
+        storage for that formula is
+        _xlfn.LET(_xlpm.x,'a"b'!A1,_xlpm.y,"c",_xlpm.x&_xlpm.y)
+        (COM ground truth, fix wave 2, 2026-09-05): the double quote inside
+        the sheet name is ordinary text, not a string delimiter.
+      - an unbalanced '(' inside a single-quoted sheet name (legal: Excel bans
+        only : \\ / ? * [ ]) threw the paren depth counter off, so the whole
+        _xlpm pass silently did nothing.
+    """
+    spans: list[tuple[int, int, str]] = []
+    i, n = 0, len(body)
+    while i < n:
+        ch = body[i]
+        if ch not in ('"', "'"):
+            i += 1
+            continue
+        kind = "string" if ch == '"' else "sheet"
+        j = i + 1
+        while j < n:
+            if body[j] == ch:
+                if j + 1 < n and body[j + 1] == ch:
+                    j += 2          # the doubled-quote escape
+                    continue
+                j += 1
+                break
+            j += 1
+        else:
+            j = n                   # unterminated: runs to the end
+        spans.append((i, min(j, n), kind))
+        i = j
+    return spans
+
+
+def _blank_literals(body: str) -> str:
+    """The formula with every inert span (string literal AND single-quoted
+    sheet name) replaced by same-length filler, so a structural scan can use
+    the offsets of the original text."""
     out = list(body)
-    for m in _STRING_RE.finditer(body):
-        for i in range(m.start(), m.end()):
+    for start, end, _kind in literal_spans(body):
+        for i in range(start, end):
             out[i] = " "
     return "".join(out)
+
+
+#: An identifier immediately followed by whitespace and then '(' -- a shape
+#: Excel's formula bar tolerates on INPUT but its FILE PARSER refuses. COM
+#: ground truth (fix wave 2, 2026-09-05): a worksheet part carrying
+#: <f>SUM (1,2)</f> gives "Open method of Workbooks class failed", and so does
+#: the tab and newline form; Excel's own Formula2 setter rejects the same
+#: string with 0x800A03EC. Nothing Excel authors ever contains it, so a
+#: formula reaching the write path with one is refused rather than stored.
+_SPACE_BEFORE_PAREN = re.compile(r"(?<![A-Za-z0-9_.])([A-Za-z_\\]"
+                                 r"[A-Za-z0-9_.?\\]*)[ \t\r\n]+\(")
+
+
+def _refuse_space_before_paren(body: str) -> None:
+    blanked = _blank_literals(body)
+    m = _SPACE_BEFORE_PAREN.search(blanked)
+    if m is None:
+        return
+    raise FormulaRejected(
+        f"the formula puts whitespace between {m.group(1)!r} and its opening "
+        "parenthesis. Excel's formula bar accepts that while you type, but "
+        "Excel's FILE parser does not: a workbook stored with "
+        f"'{m.group(1)} (' cannot be opened at all ('Open method of Workbooks "
+        "class failed', verified against Excel). Remove the space so the call "
+        f"reads '{m.group(1)}('.")
 
 
 def _top_level_args(text: str, open_idx: int) -> tuple[list[tuple[str, int]], int]:
     """Split the argument list of a call whose '(' is at open_idx. Returns
     ([(arg_text, start_offset), ...], index_of_matching_close) or ([], -1)
     when unbalanced. The offsets are what lets an optional-parameter
-    declaration be rewritten in place."""
+    declaration be rewritten in place. `text` must already have its inert
+    spans blanked (_blank_literals), or a paren inside a quoted sheet name
+    throws the depth count off."""
     depth = 0
     args: list[tuple[str, int]] = []
     start = open_idx + 1
@@ -197,28 +273,62 @@ def _top_level_args(text: str, open_idx: int) -> tuple[list[tuple[str, int]], in
     return [], -1
 
 
-def _declarations(body: str) -> tuple[list[str], list[tuple[int, int, str]]]:
-    """Every name declared by a LET or LAMBDA anywhere in the formula, plus
-    the spans of the OPTIONAL LAMBDA declarations ([y]) that need the _xlop.
-    treatment.
+@dataclass
+class Declaration:
+    """One LET / LAMBDA call: the names it declares and the span they are
+    prefixed inside."""
+    start: int          # index of the 'L' of LET/LAMBDA in the body
+    end: int            # index just past the matching ')'
+    names: list[str]
 
-    Shadowing does not matter: Excel prefixes every occurrence of a declared
-    name with _xlpm. regardless of scope, so collecting them all and
-    substituting globally reproduces exactly what Excel stores. Returns
-    (names, [(start, end, name), ...]) where the spans index into `body` and
-    cover the bracketed token including its brackets."""
-    blanked = _blank_strings(body)
-    names: list[str] = []
+
+def _declarations(body: str) -> tuple[list[Declaration], list[tuple[int, int, str]]]:
+    """Every LET / LAMBDA in the formula as a SCOPED declaration, plus the
+    spans of the OPTIONAL LAMBDA declarations ([y]) that need _xlop.
+
+    SCOPE IS REAL, and the previous global substitution got it wrong. The old
+    comment here claimed "Excel prefixes every occurrence of a declared name
+    regardless of scope"; Excel disagrees for occurrences OUTSIDE the
+    declaring call. COM ground truth (fix wave 2, 2026-09-05), authored by
+    Excel with workbook-scoped defined names Rate / Factor / a present:
+
+        =LET(Rate,1,Rate)+Rate
+          -> _xlfn.LET(_xlpm.Rate,1,_xlpm.Rate)+Rate
+        =LAMBDA(Factor,Factor*2)(3)+Factor
+          -> _xlfn.LAMBDA(_xlpm.Factor,_xlpm.Factor*2)(3)+Factor
+        =LET(a,1,a)+LET(b,2,b)+a
+          -> _xlfn.LET(_xlpm.a,1,_xlpm.a)+_xlfn.LET(_xlpm.b,2,_xlpm.b)+a
+
+    The trailing bare name is the DEFINED NAME, and prefixing it produced a
+    file that opens and shows #NAME?. So each declaration carries its own
+    span and the prefix pass only rewrites inside it.
+
+    Raises FormulaRejected when a LET/LAMBDA's argument list cannot be parsed.
+    Skipping it (the old behavior) is what let bare names reach the file, and
+    a bare LET name is not a #NAME?: Excel REFUSES TO OPEN the workbook."""
+    blanked = _blank_literals(body)
+    decls: list[Declaration] = []
     optional: list[tuple[int, int, str]] = []
     for m in _DECLARER.finditer(blanked):
         kind = m.group(1).upper()
         args, close = _top_level_args(blanked, m.end() - 1)
-        if close < 0 or len(args) < 2:
-            continue
+        if close < 0:
+            raise FormulaRejected(
+                f"the {kind} at character {m.start() + 1} has an unbalanced "
+                "argument list, so its declared parameter names cannot be "
+                "resolved. Writing them unprefixed produces a workbook Excel "
+                "REFUSES TO OPEN, so this write is refused instead. Check the "
+                "parentheses and quotes in the formula.")
+        if len(args) < 2:
+            raise FormulaRejected(
+                f"the {kind} at character {m.start() + 1} declares no "
+                f"parameter ({len(args)} argument(s)); {kind} needs at least "
+                "a name and a body.")
         if kind == "LAMBDA":
             declared = args[:-1]
         else:  # LET: name, value, name, value, ..., calculation
             declared = [a for i, a in enumerate(args[:-1]) if i % 2 == 0]
+        names: list[str] = []
         for raw, at in declared:
             tok = raw.strip()
             if not tok:
@@ -233,7 +343,9 @@ def _declarations(body: str) -> tuple[list[str], list[tuple[int, int, str]]]:
                 lead = len(raw) - len(raw.lstrip())
                 names.append(om.group(1))
                 optional.append((at + lead, at + lead + len(tok), om.group(1)))
-    return names, optional
+        if names:
+            decls.append(Declaration(m.start(), close + 1, names))
+    return decls, optional
 
 
 def _mark_optional_declarations(
@@ -254,52 +366,115 @@ def _mark_optional_declarations(
     return "".join(out)
 
 
-def _prefix_params(segment: str, names: list[str]) -> str:
-    # Single-quoted sheet names are spans the _xlpm pass must not enter
-    # ('Sales x'!A1 stays bare in Excel's own storage), so the substitution
-    # runs only on the stretches between them.
+#: An identifier as Excel's formula grammar spells one. Maximal munch, and
+#: '.' is a continuation character, so an ALREADY-prefixed name (_xlpm.x) is
+#: one token that can never collide with the bare name -- which is what makes
+#: the whole pass idempotent.
+_IDENT = re.compile(r"[A-Za-z_\\][A-Za-z0-9_.?\\]*")
+
+#: Characters that, immediately BEFORE an identifier, mean it is not a
+#: parameter use: '$' (an absolute address) and '!' (a sheet-qualified name).
+_NOT_BEFORE = "$!"
+
+
+def _prefix_params_scoped(body: str, decls: list[Declaration]) -> str:
+    """Insert _xlpm. before every USE of a declared name, inside the declaring
+    LET/LAMBDA's span only.
+
+    One left-to-right tokenizer pass over the whole formula, which is what
+    makes the three rules Excel actually follows expressible at once:
+
+      1. INERT SPANS are skipped whole. String literals and single-quoted
+         sheet names never take a prefix ('Sales x'!A1 stays bare in Excel's
+         own storage), and the one scan means a quote of either kind inside
+         the other cannot desynchronize the parse.
+      2. BUILTIN WINS at a call site: =LET(mod,2,mod+MOD(7,3)) stores
+         _xlfn.LET(_xlpm.mod,2,_xlpm.mod+MOD(7,3)) and evaluates 3. The tail
+         test skips whitespace before the '(' so the guard matches Excel's own
+         tolerance (a spaced call is separately refused by
+         _refuse_space_before_paren, because Excel's file parser rejects it).
+         A NON-builtin name followed by '(' is a lambda call site and DOES get
+         the prefix (_xlpm.f(_xlpm.x)).
+      3. SCOPE: a name is prefixed only within the span of the LET/LAMBDA that
+         declared it (see _declarations for the COM ground truth).
+
+    Maximal-munch tokenizing also retires the old sorted-by-length regex
+    loop, which needed lookarounds to keep 'sum' out of 'summary'."""
+    if not decls:
+        return body
+    inert = literal_spans(body)
     pieces: list[str] = []
     pos = 0
-    for qm in _SHEET_QUOTE_RE.finditer(segment):
-        if qm.start() > pos:
-            pieces.append(_prefix_params_span(segment[pos:qm.start()], names))
-        pieces.append(qm.group(0))
-        pos = qm.end()
-    if pos < len(segment):
-        pieces.append(_prefix_params_span(segment[pos:], names))
+    for m in _IDENT.finditer(body):
+        start, end = m.start(), m.end()
+        if start < pos:
+            continue
+        if any(s <= start < e for s, e, _k in inert):
+            continue                                  # rule 1
+        if start and body[start - 1] in _NOT_BEFORE:
+            continue
+        token = m.group(0)
+        tail = body[end:end + 1]
+        if tail == "!":
+            continue                                  # a sheet qualifier
+        scope_names = {n.lower() for d in decls
+                       if d.start <= start < d.end for n in d.names}
+        if token.lower() not in scope_names:          # rule 3
+            continue
+        rest = body[end:]
+        stripped = rest.lstrip(" \t\r\n")
+        if stripped[:1] == "(" and token.upper() in _BUILTIN_FUNCS:
+            continue                                  # rule 2
+        pieces.append(body[pos:start])
+        pieces.append("_xlpm." + token)
+        pos = end
+    pieces.append(body[pos:])
     return "".join(pieces)
 
 
-def _prefix_params_span(segment: str, names: list[str]) -> str:
-    for name in sorted(set(names), key=len, reverse=True):
-        # The trailing "!" exclusion: a token followed by "!" is a SHEET
-        # qualifier (Sales!A1), never a parameter use; Excel stores it bare
-        # (COM ground truth, edge audit 2026-09-04). Without it a declared
-        # name that collides with a sheet name was rewritten to
-        # _xlpm.Sales!A1, which is not a formula Excel ever stores.
-        pattern = re.compile(
-            r"(?<![A-Za-z0-9_.$!])(" + re.escape(name) + r")(?![A-Za-z0-9_.!])",
-            re.IGNORECASE)
+def _bare_declared_names(body: str, decls: list[Declaration]) -> list[str]:
+    """Declared names still sitting bare in a NORMALIZED formula.
 
-        def rep(m: re.Match) -> str:
-            tail = segment[m.end():m.end() + 1]
-            if tail == "(" and m.group(1).upper() in _BUILTIN_FUNCS:
-                return m.group(0)   # a real function call, not the variable
-            return "_xlpm." + m.group(1)
-
-        segment = pattern.sub(rep, segment)
-    return segment
+    The post-pass assertion behind the C-1 promise: correct prefixing or a
+    loud refusal, never a bare LET/LAMBDA name reaching the file. Uses the
+    same three rules as the prefix pass, so a name legitimately left bare (a
+    builtin call site) is not reported."""
+    inert = literal_spans(body)
+    bare: list[str] = []
+    for m in _IDENT.finditer(body):
+        start, end = m.start(), m.end()
+        if any(s <= start < e for s, e, _k in inert):
+            continue
+        if start and body[start - 1] in _NOT_BEFORE:
+            continue
+        token = m.group(0)
+        if body[end:end + 1] == "!":
+            continue
+        scope_names = {n.lower() for d in decls
+                       if d.start <= start < d.end for n in d.names}
+        if token.lower() not in scope_names:
+            continue
+        if body[end:].lstrip(" \t\r\n")[:1] == "(" and \
+                token.upper() in _BUILTIN_FUNCS:
+            continue
+        bare.append(token)
+    return bare
 
 
 def _outside_strings(body: str, fn) -> str:
-    """Apply fn to every stretch of the formula that is not a string literal."""
+    """Apply fn to every stretch of the formula that is not an inert span.
+
+    Inert means BOTH kinds: a double-quoted string literal and a
+    single-quoted sheet name. Excel prefixes nothing inside either, and
+    treating only the double-quoted kind as inert is how a sheet named
+    'a"b' used to desynchronize the whole pass."""
     pieces: list[str] = []
     pos = 0
-    for sm in _STRING_RE.finditer(body):
-        if sm.start() > pos:
-            pieces.append(fn(body[pos:sm.start()]))
-        pieces.append(sm.group(0))  # string literal, verbatim
-        pos = sm.end()
+    for start, end, _kind in literal_spans(body):
+        if start > pos:
+            pieces.append(fn(body[pos:start]))
+        pieces.append(body[start:end])   # inert span, verbatim
+        pos = end
     if pos < len(body):
         pieces.append(fn(body[pos:]))
     return "".join(pieces)
@@ -311,8 +486,21 @@ def normalize_formula(formula: str) -> tuple[str, list[str]]:
     Returns (normalized, list_of_functions_prefixed).
 
     Prefixes call-site names outside an existing _xlfn context. Quoted string
-    literals are skipped verbatim (the re-audit closed the earlier limitation
-    where a function-shaped substring inside a string was rewritten)."""
+    literals and quoted sheet names are skipped verbatim.
+
+    Raises FormulaRejected rather than storing something Excel cannot open:
+    whitespace between a name and its '(' , an unbalanced LET/LAMBDA argument
+    list, or (as a backstop) a declared name that could not be prefixed.
+
+    NORMALIZATION IS NOT VERBATIM ROUND-TRIPPING, by design. Two cosmetic
+    differences are expected and are not drift to be fixed (insane round,
+    L-4): an optional declaration written =LAMBDA(x, [ y ], x+y) comes back
+    as [y], because Excel stores the name without the brackets or the spaces
+    and the brackets are re-derived on read; and a caller who supplies an
+    ALREADY-prefixed formula, =LET(_xlpm.x,1,_xlpm.x+1), denormalizes to
+    =LET(x,1,x+1), because the display form of a stored prefix is the bare
+    name. Both re-normalize to the identical stored string, which is the
+    property that actually matters."""
     prefixed: list[str] = []
 
     def sub(m: re.Match) -> str:
@@ -329,16 +517,39 @@ def normalize_formula(formula: str) -> tuple[str, list[str]]:
         return m.group(0)
 
     body = formula[1:] if formula.startswith("=") else formula
+    _refuse_space_before_paren(body)
     out = _outside_strings(body, lambda seg: _CALL.sub(sub, seg))
-    raw_names, optional = _declarations(out)
-    # Already-prefixed declarations are skipped so the pass is idempotent.
-    names = [n for n in raw_names
-             if not n.startswith("_xlpm.") and not n.startswith(_OPT_PREFIX)]
+    _decls, optional = _declarations(out)
     if optional:
+        # Rewriting [y] to _xlop.y moves every offset after it, so the spans
+        # are recomputed against the marked body rather than shifted by hand.
         out = _mark_optional_declarations(out, optional)
-    if names:
-        out = _outside_strings(out, lambda seg: _prefix_params(seg, names))
+        _decls, _ = _declarations(out)
+    # An already-prefixed declaration keeps the pass idempotent: the scope
+    # still owns the BARE name (so body use sites get _xlpm.) while the
+    # prefixed token itself can never match it.
+    decls = [Declaration(d.start, d.end,
+                         [_strip_param_prefix(n) for n in d.names])
+             for d in _decls]
+    out = _prefix_params_scoped(out, decls)
+    bare = _bare_declared_names(out, decls)
+    if bare:
+        # Unreachable by construction; kept because the cost of being wrong
+        # here is a workbook that will not open at all, not a #NAME?.
+        raise FormulaRejected(
+            "the LET/LAMBDA parameter name(s) "
+            + ", ".join(sorted(set(bare)))
+            + " could not be given their _xlpm. storage prefix. Excel REFUSES "
+              "TO OPEN a workbook that stores them bare, so this write is "
+              "refused rather than producing an unopenable file.")
     return ("=" + out if formula.startswith("=") else out), prefixed
+
+
+def _strip_param_prefix(name: str) -> str:
+    for p in ("_xlpm.", _OPT_PREFIX):
+        if name.startswith(p):
+            return name[len(p):]
+    return name
 
 
 #: An optional-parameter declaration as Excel stores it, for the read side.
@@ -356,8 +567,21 @@ def denormalize_formula(formula: str) -> str:
     is what Excel's own formula bar shows, it is the only form that says the
     parameter is optional, and it round-trips back through normalize_formula
     to the same stored string. Before this, every read of a real Excel
-    workbook using optional lambda parameters displayed a raw _xlop.y."""
-    out = formula.replace("_xlfn._xlws.", "").replace("_xlfn.", "") \
+    workbook using optional lambda parameters displayed a raw _xlop.y.
+
+    LITERAL-AWARE, like normalize_formula's own passes. Three blind
+    str.replace calls over the WHOLE formula edited the user's data: Excel
+    stores =CONCATENATE("_xlpm.","total") verbatim (COM ground truth, fix
+    wave 2, 2026-09-05 -- the cell displays "_xlpm.total"), and reading it
+    back returned =CONCATENATE("","total"). A read followed by a write then
+    made that corruption permanent. Prefixes inside a string literal or a
+    quoted sheet name are the user's TEXT, never storage syntax, so this
+    strips only outside them."""
+    return _outside_strings(formula, _denormalize_span)
+
+
+def _denormalize_span(segment: str) -> str:
+    out = segment.replace("_xlfn._xlws.", "").replace("_xlfn.", "") \
         .replace("_xlpm.", "")
     return _XLOP_RE.sub(lambda m: "[" + m.group(1) + "]", out)
 
@@ -540,6 +764,193 @@ def strip_empty_cached_values(path: str) -> int:
     return len(targets)
 
 
+# ------------------------------------ the always-calculate cache (ca="1")
+
+#: A formula cell as Excel stores it, with its optional attributes and its
+#: optional cached value. Used only by restore_always_calc_cache below.
+_CELL_RE = re.compile(
+    r'<c r="([A-Z]+[0-9]+)"(?P<cattrs>[^>]*)>'
+    r'(?P<body>.*?)</c>', re.S)
+_F_RE = re.compile(r"<f(?P<fattrs>[^>]*)>(?P<text>.*?)</f>", re.S)
+_V_RE = re.compile(r"<v[^>]*>.*?</v>|<v[^>]*/>", re.S)
+
+
+def _sheet_parts(zf) -> dict[str, str]:
+    """sheet title -> worksheet part name, resolved through workbook.xml and
+    its rels (openpyxl renumbers part names, so position is not identity)."""
+    try:
+        wb_xml = zf.read("xl/workbook.xml").decode(
+            part_encoding(zf.read("xl/workbook.xml")), "replace")
+        rels_xml = zf.read("xl/_rels/workbook.xml.rels").decode(
+            part_encoding(zf.read("xl/_rels/workbook.xml.rels")), "replace")
+    except Exception:  # noqa: BLE001
+        return {}
+    targets = {}
+    for m in re.finditer(r'<Relationship\b[^>]*?Id="([^"]+)"[^>]*?'
+                         r'Target="([^"]+)"', rels_xml):
+        targets[m.group(1)] = m.group(2)
+    for m in re.finditer(r'<Relationship\b[^>]*?Target="([^"]+)"[^>]*?'
+                         r'Id="([^"]+)"', rels_xml):
+        targets.setdefault(m.group(2), m.group(1))
+    out: dict[str, str] = {}
+    for m in re.finditer(r'<sheet\b[^>]*>', wb_xml):
+        tag = m.group(0)
+        name = re.search(r'name="([^"]*)"', tag)
+        rid = re.search(r'r:id="([^"]+)"', tag) or \
+            re.search(r'\bid="(rId[^"]+)"', tag)
+        if not name or not rid:
+            continue
+        target = targets.get(rid.group(1))
+        if not target:
+            continue
+        out[name.group(1)] = _resolve_part(target)
+    return out
+
+
+def _resolve_part(target: str) -> str:
+    """A workbook-rels Target as a package part name. Targets come in three
+    spellings depending on who wrote the file: absolute ("/xl/worksheets/
+    sheet1.xml"), relative to xl/ ("worksheets/sheet1.xml"), and occasionally
+    already prefixed."""
+    part = target.replace("\\", "/").replace("/./", "/")
+    if part.startswith("/"):
+        return part.lstrip("/")
+    if part.startswith("xl/"):
+        return part
+    return "xl/" + part
+
+
+def _always_calc_cells(zf, part: str) -> dict[str, tuple[str, str]]:
+    """addr -> (formula_text, cached_value_element) for the ca="1" formula
+    cells of one worksheet part."""
+    try:
+        raw = zf.read(part)
+    except KeyError:
+        return {}
+    try:
+        xml = raw.decode(part_encoding(raw))
+    except UnicodeDecodeError:
+        return {}
+    out: dict[str, tuple[str, str]] = {}
+    for m in _CELL_RE.finditer(xml):
+        body = m.group("body")
+        fm = _F_RE.search(body)
+        if fm is None or 'ca="1"' not in fm.group("fattrs"):
+            continue
+        vm = _V_RE.search(body[fm.end():])
+        out[m.group(1)] = (fm.group("text"), vm.group(0) if vm else "")
+    return out
+
+
+def restore_always_calc_cache(original: str, produced: str) -> int:
+    """Put back the ca="1" flag and the cached value on formula cells the
+    edit did not touch. Returns the number of cells restored.
+
+    WHY THIS EXISTS. openpyxl does not model the always-calculate flag or any
+    cached value, so a file-tier save of an Excel-authored workbook rewrites
+
+        <c r="B1"><f ca="1">B1+A1</f><v>2.5</v></c>   as   <f>B1+A1</f>
+
+    Under normal calculation that is invisible: Excel recalculates on open
+    (the fullCalcOnLoad flag guarantees it) and fills the value back in.
+    Under ITERATIVE calculation it is not, because the iteration SEEDS from
+    the cell's current value: a circular formula with no seed lands on
+    #VALUE! and stays there, while Excel converges the identical formula it
+    authored itself. That is the exact failure the numbers-safety gate closed
+    once already via strip_empty_cached_values, re-created by the adjacent
+    case where a REAL cached value is dropped (insane round, M-4).
+
+    Conservative by construction: a cell is restored only when the produced
+    package still holds the SAME formula text at the SAME address on the same
+    sheet, so an edited formula never gets a stale value pinned to it, and a
+    cell the edit removed is simply not restored."""
+    import os
+    import shutil
+    import tempfile
+    import zipfile
+    from pathlib import Path
+
+    src = Path(produced)
+    patches: dict[str, str] = {}
+    try:
+        with zipfile.ZipFile(original) as zin, zipfile.ZipFile(src) as zout:
+            src_parts = _sheet_parts(zin)
+            out_parts = _sheet_parts(zout)
+            if not src_parts or not out_parts:
+                return 0
+            for title, part in src_parts.items():
+                target = out_parts.get(title)
+                if target is None:
+                    continue
+                wanted = _always_calc_cells(zin, part)
+                if not wanted:
+                    continue
+                raw = zout.read(target)
+                enc = part_encoding(raw)
+                try:
+                    xml = raw.decode(enc)
+                except UnicodeDecodeError:
+                    continue
+                new_xml, n = _reapply_always_calc(xml, wanted)
+                if n:
+                    patches[target] = new_xml
+    except Exception:  # noqa: BLE001 - never fail a save over a cache repair
+        return 0
+    if not patches:
+        return 0
+
+    restored = 0
+    fd, tmp = tempfile.mkstemp(suffix=src.suffix, dir=str(src.parent))
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(src) as zin, \
+                zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zw:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename in patches:
+                    raw = data
+                    data = patches[item.filename].encode(part_encoding(raw))
+                    restored += 1
+                zw.writestr(item, data)
+        shutil.move(tmp, src)
+    except Exception:  # noqa: BLE001
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return 0
+    return restored
+
+
+def _reapply_always_calc(xml: str, wanted: dict[str, tuple[str, str]]
+                         ) -> tuple[str, int]:
+    n = 0
+
+    def fix(m: re.Match) -> str:
+        addr = m.group(1)
+        entry = wanted.get(addr)
+        if entry is None:
+            return m.group(0)
+        text, cached = entry
+        body = m.group("body")
+        fm = _F_RE.search(body)
+        if fm is None or fm.group("text") != text:
+            return m.group(0)          # the edit changed this formula
+        attrs = fm.group("fattrs")
+        if 'ca="1"' not in attrs:
+            attrs = attrs + ' ca="1"'
+        rebuilt = f"<f{attrs}>{text}</f>"
+        tail = body[fm.end():]
+        if cached and not _V_RE.search(tail):
+            tail = cached + tail
+        nonlocal n
+        n += 1
+        return (f'<c r="{addr}"{m.group("cattrs")}>'
+                f"{body[:fm.start()]}{rebuilt}{tail}</c>")
+
+    return _CELL_RE.sub(fix, xml), n
+
+
 def _set_full_calc(workbook_xml: str) -> tuple[str, bool]:
     if 'fullCalcOnLoad="1"' in workbook_xml:
         return workbook_xml, False
@@ -659,7 +1070,7 @@ __all__ = [
     "normalize_formula", "denormalize_formula", "label_cell",
     "is_formula_cell", "formula_text_of", "looks_like_formula_text",
     "inject_full_calc_on_load", "strip_empty_cached_values",
-    "recalc_via_com", "recalc_via_formulas",
+    "recalc_via_com", "recalc_via_formulas", "literal_spans",
     "RecalcResult", "XLFN_FUNCS", "XLFN_XLWS_FUNCS",
     "LABEL_CACHED", "LABEL_COMPUTED", "LABEL_FORMULA", "LABEL_ABSENT",
     "LABEL_VALUE",

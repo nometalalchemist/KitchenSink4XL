@@ -77,6 +77,20 @@ class ValidationFailed(XlMcpError):
     Maps to VALIDATION_FAILED (DESIGN Section 3.3)."""
 
 
+class ExcelWouldRefuse(XlMcpError):
+    """A STATIC refuse-class check caught a value Excel itself will not
+    accept: a comment past 32,767 characters, a data-validation formula past
+    the length where the file stops opening, a header/footer string past 255,
+    an invalid hyperlink authority, a negative image extent, a control
+    character or lone surrogate in cell text.
+
+    These all used to sail through: verify-after-write proves the package is
+    valid OOXML and reads back as intended, which a workbook Excel refuses to
+    open can be. Every threshold is measured against Excel (core.limits).
+    Maps to the existing BAD_PARAMS code -- a refuse-class value is a bad
+    parameter, and the closed vocabulary does not grow for this."""
+
+
 class HazardRefused(XlMcpError):
     """The round-trip hazard scan found unpreservable parts and no safe
     route, and no allow_loss override was passed. Carries the named parts
