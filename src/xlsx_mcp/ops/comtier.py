@@ -110,12 +110,29 @@ def _wrap_com_error(exc: Exception, doing: str) -> XlMcpError:
     return err
 
 
+def _refuse_encrypted_without_password(path: str,
+                                       password: str | None) -> None:
+    """An encrypted (CFB) file opened without a password HANGS Excel on a
+    modal prompt (probe-proven: no supplied argument suppresses it), so it
+    is refused by signature BEFORE any COM call. A WRONG supplied password
+    hangs the same way and surfaces as the bounded operation timeout."""
+    if password is None and _session.is_encrypted_package(path):
+        from ..core.errors import WorkbookProtected
+        raise WorkbookProtected(
+            f"{Path(path).name} is password-protected (encrypted package); "
+            "this operation needs the password. "
+            "com_validate_opens_clean and com_save_with_password accept "
+            "one; note a WRONG password surfaces as the operation timeout "
+            "because Excel re-prompts modally.")
+
+
 def _run_readonly(label: str, path: str,
                   body: Callable[[Any, Any], dict],
                   timeout: float | None = None,
                   password: str | None = None) -> dict:
     """Open the workbook read-only in the pooled worker, run body(app, wb),
     close without saving. Serialized, alert-suppressed, timeout-bounded."""
+    _refuse_encrypted_without_password(path, password)
 
     def job(manager) -> dict:
         w = manager.acquire()
@@ -135,7 +152,7 @@ def _run_readonly(label: str, path: str,
         finally:
             if wb is not None:
                 try:
-                    wb.Close(SaveChanges=False)
+                    wb.Close(False)
                 except Exception:
                     pass
             _session._restore_hygiene(w.app, *prior)
@@ -151,6 +168,7 @@ def _run_mutation(label: str, path: str,
     """The mutating pattern: guard (not open elsewhere), rotate backup slots,
     open in the pooled worker, run body(app, wb), save with retry, close,
     structural verify (restore the backup on failure)."""
+    _refuse_encrypted_without_password(path, password)
     warnings = _session.guard_target_closed(path)
     pre_report = None
     try:
@@ -182,13 +200,13 @@ def _run_mutation(label: str, path: str,
                     raise
                 except Exception as exc:  # noqa: BLE001
                     raise _wrap_com_error(exc, "saving the workbook") from exc
-            wb.Close(SaveChanges=False)
+            wb.Close(False)
             wb = None
             return {"changed": changed, "instance_pid": w.pid}
         finally:
             if wb is not None:
                 try:
-                    wb.Close(SaveChanges=False)
+                    wb.Close(False)
                 except Exception:
                     pass
             _session._restore_hygiene(w.app, *prior)
@@ -253,6 +271,7 @@ def recalculate(path: str, engine: str = "auto",
     best-effort pure-Python compute: values are RETURNED, the file is NOT
     modified. engine='auto' prefers COM."""
     p = _norm_path(path, "recalculate")
+    _refuse_encrypted_without_password(p, None)
     engine = str(engine).strip().lower()
     if engine not in ("auto", "com", "formulas"):
         raise XlMcpError(
@@ -403,11 +422,9 @@ def com_manage_pivot(path: str, action: str, name: str | None = None,
                     dst_ws = wb.Worksheets.Add()
                 pt_name = name or f"KS4XLPivot{int(time.time()) % 100000}"
                 cache = wb.PivotCaches().Create(
-                    SourceType=XL_DATABASE,
-                    SourceData=f"'{src_ws.Name}'!{src.Address}")
+                    XL_DATABASE, f"'{src_ws.Name}'!{src.Address}")
                 pt = cache.CreatePivotTable(
-                    TableDestination=dst_ws.Range(dest_cell),
-                    TableName=pt_name)
+                    dst_ws.Range(dest_cell), pt_name)
                 for f in rows or []:
                     pt.PivotFields(f).Orientation = XL_ROW_FIELD
                 for f in columns or []:
@@ -563,7 +580,7 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
         try:
             ws = _ws(wb, sheet)
             rng = ws.Range(range_a1) if range_a1 else ws.UsedRange
-            rng.CopyPicture(Appearance=XL_SCREEN, Format=XL_BITMAP)
+            rng.CopyPicture(XL_SCREEN, XL_BITMAP)
             width, height = float(rng.Width), float(rng.Height)
             if width <= 0 or height <= 0:
                 raise XlMcpError("the target range has no visible size")
@@ -613,7 +630,7 @@ def com_convert_format(path: str, output: str, format: str | None = None,
                 os.remove(out)
             _session.com_retry(
                 lambda: wb.SaveAs(os.path.abspath(out),
-                                  FileFormat=FILE_FORMATS[fmt]),
+                                  FILE_FORMATS[fmt]),
                 label="SaveAs")
         except XlMcpError:
             raise
@@ -656,6 +673,8 @@ def com_save_with_password(path: str, password: str,
     if password == "" and not current_password:
         raise XlMcpError(
             "removing a password needs current_password to open the file")
+    _refuse_encrypted_without_password(
+        p, current_password if current_password else None)
     warnings = _session.guard_target_closed(p)
     backup_slot = None
     if backup:
@@ -681,13 +700,13 @@ def com_save_with_password(path: str, password: str,
                 _session.com_retry(wb.Save, label="encrypted save")
             except Exception as exc:  # noqa: BLE001
                 raise _wrap_com_error(exc, "applying the password") from exc
-            wb.Close(SaveChanges=False)
+            wb.Close(False)
             wb = None
             return {"instance_pid": w.pid}
         finally:
             if wb is not None:
                 try:
-                    wb.Close(SaveChanges=False)
+                    wb.Close(False)
                 except Exception:
                     pass
             _session._restore_hygiene(w.app, *prior)
@@ -781,7 +800,7 @@ def com_goal_seek(path: str, target_cell: str, target_value: float,
                 raise XlMcpError(
                     f"target_cell {target_cell} holds no formula; Goal Seek "
                     "adjusts an input until a FORMULA reaches the goal")
-            converged = bool(tgt.GoalSeek(Goal=goal, ChangingCell=chg))
+            converged = bool(tgt.GoalSeek(goal, chg))
             result_value = tgt.Value
             input_value = chg.Value
             if not converged:
@@ -831,12 +850,14 @@ def com_set_sparkline(path: str, action: str = "create",
             for i in range(1, int(wb.Worksheets.Count) + 1):
                 ws = wb.Worksheets(i)
                 try:
-                    used = ws.UsedRange
-                    cnt = int(used.SparklineGroups.Count)
+                    # ws.Cells, not UsedRange: sparkline cells hold no
+                    # values, so they can sit OUTSIDE the used range.
+                    scope = ws.Cells
+                    cnt = int(scope.SparklineGroups.Count)
                 except Exception:
                     cnt = 0
                 for j in range(1, cnt + 1):
-                    g = used.SparklineGroups.Item(j)
+                    g = scope.SparklineGroups.Item(j)
                     groups.append({
                         "sheet": str(ws.Name),
                         "location": str(g.Location.Address),
@@ -878,8 +899,7 @@ def com_set_sparkline(path: str, action: str = "create",
     def body(app, wb) -> dict:
         try:
             ws = _ws(wb, sheet)
-            group = ws.Range(location).SparklineGroups.Add(
-                Type=SPARK_TYPES[kind], SourceData=source)
+            group = ws.Range(location).SparklineGroups.Add(SPARK_TYPES[kind], source)
             return {"sparklines_created": location, "source": source,
                     "type": kind, "sheet": str(ws.Name),
                     "count": int(group.Count) if hasattr(group, "Count")

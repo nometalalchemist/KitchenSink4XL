@@ -182,21 +182,66 @@ def excel_error_message(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
+#: OLE compound-file (CFB) signature: an ENCRYPTED OOXML workbook is a CFB
+#: container, not a zip. The probe on this machine proved there is NO
+#: in-process way to make a wrong/absent-password open fail fast (Excel
+#: re-prompts modally even with a supplied password and Interactive=False;
+#: the call hangs until the worker is killed), so encryption is detected by
+#: signature BEFORE Excel is asked to open anything without a password.
+_CFB_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def is_encrypted_package(path: str) -> bool:
+    """True when the file is an OLE/CFB container (Excel's real encryption
+    wraps the package in CFB). Cheap 8-byte signature read."""
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(8) == _CFB_MAGIC
+    except OSError:
+        return False
+
+
+#: Passed as the Open password when the caller supplied none. Unencrypted
+#: files ignore it; encrypted files never reach Open without a password
+#: (the CFB pre-check refuses first), so this is defense in depth only.
+_NO_PASSWORD_SENTINEL = "ks4xl.no-password.sentinel.7f3a9c"
+
+
 def open_workbook(app, path: str, *, read_only: bool = False,
                   password: str | None = None):
-    """Workbooks.Open with the standing hygiene: no link updates, no
-    add-to-MRU, retry on busy. A repair-demand or refusal surfaces as
-    Excel's own message."""
-    kwargs: dict[str, Any] = {
-        "Filename": os.path.abspath(path),
-        "UpdateLinks": 0,
-        "ReadOnly": read_only,
-        "AddToMru": False,
-    }
-    if password is not None:
-        kwargs["Password"] = password
-    return com_retry(lambda: app.Workbooks.Open(**kwargs),
-                     label=f"open {os.path.basename(path)}")
+    """Workbooks.Open with the standing hygiene: no link updates, password
+    passed POSITIONALLY, retry on busy. A repair-demand or refusal surfaces
+    as Excel's own message.
+
+    POSITIONAL ARGS ARE LOAD-BEARING (probe-proven on this machine, pywin32
+    312 dynamic dispatch): Open with Password as a NAMED argument silently
+    fails to deliver the password, the modal prompt appears on the hidden
+    instance, and the call hangs until the timeout kills the worker. The
+    same open with positional arguments delivers the password: a correct
+    one opens in milliseconds and a wrong one raises Excel's own
+    wrong-password error immediately. Signature:
+    Open(FileName, UpdateLinks, ReadOnly, Format, Password,
+    WriteResPassword, IgnoreReadOnlyRecommended). The sentinel makes an
+    absent password fail fast instead of prompting; unencrypted files
+    ignore it."""
+    pw = password if password not in (None, "") else _NO_PASSWORD_SENTINEL
+    abs_path = os.path.abspath(path)
+    return com_retry(
+        lambda: app.Workbooks.Open(
+            abs_path,      # FileName
+            0,             # UpdateLinks: never
+            read_only,     # ReadOnly
+            None,          # Format
+            pw,            # Password (positional delivery is required)
+            None,          # WriteResPassword: None. A sentinel here FAILS
+                           # the Open outright even on plain files
+                           # (probe-proven), unlike the Password slot which
+                           # plain files ignore. A write-reserved file with
+                           # no modify password therefore prompts and
+                           # surfaces as the bounded timeout.
+            True,          # IgnoreReadOnlyRecommended
+        ),
+        label=f"open {os.path.basename(path)}")
 
 
 def _assert_hygiene(app) -> tuple[Any, Any]:
@@ -391,18 +436,53 @@ class ComExecutor:
 
     def _poison(self, job: _Job) -> None:
         """Timeout remediation: retire the worker generation and reclaim its
-        owned Excel PIDs (taskkill unblocks a stuck synchronous COM call)."""
+        owned Excel PIDs (taskkill unblocks a stuck synchronous COM call).
+
+        OBSERVED (COM-tier gate): killing an Excel that is showing a modal
+        dialog can trigger a transient Office restart-recovery EXCEL.EXE a
+        moment later. When NO foreign Excel existed at kill time, any PID
+        appearing right after the kill is that artifact of our own kill; it
+        is journaled and reaped. With any foreign Excel present the reap is
+        skipped entirely (never risk a user process)."""
         with self._state:
             self._timeouts += 1
             self._generation += 1
             manager = self._manager
             self._thread = None
             self._manager = None
-        if manager is not None:
-            try:
-                manager.force_reclaim()
-            except Exception:
-                pass
+        if manager is None:
+            return
+        try:
+            from .instances import list_excel_pids
+
+            foreign_before = list_excel_pids() - manager.owned_pids()
+            manager.force_reclaim()
+            if not foreign_before:
+                self._reap_restart_transients(manager)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _reap_restart_transients(manager: ExcelInstanceManager,
+                                 watch_seconds: float = 6.0) -> None:
+        from .instances import list_excel_pids, pid_alive, taskkill
+
+        deadline = time.monotonic() + watch_seconds
+        seen: set[int] = set()
+        while time.monotonic() < deadline:
+            for pid in list_excel_pids():
+                if pid not in seen:
+                    seen.add(pid)
+                    manager.journal.record(pid)
+            time.sleep(0.5)
+        # allow self-exit (the recovery instance usually quits on its own),
+        # then reclaim whatever we journaled that still lives.
+        time.sleep(2.0)
+        for pid in sorted(seen):
+            if pid_alive(pid):
+                taskkill(pid)
+            if not pid_alive(pid):
+                manager.journal.forget(pid)
 
     # --- status / shutdown ------------------------------------------------
 
@@ -493,6 +573,18 @@ def opens_clean(path: str, timeout: float | None = None) -> dict:
     if not os.path.exists(abs_path):
         from ..core.errors import WorkbookNotFound
         raise WorkbookNotFound(f"no such workbook: {abs_path}")
+    if is_encrypted_package(abs_path):
+        # A password-less open of an encrypted file HANGS on a modal prompt
+        # (probe-proven; no supplied argument suppresses it), so the honest
+        # answer comes from the signature, not from Excel.
+        return {
+            "opens_clean": False,
+            "encrypted": True,
+            "excel_says": "the file is password-protected (CFB-encrypted "
+                          "package); Excel would prompt for a password",
+            "note": "supply the password (com_validate_opens_clean "
+                    "password=...) to verify an encrypted file",
+        }
 
     def body(manager: ExcelInstanceManager) -> dict:
         w = manager.acquire()
@@ -517,7 +609,7 @@ def opens_clean(path: str, timeout: float | None = None) -> dict:
         finally:
             if wb is not None:
                 try:
-                    wb.Close(SaveChanges=False)
+                    wb.Close(False)
                 except Exception:
                     pass
             _restore_hygiene(w.app, *prior)

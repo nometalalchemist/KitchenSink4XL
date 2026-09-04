@@ -210,10 +210,22 @@ class WorkbookPackage:
 
     # ------------------------------------------------------------- save
 
-    def _lockfile_present(self) -> bool:
+    def _lock_state(self) -> tuple[bool, bool]:
+        """(lockfile_present, writable). The ~$ owner lockfile is a SIGNAL,
+        not authority: a stale one survives an Excel crash (com_ground_truth
+        exp 4 caveat, verified in the COM-tier gate), so the write-probe
+        decides. A real Excel hold denies the r+b open; a stale lockfile
+        leaves the file writable."""
         p = Path(self.path)
         owner = p.parent / ("~$" + p.name)
-        return owner.exists()
+        present = owner.exists()
+        writable = True
+        try:
+            fh = open(p, "r+b")
+            fh.close()
+        except OSError:
+            writable = False
+        return present, writable
 
     def _hazard_gate(self, allow_loss: bool) -> list[str]:
         """Apply the routing decision. Returns advisory warnings; raises
@@ -311,11 +323,18 @@ class WorkbookPackage:
         restores it from the backup)."""
         path = self.path
         with _safesave.write_lock(path):
-            if self._lockfile_present():
+            lock_present, writable = self._lock_state()
+            if not writable:
                 raise WorkbookLocked(
-                    f"{Path(path).name} is open in Excel (owner lockfile "
-                    "present); close it, or use a live/COM route, then retry")
+                    f"{Path(path).name} is open in Excel (or another process "
+                    "holds it); close it, or use a live/COM route, then retry")
             warnings = self._hazard_gate(allow_loss)
+            if lock_present:
+                warnings.append(
+                    f"a stale owner lockfile (~${Path(path).name}) is "
+                    "present but the file is writable; a prior Excel "
+                    "session likely crashed. Proceeding; the ~$ file can "
+                    "be deleted safely")
 
             tmp = os.path.join(
                 os.path.dirname(os.path.abspath(path)) or ".",

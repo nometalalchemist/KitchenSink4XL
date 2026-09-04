@@ -105,15 +105,17 @@ def test_restore_invalid_payload_refuses(tmp_path):
     assert Path(p).read_bytes() == original  # target untouched
 
 
-def test_restore_refuses_owner_lockfile(tmp_path):
-    from xlsx_mcp.core.errors import WorkbookLocked
+def test_restore_stale_lockfile_degrades_to_warning(tmp_path):
+    """COM-tier policy: a stale ~$ lockfile (file still writable) degrades to
+    a warning on restore; only a real hold refuses."""
     p = _make(tmp_path)
     _mutate(p, 1)
     owner = tmp_path / ("~$" + Path(p).name)
     owner.write_bytes(b"owner")
     try:
-        with pytest.raises(WorkbookLocked):
-            _backups.manage_backups("restore", path=p, source="prev")
+        result = _backups.manage_backups("restore", path=p, source="prev")
+        assert result["restored"] == str(Path(p))
+        assert any("stale" in w for w in result.get("warnings", []))
     finally:
         owner.unlink()
 

@@ -42,21 +42,25 @@ from ..core.safesave import (
 from ..core.sandbox import check_path
 
 
-def _refuse_if_excel_locked(path: Path) -> None:
-    """Same detection the save path uses: the ~$ owner lockfile, plus an
-    exclusive-open probe for any other process holding the file."""
-    owner = path.with_name("~$" + path.name)
-    if owner.exists():
-        raise WorkbookLocked(
-            f"{path.name} is open in Excel (owner lockfile present); close "
-            "it before restoring a backup over it")
+def _refuse_if_excel_locked(path: Path) -> list[str]:
+    """Same detection the save path uses: the write-probe decides, the ~$
+    owner lockfile is only a signal (a stale one survives an Excel crash and
+    must degrade to a warning, never a permanent spurious refusal). Returns
+    advisory warnings; raises WorkbookLocked on a real hold."""
     try:
         with open(path, "r+b"):
             pass
-    except PermissionError:
+    except OSError:
         raise WorkbookLocked(
-            f"{path.name} is locked by another process; close it before "
-            "restoring a backup over it") from None
+            f"{path.name} is open in Excel or locked by another process; "
+            "close it before restoring a backup over it") from None
+    owner = path.with_name("~$" + path.name)
+    if owner.exists():
+        return [
+            f"a stale owner lockfile (~${path.name}) is present but the "
+            "file is writable; a prior Excel session likely crashed. "
+            "Proceeding; the ~$ file can be deleted safely"]
+    return []
 
 
 def _validate_payload(payload: bytes) -> None:
@@ -176,8 +180,9 @@ def restore_backup(path: str, source: str) -> dict:
 
     with write_lock(doc):
         target_existed = doc.exists()
+        lock_warnings: list[str] = []
         if target_existed:
-            _refuse_if_excel_locked(doc)
+            lock_warnings = _refuse_if_excel_locked(doc)
 
         # Validate the backup payload BEFORE touching anything.
         payload = src.read_bytes()
@@ -208,6 +213,8 @@ def restore_backup(path: str, source: str) -> dict:
         "bytes": len(payload),
         "prev_rotated": rotated_prev,
     }
+    if lock_warnings:
+        result["warnings"] = lock_warnings
     if rotated_prev:
         result["undo"] = ("restore source='prev' brings back the "
                           "pre-restore content")

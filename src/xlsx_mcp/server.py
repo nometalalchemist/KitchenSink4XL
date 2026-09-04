@@ -1538,11 +1538,12 @@ def com_set_sparkline(path: str, action: str = "create",
 def com_validate_opens_clean(path: str, password: str | None = None,
                              timeout_seconds: float | None = None) -> dict:
     """The authoritative corruption smoke test: open the file in a private
-    hidden Excel and report whether Excel accepts it WITHOUT a repair
-    prompt (under suppressed alerts a repair demand surfaces as a refusal,
-    reported honestly with Excel's own message). Read-only; nothing is
-    saved. Also available inside mutating file-tier saves as the
-    verify_com option. password opens encrypted files. Serialized and
+    hidden Excel and report whether it is accepted WITHOUT a repair prompt
+    (a repair demand surfaces as a refusal carrying Excel's own message).
+    Read-only; nothing saved; also runs inside file-tier saves as the
+    verify_com option. password opens encrypted files; without one an
+    encrypted file reports encrypted, and a wrong one surfaces as the
+    operation timeout (Excel re-prompts modally). Serialized and
     timeout-bounded."""
     return _comtier.com_validate_opens_clean(
         path, password=password, timeout_seconds=timeout_seconds)

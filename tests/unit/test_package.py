@@ -194,13 +194,17 @@ def test_restore_from_backup_on_post_promote_failure(book, monkeypatch):
 # ------------------------------------------------------------- lock handling
 
 
-def test_owner_lockfile_surfaces_workbook_locked(book):
+def test_stale_owner_lockfile_degrades_to_warning(book):
+    """The ~$ lockfile is a SIGNAL, not authority (COM-tier policy): a stale
+    one left by a crashed Excel must NOT permanently block edits. The
+    write-probe decides; a writable file proceeds with a warning."""
     owner = book.parent / ("~$" + book.name)
-    owner.write_text("lock")
+    owner.write_text("stale crash leftover")
     pkg = WorkbookPackage.open(book)
     pkg.set_cell("Data", "B1", 1)
-    with pytest.raises(WorkbookLocked):
-        pkg.save()
+    result = pkg.save()
+    assert result["ok"] is True
+    assert any("stale" in w for w in result["warnings"])
 
 
 def test_permission_error_on_write_surfaces_workbook_locked(book):
