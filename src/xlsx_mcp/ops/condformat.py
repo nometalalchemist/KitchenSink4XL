@@ -1,4 +1,4 @@
-"""ops/condformat.py: conditional formatting (DESIGN Section 11, format pack).
+"""ops/condformat.py: conditional formatting (DESIGN Section 11; design pack as re-cut).
 
 manage_conditional_format adds, lists, and deletes conditional-formatting rules
 over a range: cell-value comparisons, color scales, data bars, icon sets,

@@ -77,7 +77,7 @@ mcp = FastMCP(
         "validation, tables and named ranges, sort and filter, comments and "
         "hyperlinks, CSV/TSV/JSON import and export. Positional tools take "
         "one location object (cell | range | r1c1 | name | table | "
-        "used_range | region | search; an optional sibling 'sheet' picks "
+        "used_range | region | search | anchor; an optional sibling 'sheet' picks "
         "the sheet, default active); ambiguous matches refuse loudly with "
         "every candidate. File-based with a round-trip hazard scan, "
         "auto-backup before every mutation, and verify-after-write; a "
@@ -173,7 +173,7 @@ def get_server_info() -> dict:
     return {
         "name": "kitchensink4xl",
         "version": __version__,
-        "phase": "5 (file tier complete; COM tier live, env-gated)",
+        "phase": "6 (consolidated: pack re-cut, anchors, tiered loading)",
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
@@ -237,9 +237,10 @@ def diagnose_workbook(path: str) -> dict:
     This is how you check a workbook is safe to edit before mutating it.
 
     What to do with the verdict: hazards never block reads; a would-lose
-    verdict means every mutating tool will refuse until the COM route exists
-    or you pass allow_loss:true (an explicit, backed-up acceptance of the
-    loss). A clean verdict means file-based edits are round-trip safe. Limit:
+    verdict means every mutating tool will refuse unless you route through
+    Excel (com pack) or pass allow_loss:true (an explicit, backed-up
+    acceptance of the loss). A clean verdict means file-based edits are
+    round-trip safe. Limit:
     the scan sees PARTS, so features living inside surviving parts (x14
     conditional formats, sparklines) are outside its sight. Read-only."""
     return _lifecycle.diagnose_workbook(path)
@@ -276,8 +277,8 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
 def read_range(path: str, location: Any, values: str = "cached",
                sheet: str | None = None) -> dict:
     """Read a cell or range addressed by a location object (cell, range, r1c1,
-    name, table, used_range, region, or search; sheet picks the sheet when the
-    location does not, default active). values controls the honest calc story:
+    name, table, used_range, region, search, or a grid-view anchor; sheet
+    picks the sheet when the location does not, default active). values controls the honest calc story:
     'cached' returns the last calculated values, 'formula' the formula
     strings, 'both' pairs each value with a label (cached, absent, formula,
     value). A formula cell with no cached value is labelled 'absent', never
@@ -416,8 +417,11 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
     strings. The view paginates with max_rows and max_cols (caps 200 and 100)
     and reports truncated flags so the caller knows when to page.
     formula_cells maps addresses to their formula strings; merged ranges
-    intersecting the view are listed. Read-only; works while the file is open
-    in Excel. Pair it with apply_edits to edit what you see."""
+    intersecting the view are listed. The result's anchor is a token for the
+    shown rectangle: {"anchor": token} addresses it in any positional tool,
+    refusing STALE_ANCHOR if the region changed since this view; cells
+    inside stay plain A1. Read-only; works while the file is open in Excel.
+    Pair it with apply_edits to edit what you see."""
     return _view.get_grid_view(path, location=location, sheet=sheet,
                                max_rows=max_rows, max_cols=max_cols,
                                values=values)
@@ -429,7 +433,7 @@ def apply_edits(path: str, edits: list, allow_loss: bool = False,
     """Apply many addressed edits as ONE atomic batch. edits is a list of
     {op, location, ...}: set_value {value}, set_formula {formula}, clear
     {what: contents|formats|all}, write_range {data: 2D array}. location is any
-    location object.
+    location object, including a stale-checked get_grid_view anchor.
 
     Every location is resolved and every op validated BEFORE anything is
     written, so a single bad edit refuses the whole batch and the file stays
@@ -457,10 +461,10 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
     unspecified attributes are preserved. number_format is an Excel format
     code; font is {name, size, bold, italic, underline, strike, color}; fill
     is {color} or {pattern, fg, bg}; border is {style, color, sides};
-    alignment is {horizontal, vertical, wrap_text, text_rotation, indent}.
-    Colors are hex. A hazardous workbook refuses unless allow_loss is true.
-    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
-    in Excel."""
+    alignment is {horizontal, vertical, wrap_text, text_rotation, indent};
+    colors are hex. Named styles and conditional formats: design pack.
+    Hazard-gated (allow_loss overrides); auto-backup; atomic verified save.
+    Refuses while open in Excel."""
     return _format.format_cells(
         path, location, number_format=number_format, font=font, fill=fill,
         border=border, alignment=alignment, sheet=sheet,
@@ -525,17 +529,17 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
 def get_table(path: str, name: str, columns: list | None = None,
               values: str = "cached", records: bool = False) -> dict:
     """Read a table's data by its name (case-insensitive). columns projects a
-    subset of the table columns; values controls the honest calc story (cached
-    returns last calculated values, formula the formula strings, both pairs
-    them); records true returns row objects keyed by column name. Returns the
+    subset; values is cached | formula | both (the honest calc story);
+    records true returns row objects keyed by column name. Returns the
     table ref, the column names, and the data rows without the header or
-    totals row; a large table returns everything, so filter or page big ones
-    with query_range and a {table} location. Read-only; nothing is written."""
+    totals row; filter or page big tables with query_range and a {table}
+    location. Advanced table ops (columns, totals, resize, banding):
+    manage_table (design pack). Read-only; nothing is written."""
     return _tables.get_table(path, name, columns=columns, values=values,
                              records=records)
 
 
-@_tool("tables-names")
+@_tool("design")
 def manage_table(path: str, name: str, action: str, values: list | None = None,
                  index: int | None = None, column: str | None = None,
                  new_name: str | None = None, new_ref: str | None = None,
@@ -566,7 +570,7 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
 # -------------------------------------------------------------- named ranges
 
 
-@_tool("tables-names")
+@_tool("design")
 def manage_name(path: str, action: str, name: str | None = None,
                 refers_to: str | None = None, scope: str | None = None,
                 new_name: str | None = None, allow_loss: bool = False,
@@ -591,7 +595,7 @@ def manage_name(path: str, action: str, name: str | None = None,
 # ----------------------------------------------------- conditional formatting
 
 
-@_tool("format")
+@_tool("design")
 def manage_conditional_format(path: str, action: str, location: Any = None,
                               cf_type: str | None = None,
                               params: dict | None = None,
@@ -619,7 +623,7 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
 # ------------------------------------------------------------ data validation
 
 
-@_tool("format")
+@_tool("design")
 def manage_data_validation(path: str, action: str, location: Any = None,
                            dv_type: str | None = None, values: Any = None,
                            operator: str | None = None,
@@ -713,8 +717,9 @@ def manage_comment(path: str, action: str, location: Any = None,
     author). This writes legacy notes, which round-trip cleanly through a
     file-based save. Threaded reply-and-resolve comments are a different part
     this tool can neither read nor write: the hazard scan flags them and the
-    mutation gate refuses rather than dropping them, but reply/resolve waits
-    for the COM tier. For the mutating actions: a hazardous workbook refuses
+    mutation gate refuses rather than dropping them; threaded reply and
+    resolve are not offered in v1. For the mutating actions: a hazardous
+    workbook refuses
     unless allow_loss is true; auto-backup to prev/anchor slots in
     .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _annotations.manage_comment(
@@ -771,12 +776,13 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
                  fmt: str = "csv", header: bool = True, values: str = "cached",
                  records: bool = False, out_file: str | None = None) -> dict:
     """Export a range, table, or sheet to CSV, TSV, or JSON. location defaults
-    to the sheet's true used range; a {table} selector exports a table. values
-    controls the calc story (cached, formula, or both), and the result states
-    which mode produced the output so a formula with no cached value is never
-    passed off as blank. out_file writes the text to a sandboxed path,
-    silently replacing an existing file there; otherwise the text is returned
-    inline. Read-only; nothing in the workbook is changed."""
+    to the sheet's true used range; a {table} selector exports a table.
+    values is cached | formula | both, and the result states the mode used
+    so a formula with no cached value is never passed off as blank.
+    out_file writes the text to a sandboxed path, replacing any existing
+    file there; otherwise the text returns inline. Whole-workbook
+    multi-sheet export is export_file (io pack). Read-only; nothing in the
+    workbook is changed."""
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
         values=values, records=records, out_file=out_file)
@@ -925,7 +931,7 @@ def set_cells(path: str, cells: list, sheet: str | None = None,
 # ------------------------------------------------------------- style layer
 
 
-@_tool("format")
+@_tool("design")
 def apply_style(path: str, style: str, location: Any = None,
                 define: dict | None = None, sheet: str | None = None,
                 allow_loss: bool = False, backup: bool = True) -> dict:
@@ -942,7 +948,7 @@ def apply_style(path: str, style: str, location: Any = None,
         allow_loss=allow_loss, backup=backup)
 
 
-@_tool("format")
+@_tool("design")
 def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
                 allow_loss: bool = False, backup: bool = True) -> dict:
     """The format painter: copy ONE source cell's complete format (font,
@@ -956,7 +962,7 @@ def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
                                allow_loss=allow_loss, backup=backup)
 
 
-@_tool("format")
+@_tool("design")
 def audit_styles(path: str, top: int = 10) -> dict:
     """Read-only style-bloat audit against Excel's 64,000 distinct-format
     ceiling: counts from the styles.xml registry (cell formats, fonts,
@@ -981,7 +987,7 @@ def audit_styles(path: str, top: int = 10) -> dict:
 # ------------------------------------------------------------------ objects
 
 
-@_tool("objects")
+@_tool("design")
 def manage_image(path: str, action: str, image_file: str | None = None,
                  location: Any = None, sheet: str | None = None,
                  width: int | None = None, height: int | None = None,
@@ -1008,7 +1014,7 @@ def manage_image(path: str, action: str, image_file: str | None = None,
         allow_loss=allow_loss, backup=backup)
 
 
-@_tool("objects")
+@_tool("design")
 def manage_chart(path: str, action: str, chart_type: str | None = None,
                  data: Any = None, categories: Any = None,
                  title: str | None = None, x_title: str | None = None,
@@ -1028,8 +1034,8 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
     re-serializes every chart through its own model on save, so a complex
     Excel-authored chart can lose sub-features the model does not know;
     the hazard scan tracks charts as a degrade risk and warns on every
-    save. Existing charts are not editable here (delete and recreate, or
-    wait for the COM tier). After create or delete the chart count is read
+    save. Existing charts are not editable here; delete and recreate is
+    the edit route. After create or delete the chart count is read
     back and a mismatch restores the backup. Auto-backup to .ks4xl-backups;
     atomic verified save. Refuses while open in Excel."""
     return _objects.manage_chart(
@@ -1062,7 +1068,7 @@ def set_protection(path: str, action: str, sheet: str | None = None,
     password is stored as the legacy ECMA-376 hash Excel checks in its UI;
     the file stays a readable zip and any tool can strip the lock. Real
     encryption is a different mechanism and needs the Excel application
-    (com pack, com_save_with_password, a later phase). Auto-backup to
+    (com_save_with_password, com pack). Auto-backup to
     .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _protection.set_protection(
         path, action, sheet=sheet, password=password, options=options,
@@ -1152,28 +1158,29 @@ def inspect_vba(path: str) -> dict:
     return _inspectors.inspect_vba(path)
 
 
-@_tool("data")
+@_tool("io")
 def get_pivot(path: str, sheet: str | None = None) -> dict:
     """Describe existing pivot tables, read-only: each pivot's sheet and
     location, source sheet and range, cache field list, row, column, data,
     and page fields by name, cache record count, who refreshed it last and
     when, and the refresh-on-load flag. Description only, stated honestly:
-    creating, modifying, or refreshing a pivot needs the Excel application
-    (com pack, a later phase), while file-based edits elsewhere in the
+    creating, refreshing, or deleting a pivot needs the Excel application
+    (com_manage_pivot, com pack), while file-based edits elsewhere in the
     workbook preserve the pivot parts. Works while the file is open in
     Excel."""
     return _inspectors.get_pivot(path, sheet=sheet)
 
 
-@_tool("data")
+@_tool("io")
 def get_connections(path: str) -> dict:
     """List data connections and Power Query presence, read-only: each
     connection's name, type, connection string or URL, command, and
     refresh-on-load flag from the connections part, plus DataMashup
     evidence for Power Query and any legacy query-table parts. Connection
     strings can embed server names and credentials, so the output is
-    marked sensitive. Refreshing a connection needs the Excel application
-    (com pack, a later phase). Works while the file is open in Excel."""
+    marked sensitive. Refreshing a connection is not offered in v1 (a
+    com-pack refresh tool is queued; pivot refresh already lives in
+    com_manage_pivot). Works while the file is open in Excel."""
     return _inspectors.get_connections(path)
 
 
@@ -1617,12 +1624,20 @@ _MENU_LINES = "\n".join(
     for name in _packs.pack_names()
 )
 
+_TASK_MAP = (
+    "Task map: conditional formatting, data validation, named styles, "
+    "images, charts, advanced table ops, named ranges -> design; page "
+    "layout, headers/footers, protection, comments, whole-file export, "
+    "external links, VBA, pivot and connection info -> io; recalculate, "
+    "real pivots, PDF, render, convert, encrypt, autofit, sparklines, "
+    "goal seek -> com."
+)
+
 enable_tools.__doc__ = (
     "Enable optional tool packs mid-session (sessions start lite). "
-    "Idempotent; result reports packs enabled, approx tokens added, and the "
-    "new total surface. packs = any combination below or ['everything']; "
-    "disable_tools reverses it. Refuses when the host pins the surface with "
-    "KS4XL_PACK_POLICY=locked. Packs:\n" + _MENU_LINES
+    "Idempotent; reports tokens added. packs = names below or "
+    "['everything']; disable_tools reverses it. Refuses under "
+    "KS4XL_PACK_POLICY=locked. " + _TASK_MAP + "\nPacks:\n" + _MENU_LINES
 )
 
 disable_tools.__doc__ = (

@@ -170,7 +170,7 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
     try:
         loc = location if location is not None else {
             "used_range": sheet if sheet is not None else True}
-        grid = gridio.resolve(base, loc, default_sheet=sheet)
+        grid = gridio.resolve(base, loc, default_sheet=sheet, path=path)
         if grid.empty:
             content = "[]" if fmt == "json" else ""
             return {"sheet": grid.sheet, "range": grid.a1, "format": fmt,

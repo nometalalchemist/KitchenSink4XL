@@ -261,6 +261,44 @@ def test_unknown_key_refuses():
         res({"cell": "A1", "bogus": 1})
 
 
-def test_reserved_anchor_selector_refuses_cleanly():
-    with pytest.raises(UnsupportedStructure):
-        res({"anchor": "a3f9"})
+def test_anchor_selector_round_trip_and_staleness():
+    """The consolidation-phase anchor: make_anchor over a rectangle resolves
+    back to the same rectangle while content is unchanged, refuses
+    StaleAnchor on any content change or a deleted sheet, and a malformed
+    token is BAD_PARAMS (XlMcpError), not a stale refusal."""
+    from xlsx_mcp.core.errors import StaleAnchor
+
+    wb = _wb()
+    ws = wb["Data"]
+    token = locate.make_anchor(ws, 1, 1, 3, 2)  # A1:B3
+    grid = locate.resolve_location(wb, {"anchor": token})
+    assert (grid.sheet, grid.a1, grid.selector) == ("Data", "A1:B3", "anchor")
+
+    # a content change inside the rectangle goes stale
+    ws["B2"] = 999
+    with pytest.raises(StaleAnchor):
+        locate.resolve_location(wb, {"anchor": token})
+
+    # a change OUTSIDE the rectangle does not
+    ws["B2"] = 10
+    ws["Z99"] = "elsewhere"
+    assert locate.resolve_location(wb, {"anchor": token}).a1 == "A1:B3"
+
+    # single-cell anchors use the single-cell A1 form
+    tok1 = locate.make_anchor(ws, 5, 4, 5, 4)
+    assert locate.resolve_location(wb, {"anchor": tok1}).a1 == "D5"
+
+    # deleted sheet -> stale, named clearly
+    wb2 = _wb()
+    tok2 = locate.make_anchor(wb2["Summary"], 9, 2, 9, 2)
+    del wb2["Summary"]
+    with pytest.raises(StaleAnchor):
+        locate.resolve_location(wb2, {"anchor": tok2})
+
+    # malformed tokens refuse as BAD_PARAMS (plain XlMcpError, not a stale
+    # refusal), never resolve
+    for bogus in ("a3f9", "gv1:only-two-parts", "gv1:!!!:A1:00", 7, None,
+                  "gv1::A1:deadbeef00"):
+        with pytest.raises(XlMcpError) as exc:
+            locate.resolve_location(wb, {"anchor": bogus})
+        assert not isinstance(exc.value, StaleAnchor), bogus

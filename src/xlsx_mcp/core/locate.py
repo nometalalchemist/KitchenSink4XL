@@ -21,6 +21,9 @@ Selectors (Phase 2):
     {"search": {"text": "Q3 Total", "sheet": "Q3",
                 "occurrence": 1, "match_case": false,
                 "match": "exact"}}                    content-match addressing
+    {"anchor": "gv1:..."}                             the rectangle a
+                                                      get_grid_view showed,
+                                                      content-verified
 
 Discipline inherited from KS4W (DESIGN Section 5.2): no tool acts on first
 match. A search or name that resolves to more than one target with no
@@ -31,12 +34,24 @@ selector computes the TRUE used range (value-bearing bounds), which differs
 from openpyxl's dimension (see true_used_range); the incumbent gets this wrong
 (demand_mining D7, incumbent_study defect 11).
 
-The anchor selector (a get_grid_view anchor id) is added in Phase 4 with the
-view layer; its key is reserved here so the surface does not shift.
+The anchor selector (reserved since Phase 2, landed with the consolidation
+phase) is view-stable addressing: get_grid_view returns one self-contained
+token for the rectangle it SHOWED (sheet + A1 bounds + a content
+fingerprint), and {"anchor": token} resolves to that rectangle only while
+its content is unchanged, refusing StaleAnchor (STALE_ANCHOR) otherwise.
+Cells already have stable A1 addresses, so per-cell/per-row anchors would be
+ceremony; the one thing A1 cannot express is "the region as it was when I
+looked", and that is all the anchor adds. The token is stateless (no
+server-side session table), so it survives server restarts and works across
+processes; the fingerprint is computed over raw stored values (formulas as
+strings, data_only=False loads), the value space every mutating tool
+resolves against.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,17 +66,22 @@ from openpyxl.utils import (
 from .errors import (
     AmbiguousTarget,
     RangeOutOfBounds,
+    StaleAnchor,
     TargetNotFound,
-    UnsupportedStructure,
     XlMcpError,
 )
 
 SELECTORS = (
     "cell", "range", "a1", "r1c1", "name", "named_range",
-    "table", "used_range", "region", "search",
+    "table", "used_range", "region", "search", "anchor",
 )
-#: reserved for Phase 4 (view layer); refuses cleanly until then.
-RESERVED_SELECTORS = ("anchor",)
+#: nothing reserved anymore; the anchor selector landed with the
+#: consolidation phase. Kept (empty) for import stability.
+RESERVED_SELECTORS: tuple[str, ...] = ()
+
+#: anchor token version tag; a token from a future incompatible scheme
+#: refuses as malformed rather than mis-resolving.
+_ANCHOR_TAG = "gv1"
 
 MAX_ROW = 1_048_576
 MAX_COL = 16_384
@@ -605,6 +625,84 @@ def _resolve_search(wb, spec: Any, sheet: str | None) -> ResolvedGrid:
     return ResolvedGrid(ws.title, r, c, r, c, "search", matched=matched)
 
 
+# ------------------------------------------------------------------ anchors
+
+
+def grid_fingerprint(ws, min_row: int, min_col: int, max_row: int,
+                     max_col: int) -> str:
+    """A short content fingerprint of a rectangle: raw stored values
+    (formula strings and literals, the data_only=False value space) keyed by
+    coordinate, so any value change, move, insert, or delete inside the
+    rectangle changes the digest. Formatting-only changes do not; the anchor
+    guards content, not cosmetics."""
+    h = hashlib.blake2b(digest_size=5)
+    cells = getattr(ws, "_cells", None)
+    for r in range(min_row, max_row + 1):
+        for c in range(min_col, max_col + 1):
+            if cells is not None:
+                cell = cells.get((r, c))
+                v = None if cell is None else cell.value
+            else:  # pragma: no cover - read-only worksheets
+                v = ws.cell(r, c).value
+            if v is not None:
+                h.update(f"{r},{c},{v!r};".encode("utf-8", "surrogatepass"))
+    return h.hexdigest()
+
+
+def make_anchor(ws, min_row: int, min_col: int, max_row: int,
+                max_col: int) -> str:
+    """Build the self-contained view anchor token get_grid_view returns:
+    gv1:<base64url(sheet)>:<A1 bounds>:<fingerprint>. Stateless by design;
+    resolving it re-derives the fingerprint from the live workbook."""
+    tl = f"{get_column_letter(min_col)}{min_row}"
+    br = f"{get_column_letter(max_col)}{max_row}"
+    a1_ref = tl if (min_row, min_col) == (max_row, max_col) else f"{tl}:{br}"
+    b64 = base64.urlsafe_b64encode(
+        ws.title.encode("utf-8")).decode("ascii").rstrip("=")
+    fp = grid_fingerprint(ws, min_row, min_col, max_row, max_col)
+    return f"{_ANCHOR_TAG}:{b64}:{a1_ref}:{fp}"
+
+
+def _resolve_anchor(wb, token: Any) -> ResolvedGrid:
+    bad = XlMcpError(
+        "anchor selector takes the token a get_grid_view result carries "
+        "(it looks like 'gv1:...'); re-run get_grid_view for a fresh one")
+    if not isinstance(token, str) or not token.startswith(_ANCHOR_TAG + ":"):
+        raise bad
+    try:
+        _tag, b64, rest = token.split(":", 2)
+        a1_ref, fp = rest.rsplit(":", 1)
+        pad = "=" * (-len(b64) % 4)
+        sheet = base64.urlsafe_b64decode(b64 + pad).decode("utf-8")
+        if not sheet or not a1_ref or not fp:
+            raise ValueError
+    except (ValueError, UnicodeDecodeError):
+        raise bad
+    if sheet not in wb.sheetnames:
+        raise StaleAnchor(
+            f"the anchor points at sheet {sheet!r}, which no longer exists; "
+            "re-run get_grid_view and resend with fresh addressing")
+    ws = wb[sheet]
+    try:
+        min_col, min_row, max_col, max_row = range_boundaries(a1_ref)
+    except Exception:
+        raise bad
+    if None in (min_col, min_row, max_col, max_row):
+        raise bad
+    _check_bounds(min_col, min_row, max_col, max_row, f"anchor {a1_ref!r}")
+    current = grid_fingerprint(ws, min_row, min_col, max_row, max_col)
+    if current != fp:
+        raise StaleAnchor(
+            f"anchor {a1_ref} on sheet {sheet!r} is stale: the region's "
+            "content changed after the view was taken. Re-run get_grid_view "
+            "and resend with the fresh anchor (or address by cell/range if "
+            "the change was your own intended edit).")
+    return ResolvedGrid(
+        sheet, min_row, min_col, max_row, max_col, "anchor",
+        matched={"a1": a1_ref, "fingerprint": fp,
+                 "note": "content verified unchanged since the view"})
+
+
 # ------------------------------------------------------------------ public
 
 
@@ -621,7 +719,7 @@ def resolve_location(wb, location: Any, *,
     Returns a ResolvedGrid rectangle (1-based, inclusive). Raises XlMcpError
     (BAD_PARAMS), TargetNotFound (NOT_FOUND), AmbiguousTarget with .matches
     (AMBIGUOUS_LOCATION), RangeOutOfBounds (RANGE_OUT_OF_BOUNDS), or
-    UnsupportedStructure.
+    StaleAnchor (STALE_ANCHOR).
     """
     if isinstance(location, str):
         location = {"a1": location}
@@ -629,10 +727,6 @@ def resolve_location(wb, location: Any, *,
         raise XlMcpError(
             "location must be an object with exactly one selector key from "
             f"{list(SELECTORS)} plus an optional 'sheet'")
-    if any(k in location for k in RESERVED_SELECTORS):
-        raise UnsupportedStructure(
-            "the 'anchor' selector is added with the grid-view layer (Phase "
-            "4); address by cell/range/name/table/used_range/search for now")
     modifiers = {"sheet", "scope", "column", "part"}
     present = [k for k in SELECTORS if k in location]
     unknown = sorted(set(location) - set(SELECTORS) - modifiers)
@@ -662,11 +756,13 @@ def resolve_location(wb, location: Any, *,
         return _resolve_used_range(wb, value, sheet)
     if sel == "region":
         return _resolve_region(wb, value, sheet)
+    if sel == "anchor":
+        return _resolve_anchor(wb, value)
     return _resolve_search(wb, value, sheet)
 
 
 __all__ = [
     "ResolvedGrid", "resolve_location", "true_used_range",
-    "SELECTORS", "RESERVED_SELECTORS",
+    "SELECTORS", "RESERVED_SELECTORS", "make_anchor", "grid_fingerprint",
     "MAX_ROW", "MAX_COL", "MAX_CELL_CHARS",
 ]

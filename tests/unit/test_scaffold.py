@@ -55,20 +55,19 @@ def test_all_tools_are_packed():
     assert listed <= packed, f"unpacked tools: {sorted(listed - packed)}"
     lite = set(packs.tool_names()["lite"])
     assert (BASE_LITE | PHASE_3A_LITE) <= lite
-    # Phase 3b/3c populate format, tables-names, and io; objects/data/com
-    # are still empty (their families land in later waves).
+    # The consolidation-phase re-cut (2026-09-04): the four small planning
+    # packs merged into two. format+objects+tables-names -> design (the
+    # report-design usage cluster); data -> io (the read-side inspector
+    # cluster). Every pack clears the 1.5k cost line with no exceptions.
     members = packs.tool_names()
-    assert set(members.get("format", [])) == {
+    assert set(members.get("design", [])) == {
         "manage_conditional_format", "manage_data_validation",
-        "apply_style", "copy_format", "audit_styles"}
-    assert set(members.get("tables-names", [])) == {"manage_table", "manage_name"}
-    # Phase 3d populates io, objects, and data; Phase 5 populates com.
+        "apply_style", "copy_format", "audit_styles",
+        "manage_image", "manage_chart", "manage_table", "manage_name"}
     assert set(members.get("io", [])) == {
         "manage_comment", "set_protection", "set_page_layout",
         "set_header_footer", "get_external_links", "inspect_vba",
-        "export_file"}
-    assert set(members.get("objects", [])) == {"manage_image", "manage_chart"}
-    assert set(members.get("data", [])) == {"get_pivot", "get_connections"}
+        "export_file", "get_pivot", "get_connections"}
     # The COM tier (Phase 5). com_run_macro is DELIBERATELY absent: macro
     # execution is deferred from v1 by ruling (VBA is preserve/inspect only).
     assert set(members.get("com", [])) == {
@@ -88,12 +87,10 @@ def test_all_tools_are_packed():
         assert name in lite
 
 
-def test_pack_map_is_the_design_surface():
-    """The pack map is the DESIGN Section 9 set (member lists fill in as the
-    families land)."""
-    assert set(packs.pack_names()) == {
-        "format", "objects", "tables-names", "io", "data", "com",
-    }
+def test_pack_map_is_the_recut_surface():
+    """The pack map is the consolidation-phase re-cut: three packs, every
+    one over the 1.5k cost line (com env-gated regardless of size)."""
+    assert set(packs.pack_names()) == {"design", "io", "com"}
 
 
 def test_grid_error_codes_present():

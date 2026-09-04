@@ -47,8 +47,26 @@ def open_wb(path: str, *, data_only: bool = False):
         p, data_only=data_only, keep_vba=keep_vba, rich_text=False)
 
 
-def resolve(wb, location: Any, *, default_sheet: str | None = None):
-    """Resolve a location object to a ResolvedGrid rectangle."""
+def resolve(wb, location: Any, *, default_sheet: str | None = None,
+            path: str | None = None):
+    """Resolve a location object to a ResolvedGrid rectangle.
+
+    path is the anchor-consistency escape hatch: a get_grid_view anchor's
+    fingerprint lives in the RAW value space (formula strings, the
+    data_only=False load every mutating tool resolves against), so a read
+    that resolved against a data_only=True load would recompute the
+    fingerprint over cached values and refuse a perfectly fresh anchor.
+    When path is given and the location is an anchor against a cached
+    load, resolution re-opens a formula-load view just for the anchor
+    check."""
+    if (path is not None and isinstance(location, dict)
+            and "anchor" in location and getattr(wb, "data_only", False)):
+        fwb = open_wb(path, data_only=False)
+        try:
+            return _locate.resolve_location(
+                fwb, location, default_sheet=default_sheet)
+        finally:
+            fwb.close()
     return _locate.resolve_location(wb, location, default_sheet=default_sheet)
 
 

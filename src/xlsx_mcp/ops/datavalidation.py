@@ -1,4 +1,4 @@
-"""ops/datavalidation.py: data validation (DESIGN Section 11, format pack).
+"""ops/datavalidation.py: data validation (DESIGN Section 11; design pack as re-cut).
 
 manage_data_validation adds, lists, and deletes validation rules over a range: a
 list dropdown (inline values or a range/formula), whole-number and decimal

@@ -56,7 +56,8 @@ def read_range(path: str, location: Any, values: str = "cached",
         if values in ("cached", "both") else None
     try:
         base = formula_wb if formula_wb is not None else cached_wb
-        grid = gridio.resolve(base, location, default_sheet=sheet)
+        grid = gridio.resolve(base, location, default_sheet=sheet,
+                              path=path)
         if grid.empty:
             return {"sheet": grid.sheet, "range": grid.a1, "empty": True,
                     "values": [], "value_mode": values}
@@ -387,7 +388,7 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     try:
         loc = location if location is not None else {
             "used_range": sheet if sheet is not None else True}
-        grid = gridio.resolve(wb, loc, default_sheet=sheet)
+        grid = gridio.resolve(wb, loc, default_sheet=sheet, path=path)
         if grid.empty:
             return {"sheet": grid.sheet, "source": grid.a1, "mode": "rows",
                     "columns": [], "rows": [], "matched": 0, "returned": 0,
@@ -583,10 +584,11 @@ def _sort_key(v):
 # ------------------------------------------------------- scatter read / write
 
 
-def _single_cell_grid(base_wb, item: Any, i: int, sheet: str | None):
+def _single_cell_grid(base_wb, item: Any, i: int, sheet: str | None,
+                      path: str | None = None):
     """Resolve one scatter item's address to a single-cell grid, or refuse
     naming the offending item."""
-    grid = gridio.resolve(base_wb, item, default_sheet=sheet)
+    grid = gridio.resolve(base_wb, item, default_sheet=sheet, path=path)
     if not grid.is_single:
         raise XlMcpError(
             f"cells[{i}] resolves to the range {grid.a1}, not a single cell; "
@@ -620,7 +622,7 @@ def get_cells(path: str, cells: list, values: str = "cached",
         out = []
         absent = 0
         for i, item in enumerate(cells):
-            grid = _single_cell_grid(base, item, i, sheet)
+            grid = _single_cell_grid(base, item, i, sheet, path=path)
             vals, labels, _hf = gridio.read_matrix(
                 grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
             label = labels[0][0]

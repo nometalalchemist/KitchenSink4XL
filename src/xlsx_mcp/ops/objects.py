@@ -1,4 +1,4 @@
-"""ops/objects.py: images and charts (DESIGN Section 11, objects pack).
+"""ops/objects.py: images and charts (DESIGN Section 11; design pack as re-cut).
 
 manage_image inserts, lists, deletes, and extracts cell-anchored images.
 openpyxl only carries images through a load+save when Pillow is installed,

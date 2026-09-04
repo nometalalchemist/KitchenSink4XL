@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core import hazard as _hazard
+from ..core import locate as _locate
 from ..core.errors import XlMcpError
 from ..core.package import WorkbookPackage
 from ..core.sandbox import check_path
@@ -108,9 +109,16 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
             for mr in mc.ranges:
                 if mr.min_row <= end_row and mr.min_col <= end_col:
                     merges.append(str(mr))
+        # View-stable addressing: one self-contained token for the SHOWN
+        # rectangle, fingerprinted over the raw (formula-load) values so a
+        # later {"anchor": token} location refuses STALE_ANCHOR if the
+        # region changed after this view. Cells inside stay plain A1.
+        anchor = _locate.make_anchor(
+            fws, grid.min_row, grid.min_col, end_row, end_col)
         return {
             "sheet": grid.sheet,
             "used_range": grid.a1,
+            "anchor": anchor,
             "dimensions": {"rows": full_rows, "cols": full_cols},
             "shown": {"rows": end_row - grid.min_row + 1,
                       "cols": end_col - grid.min_col + 1},

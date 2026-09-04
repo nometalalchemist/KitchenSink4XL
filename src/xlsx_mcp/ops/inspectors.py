@@ -441,7 +441,8 @@ def get_pivot(path: str, sheet: str | None = None) -> dict:
         return {
             "pivots": pivots, "count": len(pivots),
             "note": ("description only: pivot creation, modification, and "
-                     "refresh need the Excel application (com pack)"
+                     "refresh need the Excel application "
+                     "(com_manage_pivot, com pack)"
                      if pivots else "no pivot tables"),
         }
     finally:

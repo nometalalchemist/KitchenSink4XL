@@ -11,7 +11,7 @@ services an autofit REQUEST as a best-effort width approximation (true autofit
 needs Excel's text metrics via the COM tier, so this is marked approximate,
 never claimed as exact). Both route their mutation through WorkbookPackage.
 
-Phase 3c additions (the format pack's style layer): apply_style (named cell
+Phase 3c additions (the style layer, design pack as re-cut): apply_style (named cell
 styles, builtin or defined in-call), copy_format (the format painter: one
 source cell's style painted onto a range), and audit_styles (the read-only
 style-bloat audit toward the 64,000-cell-format ceiling the research flagged:

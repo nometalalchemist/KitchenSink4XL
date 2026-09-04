@@ -84,7 +84,7 @@ WORKFLOWS: dict[str, dict] = {
                     "open"},
             {"tool": "format_cells", "pack": "lite",
              "why": "number formats and header emphasis"},
-            {"tool": "manage_chart", "pack": "objects",
+            {"tool": "manage_chart", "pack": "design",
              "why": "action='create' a chart over the table range"},
             {"tool": "set_view", "pack": "lite",
              "why": "freeze the header row and set the opening zoom"},
@@ -97,8 +97,8 @@ WORKFLOWS: dict[str, dict] = {
                     "workbook"},
         ],
         "notes": [
-            "Enable the format pack for conditional formatting or named "
-            "styles on top of the basics.",
+            "Enable the design pack for conditional formatting, named "
+            "styles, or a chart on top of the basics.",
         ],
     },
     "data-cleanup": {
@@ -117,7 +117,7 @@ WORKFLOWS: dict[str, dict] = {
              "why": "locate the dirty values and patterns first"},
             {"tool": "replace_cells", "pack": "lite",
              "why": "dry_run=true to preview the change list, then apply"},
-            {"tool": "manage_data_validation", "pack": "format",
+            {"tool": "manage_data_validation", "pack": "design",
              "why": "add rules so the cleaned columns stay clean"},
             {"tool": "sort_range", "pack": "lite",
              "why": "multi-key sort that moves whole rows atomically"},
@@ -136,7 +136,7 @@ WORKFLOWS: dict[str, dict] = {
             "consolidate formatting."
         ),
         "steps": [
-            {"tool": "audit_styles", "pack": "format",
+            {"tool": "audit_styles", "pack": "design",
              "why": "the counters, the heaviest formats, and the risk "
                     "verdict against the ceiling"},
             {"tool": "get_grid_view", "pack": "lite",
@@ -145,7 +145,7 @@ WORKFLOWS: dict[str, dict] = {
             {"tool": "clear_range", "pack": "lite",
              "why": "what='formats' on runaway areas resets them to "
                     "default"},
-            {"tool": "apply_style", "pack": "format",
+            {"tool": "apply_style", "pack": "design",
              "why": "named styles instead of thousands of per-cell "
                     "one-offs"},
             {"tool": "format_cells", "pack": "lite",
@@ -155,7 +155,7 @@ WORKFLOWS: dict[str, dict] = {
                     "moved"},
         ],
         "notes": [
-            "Enable the format pack first: enable_tools(['format']).",
+            "Enable the design pack first: enable_tools(['design']).",
         ],
     },
     "safe-edit-of-rich-workbook": {
@@ -232,7 +232,7 @@ WORKFLOWS: dict[str, dict] = {
             {"tool": "create_table", "pack": "lite",
              "why": "replaces create_table like for like, adding "
                     "name-collision and overlap checks"},
-            {"tool": "manage_chart", "pack": "objects",
+            {"tool": "manage_chart", "pack": "design",
              "why": "replaces create_chart"},
             {"tool": "com_manage_pivot", "pack": "com",
              "why": "replaces create_pivot_table with a real refreshable "

@@ -2,21 +2,23 @@
 
 Ported near-verbatim from KitchenSink4Word packs.py (proven in production
 through two siblings) and adapted to the grid domain: env vars are
-KS4XL_MODE / KS4XL_PACK_POLICY, and PACK_SUMMARIES carries the DESIGN
-Section 9 pack map (lite + six packs). The visibility route is the fastmcp
+KS4XL_MODE / KS4XL_PACK_POLICY, and PACK_SUMMARIES carries the
+consolidation-phase pack map (lite + three packs, re-cut 2026-09-04 against
+measured bills under the cost-aware ruling). The visibility route is the fastmcp
 3.x design Word v2 finalized: server.py registers every tool up front,
 non-lite tools start disabled, main() applies apply_startup_mode() then ONE
 global Visibility transform, and mid-session enable_tools/disable_tools use
 session-scoped ctx.enable_components/disable_components.
 
-Pack membership below is the DESIGN Section 9 map; member lists are wired by
-server.py's @_tool decorator (the single source of membership truth) as the
-engine families land in later phases. In Phase 0 only enable_tools and
-disable_tools register (under lite).
+Member lists are wired by server.py's @_tool decorator (the single source of
+membership truth). The 2026-09-04 re-cut merged the four small planning packs
+into two: format+objects+tables-names became design (the report-design usage
+cluster) and data folded into io's inspector cluster; rationale per pack in
+the DESIGN as-built notes.
 
 Env contract:
 - KS4XL_MODE: startup surface for clients without reliable list_changed.
-  "lite" (default), "full", or a comma-separated pack list ("format,com").
+  "lite" (default), "full", or a comma-separated pack list ("design,com").
 - KS4XL_PACK_POLICY: "auto" (default; the CLIENT's permission prompt gates
   enable_tools, which is deliberately a plain tool call) or "locked"
   (enable_tools/disable_tools refuse; the surface is fixed at startup).
@@ -32,33 +34,24 @@ from typing import Callable
 
 from .core.errors import XlMcpError
 
-# Packs in menu order, per DESIGN Section 9 (cost-aware: sub-1.5k packs
-# merge into a neighbor unless environment-gated; com stays separate at any
-# size). "lite" is the always-on core, not a pack. "everything" is a
-# convenience alias for all packs.
+# Packs in menu order (cost-aware ruling 2026-09-02, re-cut 2026-09-04
+# against measured bills: every sub-1.5k pack merged into a thematic
+# neighbor; com stays separate at any size because it is environment-gated).
+# "lite" is the always-on core, not a pack. "everything" is a convenience
+# alias for all packs.
 PACK_SUMMARIES: dict[str, str] = {
-    "format": (
-        "advanced formatting and styles: named cell styles, format "
+    "design": (
+        "workbook design and rich features: named cell styles, format "
         "painter, style-bloat audit, conditional formatting, data "
-        "validation"
-    ),
-    "objects": (
-        "images and basic charts: insert/list/delete/extract images, "
-        "create/delete charts; chart fidelity is model-mediated, "
-        "sparklines are COM-tier"
-    ),
-    "tables-names": (
-        "advanced table lifecycle (columns, rows, totals, resize, banding) "
-        "and named ranges (define, scope, LAMBDA/named-formula, cleanup)"
+        "validation, images, charts (create/list/delete), advanced table "
+        "lifecycle (columns, totals, resize, banding), and named ranges "
+        "(define, scope, LAMBDA, cleanup)"
     ),
     "io": (
         "page layout and print, headers/footers, advisory protection, "
-        "legacy comments, multi-sheet export, external-link audit, "
-        "read-only VBA inspection"
-    ),
-    "data": (
-        "pivots (file read/describe), data connections, and Power Query "
-        "presence; read-only, refresh and creation are COM-tier"
+        "legacy comments, multi-sheet export, and the read-side "
+        "inspectors: external links, VBA, existing pivots, data "
+        "connections"
     ),
     "com": (
         "drives a private hidden Excel instance (Windows + Excel "
