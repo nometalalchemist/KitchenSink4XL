@@ -62,15 +62,21 @@ def test_all_tools_are_packed():
         "manage_conditional_format", "manage_data_validation",
         "apply_style", "copy_format", "audit_styles"}
     assert set(members.get("tables-names", [])) == {"manage_table", "manage_name"}
-    # Phase 3d populates io, objects, and data; com stays empty until the
-    # application tier lands.
+    # Phase 3d populates io, objects, and data; Phase 5 populates com.
     assert set(members.get("io", [])) == {
         "manage_comment", "set_protection", "set_page_layout",
         "set_header_footer", "get_external_links", "inspect_vba",
         "export_file"}
     assert set(members.get("objects", [])) == {"manage_image", "manage_chart"}
     assert set(members.get("data", [])) == {"get_pivot", "get_connections"}
-    assert members.get("com", []) == []
+    # The COM tier (Phase 5). com_run_macro is DELIBERATELY absent: macro
+    # execution is deferred from v1 by ruling (VBA is preserve/inspect only).
+    assert set(members.get("com", [])) == {
+        "recalculate", "com_manage_pivot", "com_export_pdf",
+        "com_render_sheet", "com_convert_format", "com_save_with_password",
+        "com_autofit", "com_goal_seek", "com_set_sparkline",
+        "com_validate_opens_clean", "com_status"}
+    assert "com_run_macro" not in packed
     # Phase 3b lite additions.
     for name in ("create_table", "get_table", "sort_range", "set_filter",
                  "clear_filter", "manage_hyperlink", "import_data",

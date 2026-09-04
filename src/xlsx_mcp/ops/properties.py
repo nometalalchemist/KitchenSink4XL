@@ -55,6 +55,9 @@ def _read_report(path: str) -> dict:
                 "calc_mode": mode,
                 "full_calc_on_load": bool(
                     getattr(calc, "fullCalcOnLoad", False)),
+                "iterative_calc": bool(getattr(calc, "iterate", False)),
+                "max_iterations": getattr(calc, "iterateCount", None) or 100,
+                "max_change": getattr(calc, "iterateDelta", None) or 0.001,
             },
             "changed": False,
         }
@@ -73,6 +76,9 @@ def set_workbook_properties(path: str, title: str | None = None,
                             comments: str | None = None,
                             calc_mode: str | None = None,
                             full_calc_on_load: bool | None = None,
+                            iterative_calc: bool | None = None,
+                            max_iterations: int | None = None,
+                            max_change: float | None = None,
                             allow_loss: bool = False,
                             backup: bool = True) -> dict:
     """Set core document properties and/or calc settings; only the given
@@ -82,7 +88,9 @@ def set_workbook_properties(path: str, title: str | None = None,
              "keywords": keywords, "category": category,
              "comments": comments}
     settings = {k: v for k, v in given.items() if v is not None}
-    if not settings and calc_mode is None and full_calc_on_load is None:
+    calc_given = [v for v in (calc_mode, full_calc_on_load, iterative_calc,
+                              max_iterations, max_change) if v is not None]
+    if not settings and not calc_given:
         return _read_report(path)
 
     mode = None
@@ -112,6 +120,27 @@ def set_workbook_properties(path: str, title: str | None = None,
     if full_calc_on_load is not None:
         wb.calculation.fullCalcOnLoad = bool(full_calc_on_load)
         detail["full_calc_on_load"] = bool(full_calc_on_load)
+    if iterative_calc is not None:
+        wb.calculation.iterate = bool(iterative_calc)
+        detail["iterative_calc"] = bool(iterative_calc)
+        if iterative_calc:
+            warnings.append(
+                "iterative calculation is on: circular references now "
+                "converge instead of erroring, bounded by max_iterations "
+                "and max_change; unintended circular references become "
+                "silent wrong numbers, so use audit_formulas to check")
+    if max_iterations is not None:
+        n = int(max_iterations)
+        if not 1 <= n <= 32767:
+            raise XlMcpError("max_iterations must be 1 to 32767")
+        wb.calculation.iterateCount = n
+        detail["max_iterations"] = n
+    if max_change is not None:
+        d = float(max_change)
+        if d <= 0:
+            raise XlMcpError("max_change must be a positive number")
+        wb.calculation.iterateDelta = d
+        detail["max_change"] = d
     pkg._changed["properties"] = detail
     result = pkg.save(allow_loss=allow_loss, backup=backup)
     result["warnings"] = result.get("warnings", []) + warnings

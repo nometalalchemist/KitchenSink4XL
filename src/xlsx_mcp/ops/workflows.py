@@ -15,9 +15,10 @@ from __future__ import annotations
 
 from ..core.errors import XlMcpError
 
-#: Tools named in steps that are DECLARED but arrive with the COM tier.
-#: The registry test treats these as pending rather than missing.
-FORTHCOMING_TOOLS: set[str] = {"recalculate", "com_manage_pivot"}
+#: Tools named in steps that are DECLARED but not yet registered. The COM
+#: tier shipped, so the set is empty; the registry test treats members as
+#: pending rather than missing.
+FORTHCOMING_TOOLS: set[str] = set()
 
 # task -> {summary, steps: [{tool, pack, why, optional?, forthcoming?}],
 #          notes: [...]}
@@ -76,10 +77,11 @@ WORKFLOWS: dict[str, dict] = {
             {"tool": "set_formula", "pack": "lite",
              "why": "summary metrics over the table; modern functions are "
                     "normalized automatically"},
-            {"tool": "recalculate", "pack": "com", "forthcoming": True,
+            {"tool": "recalculate", "pack": "com",
              "why": "populate cached results so non-Excel readers see "
-                    "numbers; arrives with the com pack, until then the "
-                    "file recalculates on its next Excel open"},
+                    "numbers; needs the com pack (Windows + Excel), "
+                    "otherwise the file recalculates on its next Excel "
+                    "open"},
             {"tool": "format_cells", "pack": "lite",
              "why": "number formats and header emphasis"},
             {"tool": "manage_chart", "pack": "objects",
@@ -232,9 +234,9 @@ WORKFLOWS: dict[str, dict] = {
                     "name-collision and overlap checks"},
             {"tool": "manage_chart", "pack": "objects",
              "why": "replaces create_chart"},
-            {"tool": "com_manage_pivot", "pack": "com", "forthcoming": True,
+            {"tool": "com_manage_pivot", "pack": "com",
              "why": "replaces create_pivot_table with a real refreshable "
-                    "pivot through Excel; arrives with the com pack"},
+                    "pivot through Excel (com pack; Windows + Excel)"},
         ],
         "notes": [],
     },

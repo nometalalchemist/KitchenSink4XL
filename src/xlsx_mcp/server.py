@@ -46,6 +46,7 @@ from . import packs as _packs
 from .ops import annotations as _annotations
 from .ops import backups as _backups
 from .ops import cells as _cells
+from .ops import comtier as _comtier
 from .ops import inspectors as _inspectors
 from .ops import objects as _objects
 from .ops import pagelayout as _pagelayout
@@ -81,9 +82,11 @@ mcp = FastMCP(
         "every candidate. File-based with a round-trip hazard scan, "
         "auto-backup before every mutation, and verify-after-write; a "
         "workbook open in Excel refuses rather than risking the open copy. "
-        "Sessions start lite; enable_tools loads optional packs (the Excel "
-        "COM application tier arrives as a later pack). Not affiliated with "
-        "Microsoft Corporation."
+        "Sessions start lite; enable_tools loads optional packs, including "
+        "the com pack that drives a private hidden Excel (Windows + Excel "
+        "required) for real pivot tables, fidelity recalculation, PDF "
+        "export, rendering, conversion, and encryption. Not affiliated "
+        "with Microsoft Corporation."
     ),
 )
 
@@ -170,7 +173,7 @@ def get_server_info() -> dict:
     return {
         "name": "kitchensink4xl",
         "version": __version__,
-        "phase": "3e (ungated file tier complete; COM tier pending)",
+        "phase": "5 (file tier complete; COM tier live, env-gated)",
         "surface": _packs.surface_report(),
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
@@ -1201,8 +1204,7 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
 # the multiplex validate battery, workflow recipes, backup management over
 # the safesave slots, document properties with the calc-settings surface,
 # and sheet-view state. Every mutation runs through WorkbookPackage. No em
-# dashes. The COM tier (recalculate and friends) is a later phase and is
-# named as forthcoming, never pretended present.
+# dashes. The COM tier registers below under the env-gated com pack.
 
 
 # ----------------------------------------------------------------- formulas
@@ -1217,7 +1219,7 @@ def set_formula(path: str, location: Any, formula: str,
     (Excel copy semantics; absolute $ anchors stay put). Formulas are
     normalized so modern functions do not land as #NAME?, and the workbook
     is flagged to recalculate on its next open; stored cached results stay
-    stale until then (the recalculate tool arrives with the com pack).
+    stale until then (the recalculate tool in the com pack populates them).
     Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
     in Excel."""
     return _formulas.set_formula(path, location, formula, sheet=sheet,
@@ -1318,21 +1320,25 @@ def set_workbook_properties(path: str, title: str | None = None,
                             comments: str | None = None,
                             calc_mode: str | None = None,
                             full_calc_on_load: bool | None = None,
+                            iterative_calc: bool | None = None,
+                            max_iterations: int | None = None,
+                            max_change: float | None = None,
                             allow_loss: bool = False,
                             backup: bool = True) -> dict:
     """Set core document properties (title, author, subject, keywords,
-    category, comments) and the calc settings: calc_mode ('auto',
-    'autoNoTable', 'manual') and the full_calc_on_load flag. Only the given
-    parameters change; called with none it returns the current values
-    read-only. Manual mode means Excel does not recalculate on open, so
-    cached results go stale after every edit; the result says so.
-    Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
-    in Excel."""
+    category, comments) and calc settings: calc_mode ('auto',
+    'autoNoTable', 'manual'), full_calc_on_load, and iterative calculation
+    (iterative_calc with max_iterations and max_change bounds for circular
+    references). Only given parameters change; with none it reports current
+    values read-only. Manual mode means no recalc on Excel open, so caches
+    go stale; the result says so. Auto-backup; atomic verified save.
+    Refuses while open in Excel."""
     return _properties.set_workbook_properties(
         path, title=title, author=author, subject=subject, keywords=keywords,
         category=category, comments=comments, calc_mode=calc_mode,
-        full_calc_on_load=full_calc_on_load, allow_loss=allow_loss,
-        backup=backup)
+        full_calc_on_load=full_calc_on_load, iterative_calc=iterative_calc,
+        max_iterations=max_iterations, max_change=max_change,
+        allow_loss=allow_loss, backup=backup)
 
 
 @_tool("lite")
@@ -1353,6 +1359,204 @@ def set_view(path: str, sheet: str | None = None, freeze: str | None = None,
         path, sheet=sheet, freeze=freeze, split=split, gridlines=gridlines,
         headings=headings, zoom=zoom, selection=selection,
         tab_color=tab_color, allow_loss=allow_loss, backup=backup)
+
+
+# ============================================================== COM TIER
+# The environment-gated com pack: drives a real, private, hidden Excel
+# instance for everything the file tier honestly cannot do. Serialized
+# through one COM worker thread, alert-suppressed, timeout-bounded, PID-
+# journaled; NEVER attaches to the user's Excel session and refuses files
+# Excel holds open. VBA stays preserve/inspect only: no macro authoring and
+# no macro execution (com_run_macro is deferred from v1 by ruling). No em
+# dashes.
+
+
+@_tool("com")
+def recalculate(path: str, engine: str = "auto",
+                timeout_seconds: float | None = None,
+                backup: bool = True) -> dict:
+    """Fidelity recalculation. engine='com' (or 'auto' where Excel exists)
+    opens the workbook in a private hidden Excel, issues an explicit
+    CalculateFull (required: open-time calc does not fire under manual
+    calculation mode), saves, and reports how many formula cells gained
+    cached values; after it, stored results are freshly computed by Excel.
+    engine='formulas' is a best-effort pure-Python compute of classic
+    functions that returns values WITHOUT modifying the file. Auto-backup;
+    refuses while the file is open in Excel."""
+    return _comtier.recalculate(path, engine=engine,
+                                timeout_seconds=timeout_seconds,
+                                backup=backup)
+
+
+@_tool("com")
+def com_manage_pivot(path: str, action: str, name: str | None = None,
+                     source_sheet: str | None = None,
+                     source_range: str | None = None,
+                     dest_sheet: str | None = None, dest_cell: str = "A3",
+                     rows: list[str] | None = None,
+                     columns: list[str] | None = None,
+                     filters: list[str] | None = None,
+                     values: list[dict] | None = None,
+                     timeout_seconds: float | None = None,
+                     backup: bool = True) -> dict:
+    """Create, refresh, delete, or list REAL pivot tables through Excel
+    (never a fake static table). action='create': source_range must include
+    a header row; rows/columns/filters name header fields; values is a list
+    like [{'field': 'Amount', 'func': 'sum', 'caption'?}] with funcs sum,
+    count, average, max, min, product, count_numbers, stdev, var;
+    dest_sheet is created if missing (omitted: a new sheet), dest_cell
+    defaults to A3, name is optional. action='refresh': one pivot by name,
+    or every pivot when name is omitted; source-range changes are picked
+    up. action='delete': clears the named pivot's range. action='list':
+    read-only inventory with source and location. Runs in a private hidden
+    Excel instance, serialized and timeout-bounded (timeout_seconds,
+    default 60); mutations auto-backup and verify; Excel's own error text
+    is surfaced when it refuses (a wrong field name, an invalid source).
+    Refuses while the file is open in your Excel."""
+    return _comtier.com_manage_pivot(
+        path, action, name=name, source_sheet=source_sheet,
+        source_range=source_range, dest_sheet=dest_sheet,
+        dest_cell=dest_cell, rows=rows, columns=columns, filters=filters,
+        values=values, timeout_seconds=timeout_seconds, backup=backup)
+
+
+@_tool("com")
+def com_export_pdf(path: str, output: str, scope: str = "workbook",
+                   sheet: str | None = None, range_a1: str | None = None,
+                   overwrite: bool = False,
+                   timeout_seconds: float | None = None) -> dict:
+    """Export to PDF via Excel's real renderer. scope='workbook' (every
+    sheet), 'sheet' (one sheet, name via sheet), or 'range' (sheet plus
+    range_a1 like 'A1:F40'). output must be a .pdf path; an existing file
+    refuses unless overwrite:true. Read-only on the workbook (nothing is
+    saved); the produced PDF is checked non-empty. Runs in a private
+    hidden Excel instance, serialized and timeout-bounded."""
+    return _comtier.com_export_pdf(
+        path, output, scope=scope, sheet=sheet, range_a1=range_a1,
+        overwrite=overwrite, timeout_seconds=timeout_seconds)
+
+
+@_tool("com")
+def com_render_sheet(path: str, output: str, sheet: str | None = None,
+                     range_a1: str | None = None, overwrite: bool = False,
+                     timeout_seconds: float | None = None) -> dict:
+    """Render a sheet's used range (or range_a1) to a PNG image exactly as
+    Excel displays it: formatting, conditional formats, charts in range,
+    and sparklines included. Use it to visually verify edits without
+    opening Excel by hand. output must be a .png path; existing files
+    refuse unless overwrite:true. Read-only on the workbook. Runs in a
+    private hidden Excel instance, serialized and timeout-bounded."""
+    return _comtier.com_render_sheet(
+        path, output, sheet=sheet, range_a1=range_a1, overwrite=overwrite,
+        timeout_seconds=timeout_seconds)
+
+
+@_tool("com")
+def com_convert_format(path: str, output: str, format: str | None = None,
+                       overwrite: bool = False,
+                       timeout_seconds: float | None = None) -> dict:
+    """Convert a workbook between formats via Excel's own SaveAs: xlsx,
+    xlsm, xlsb, xls, csv (UTF-8; first worksheet's values only, by the
+    format's nature), or ods. format defaults from the output extension;
+    the source file is never overwritten. The produced file is checked
+    non-empty. Runs in a private hidden Excel instance, serialized and
+    timeout-bounded; refuses while the source is open in Excel elsewhere
+    only if locked."""
+    return _comtier.com_convert_format(
+        path, output, format=format, overwrite=overwrite,
+        timeout_seconds=timeout_seconds)
+
+
+@_tool("com")
+def com_save_with_password(path: str, password: str,
+                           current_password: str | None = None,
+                           timeout_seconds: float | None = None,
+                           backup: bool = True) -> dict:
+    """Password-protect a workbook with Excel's REAL encryption (the whole
+    package is encrypted, unlike the advisory set_protection). password=''
+    with current_password removes it; current_password also opens an
+    already-encrypted file for re-keying. The password is NOT recoverable,
+    and every file-based tool refuses encrypted files, so keep the backup
+    (auto-rotated before the save). Runs in a private hidden Excel
+    instance, serialized and timeout-bounded."""
+    return _comtier.com_save_with_password(
+        path, password, current_password=current_password,
+        timeout_seconds=timeout_seconds, backup=backup)
+
+
+@_tool("com")
+def com_autofit(path: str, sheet: str | None = None,
+                columns: str | None = None, rows: str | None = None,
+                timeout_seconds: float | None = None,
+                backup: bool = True) -> dict:
+    """True column and row autofit using Excel's real text metrics (the
+    file tier can only estimate widths). Default: every used column on the
+    sheet; columns like 'A:D' or 'C', rows like '1:20'. Auto-backup;
+    verified save; runs in a private hidden Excel instance, serialized and
+    timeout-bounded; refuses while the file is open in Excel."""
+    return _comtier.com_autofit(
+        path, sheet=sheet, columns=columns, rows=rows,
+        timeout_seconds=timeout_seconds, backup=backup)
+
+
+@_tool("com")
+def com_goal_seek(path: str, target_cell: str, target_value: float,
+                  changing_cell: str, sheet: str | None = None,
+                  save: bool = True, timeout_seconds: float | None = None,
+                  backup: bool = True) -> dict:
+    """Excel's Goal Seek: adjust changing_cell until the formula in
+    target_cell reaches target_value. Convergence-checked: a non-converging
+    seek refuses and nothing is saved. save:false reports the solution
+    without persisting it. Auto-backup on save; runs in a private hidden
+    Excel instance, serialized and timeout-bounded; refuses while the file
+    is open in Excel."""
+    return _comtier.com_goal_seek(
+        path, target_cell, target_value, changing_cell, sheet=sheet,
+        save=save, timeout_seconds=timeout_seconds, backup=backup)
+
+
+@_tool("com")
+def com_set_sparkline(path: str, action: str = "create",
+                      location: str | None = None, source: str | None = None,
+                      type: str = "line", sheet: str | None = None,
+                      timeout_seconds: float | None = None,
+                      backup: bool = True) -> dict:
+    """Create, clear, or list sparkline groups through Excel (sparklines
+    live in worksheet XML the file tier cannot round-trip, so Excel owns
+    them here). action='create': location is the cell/range that displays
+    them (e.g. 'G2:G10'), source the data range (e.g. 'A2:F10'), type
+    'line', 'column', or 'win_loss'. action='clear' removes groups in
+    location; action='list' is a read-only inventory. Auto-backup on
+    mutations; private hidden Excel instance, serialized, timeout-bounded;
+    refuses while the file is open in Excel."""
+    return _comtier.com_set_sparkline(
+        path, action=action, location=location, source=source, type=type,
+        sheet=sheet, timeout_seconds=timeout_seconds, backup=backup)
+
+
+@_tool("com")
+def com_validate_opens_clean(path: str, password: str | None = None,
+                             timeout_seconds: float | None = None) -> dict:
+    """The authoritative corruption smoke test: open the file in a private
+    hidden Excel and report whether Excel accepts it WITHOUT a repair
+    prompt (under suppressed alerts a repair demand surfaces as a refusal,
+    reported honestly with Excel's own message). Read-only; nothing is
+    saved. Also available inside mutating file-tier saves as the
+    verify_com option. password opens encrypted files. Serialized and
+    timeout-bounded."""
+    return _comtier.com_validate_opens_clean(
+        path, password=password, timeout_seconds=timeout_seconds)
+
+
+@_tool("com")
+def com_status() -> dict:
+    """Honest COM layer status: whether Excel COM is available on this
+    machine, worker and pooled-instance state, journaled Excel PIDs, the
+    operation running right now with its elapsed time, queued and completed
+    counts, timeouts, and contention waits. Reports busy as busy rather
+    than always ready. Never spawns Excel; safe to call anytime, including
+    while another COM operation runs."""
+    return _comtier.com_status()
 
 
 # ------------------------------------------------ tiered loading (Section 9)

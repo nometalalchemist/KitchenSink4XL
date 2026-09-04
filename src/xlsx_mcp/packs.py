@@ -61,10 +61,11 @@ PACK_SUMMARIES: dict[str, str] = {
         "presence; read-only, refresh and creation are COM-tier"
     ),
     "com": (
-        "drives the Excel application (Windows + Excel required): real "
-        "pivot tables, recalculation, goal seek, PDF and chart-image "
-        "export, sheet render, xls/xlsb/ods convert, encryption, macros, "
-        "autofit, opens-clean validation"
+        "drives a private hidden Excel instance (Windows + Excel "
+        "required): real pivot tables, fidelity recalculation, goal seek, "
+        "PDF export, sheet render to image, format conversion, real "
+        "encryption, sparklines, true autofit, opens-clean validation, "
+        "and honest status; never touches your open Excel session"
     ),
 }
 EVERYTHING = "everything"

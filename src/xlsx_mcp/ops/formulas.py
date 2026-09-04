@@ -44,7 +44,8 @@ ERROR_VALUES = frozenset({
 STALENESS_NOTE = (
     "stored cached results are stale until a real recalculation; the "
     "workbook is flagged to recalculate on its next open in Excel or "
-    "LibreOffice (the recalculate tool arrives with the com pack)")
+    "LibreOffice, or run the recalculate tool (com pack) to populate "
+    "the cache now")
 
 _STRING_RE = re.compile(r'"(?:[^"]|"")*"')
 _CALL_RE = re.compile(r"(?<![A-Za-z0-9_.])([A-Za-z][A-Za-z0-9_.]*)\s*\(")
@@ -216,8 +217,8 @@ def audit_formulas(path: str, location: Any = None,
             result["warning"] = (
                 f"{len(missing_cached)} formula cell(s) have NO cached "
                 "value and read as blank to every non-Excel consumer; "
-                "open in Excel to recalculate (the recalculate tool "
-                "arrives with the com pack)")
+                "run the recalculate tool (com pack) or open in Excel "
+                "to populate them")
         return result
     finally:
         formula_wb.close()

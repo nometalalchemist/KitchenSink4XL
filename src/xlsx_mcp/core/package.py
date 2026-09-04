@@ -301,7 +301,8 @@ class WorkbookPackage:
         return False
 
     def save(self, *, allow_loss: bool = False, backup: bool = True,
-             saver: Callable[[str], None] | None = None) -> dict:
+             saver: Callable[[str], None] | None = None,
+             verify_com: bool = False) -> dict:
         """Persist pending mutations through the full safety pipeline and
         return the mutation-success envelope. Raises HazardRefused,
         ValidationFailed, or WorkbookLocked (all mapped to closed codes by the
@@ -363,6 +364,11 @@ class WorkbookPackage:
                        if restored else "")
                     + ". " + "; ".join(post.reasons))
 
+            verified_com = None
+            if verify_com:
+                verified_com = self._verify_com_after_promote(
+                    path, backup=backup, warnings=warnings)
+
             # The on-disk package changed; the cached model and scan are stale.
             self._workbook = None
             self._hazard = _hazard.scan_path(path)
@@ -379,7 +385,7 @@ class WorkbookPackage:
             self._changed = {}
             self._expected_removals = set()
             self._expected_preserved = set()
-            return {
+            result = {
                 "ok": True,
                 "file": path,
                 "changed": changed,
@@ -388,6 +394,40 @@ class WorkbookPackage:
                 "verified": True,
                 "warnings": warnings,
             }
+            if verified_com is not None:
+                result["verified_com"] = verified_com
+            return result
+
+    def _verify_com_after_promote(self, path: str, *, backup: bool,
+                                  warnings: list[str]) -> bool | None:
+        """The optional DEEP verification (verify_com:true): after promotion,
+        open the produced file in a private hidden Excel worker and require a
+        clean, repair-free open (com.session.opens_clean). On failure the
+        backup is restored and the save refuses. When COM is unavailable the
+        save stands on the file-tier verify and says so in warnings (None)."""
+        from ..com import session as _com_session
+        ok, why = _com_session.com_available()
+        if not ok:
+            warnings.append(
+                f"verify_com was requested but Excel/COM is unavailable "
+                f"({why}); the save stands on the file-tier verification "
+                "only")
+            return None
+        try:
+            res = _com_session.opens_clean(path)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(
+                "verify_com could not run (" + f"{type(exc).__name__}: {exc}"
+                + "); the save stands on the file-tier verification only")
+            return None
+        if not res.get("opens_clean"):
+            restored = self._restore_from_backup() if backup else False
+            raise ValidationFailed(
+                "deep verification failed: Excel refused the produced file "
+                "or demanded a repair (" + str(res.get("excel_says", ""))
+                + ")" + (" and the file was restored from the backup"
+                         if restored else ""))
+        return True
 
     def close(self) -> None:
         if self._workbook is not None:
