@@ -190,7 +190,8 @@ def audit_formulas(path: str, location: Any = None,
                 for m in _SHEET_REF_RE.finditer(body):
                     target = (m.group(1) or m.group(2) or "")
                     target = target.replace("''", "'")
-                    if "[" in target:
+                    if "[" in target or (
+                            m.start() > 0 and body[m.start() - 1] == "]"):
                         continue  # external workbook ref, counted above
                     if target.lower() not in known:
                         unknown_sheets.add(target)

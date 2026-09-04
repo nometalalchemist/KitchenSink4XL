@@ -78,8 +78,8 @@ WORKFLOWS: dict[str, dict] = {
                     "normalized automatically"},
             {"tool": "recalculate", "pack": "com", "forthcoming": True,
              "why": "populate cached results so non-Excel readers see "
-                    "numbers; until it ships, the file recalculates on its "
-                    "next Excel open"},
+                    "numbers; arrives with the com pack, until then the "
+                    "file recalculates on its next Excel open"},
             {"tool": "format_cells", "pack": "lite",
              "why": "number formats and header emphasis"},
             {"tool": "manage_chart", "pack": "objects",
@@ -228,7 +228,8 @@ WORKFLOWS: dict[str, dict] = {
                     "delete_sheet_rows, and delete_sheet_columns, and "
                     "rewrites every affected reference"},
             {"tool": "create_table", "pack": "lite",
-             "why": "same name, plus name-collision checks"},
+             "why": "replaces create_table like for like, adding "
+                    "name-collision and overlap checks"},
             {"tool": "manage_chart", "pack": "objects",
              "why": "replaces create_chart"},
             {"tool": "com_manage_pivot", "pack": "com", "forthcoming": True,
