@@ -55,7 +55,8 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
                  font: dict | None = None, fill: dict | None = None,
                  border: dict | None = None, alignment: dict | None = None,
                  sheet: str | None = None, allow_loss: bool = False,
-                 backup: bool = True) -> dict:
+                 backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Apply number format, font, fill, border, and/or alignment to a range,
     merging onto the existing style so unspecified attributes are preserved.
     One backup + one verified save."""
@@ -129,7 +130,8 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
             if alignment is not None:
                 cell.alignment = new_align(cell.alignment)
             n += 1
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["formatted"] = {"range": grid.a1, "cells": n}
     return result
 
@@ -140,7 +142,8 @@ def set_dimensions(path: str, sheet: str | None = None,
                    autofit_columns: list | None = None,
                    hide_columns: list | None = None,
                    hide_rows: list | None = None,
-                   allow_loss: bool = False, backup: bool = True) -> dict:
+                   allow_loss: bool = False, backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Set column widths and row heights, hide rows/columns, and service an
     autofit request as a best-effort width approximation (true autofit needs
     Excel via the com pack). One backup + one verified save."""
@@ -193,7 +196,8 @@ def set_dimensions(path: str, sheet: str | None = None,
         changed["hidden_rows"] = [int(k) for k in hide_rows]
 
     pkg._changed["dimensions"] = {"sheet": ws.title, **changed}
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 # ----------------------------------------------------------- named styles
@@ -260,7 +264,8 @@ def _build_named_style(name: str, define: dict):
 
 def apply_style(path: str, style: str, location: Any = None,
                 define: dict | None = None, sheet: str | None = None,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Apply a named cell style to a range, defining it first when `define`
     is given. Builtin Excel style names (Good, Bad, Input, Title...) work
     out of the box; define with no location registers the style only."""
@@ -308,7 +313,8 @@ def apply_style(path: str, style: str, location: Any = None,
             for c in range(grid.min_col, grid.max_col + 1):
                 ws.cell(r, c).style = style
                 applied += 1
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["style"] = {
         "name": style, "defined": define is not None,
         "range": grid.a1 if grid else None, "cells": applied}
@@ -316,7 +322,8 @@ def apply_style(path: str, style: str, location: Any = None,
 
 
 def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """The format painter: copy ONE source cell's complete format (font, fill,
     border, alignment, number format) onto every cell of a target range.
     Values are never touched."""
@@ -337,7 +344,8 @@ def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
         for c in range(dst.min_col, dst.max_col + 1):
             dws.cell(r, c)._style = _copy(style)
             painted += 1
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["painted"] = {
         "from": f"{src.sheet}!{src.a1}", "to": f"{dst.sheet}!{dst.a1}",
         "cells": painted}

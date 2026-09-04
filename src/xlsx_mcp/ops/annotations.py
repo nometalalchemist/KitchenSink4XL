@@ -41,7 +41,8 @@ def _single(pkg, location, sheet):
 def manage_comment(path: str, action: str, location: Any = None,
                    text: str | None = None, author: str | None = None,
                    sheet: str | None = None, allow_loss: bool = False,
-                   backup: bool = True) -> dict:
+                   backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Add / edit / delete / list legacy cell comments. Backup + verify."""
     if action not in COMMENT_ACTIONS:
         raise XlMcpError(
@@ -101,13 +102,15 @@ def manage_comment(path: str, action: str, location: Any = None,
         detail = {"deleted": grid.a1}
 
     pkg._changed["comment"] = {"sheet": ws.title, **detail}
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 def manage_hyperlink(path: str, action: str, location: Any = None,
                      target: str | None = None, display: str | None = None,
                      tooltip: str | None = None, sheet: str | None = None,
-                     allow_loss: bool = False, backup: bool = True) -> dict:
+                     allow_loss: bool = False, backup: bool = True,
+                     verify_com: bool | None = None) -> dict:
     """Add / remove / list cell hyperlinks (and audit HYPERLINK formulas).
     Backup + verify on write."""
     if action not in HYPERLINK_ACTIONS:
@@ -172,7 +175,8 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
         cell.hyperlink = None
         pkg._changed["hyperlink"] = {"sheet": ws.title, "removed": grid.a1}
 
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     if hl_warnings:
         result["warnings"] = list(result.get("warnings", [])) + hl_warnings
     return result

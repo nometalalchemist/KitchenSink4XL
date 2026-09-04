@@ -157,7 +157,8 @@ def manage_image(path: str, action: str, image_file: str | None = None,
                  location: Any = None, sheet: str | None = None,
                  width: int | None = None, height: int | None = None,
                  index: int | None = None, out_dir: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Insert / list / delete / extract images. Backup + verify on write."""
     if action not in IMAGE_ACTIONS:
         raise XlMcpError(
@@ -251,7 +252,8 @@ def manage_image(path: str, action: str, image_file: str | None = None,
         ws.add_image(img, anchor)
         pkg._changed["image"] = {"sheet": grid.sheet, "inserted": anchor,
                                  "source": ip}
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         expected, verb = pre_count + 1, "inserted"
         target_sheet = grid.sheet
     else:  # delete
@@ -289,7 +291,8 @@ def manage_image(path: str, action: str, image_file: str | None = None,
         pkg.expect_removal("xl/media/", "xl/drawings/")
         pkg._changed["image"] = {"sheet": sheet,
                                  "deleted": _anchor_cell(target)}
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         expected, verb = pre_count - 1, "deleted"
         target_sheet = sheet
 
@@ -350,7 +353,8 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
                  y_title: str | None = None, anchor: str | None = None,
                  sheet: str | None = None, index: int | None = None,
                  titles_from_data: bool = True, allow_loss: bool = False,
-                 backup: bool = True) -> dict:
+                 backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Create / list / delete charts (openpyxl chart model). Backup + verify
     on write."""
     if action not in CHART_ACTIONS:
@@ -429,7 +433,8 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
         ws.add_chart(ch, at)
         pkg._changed["chart"] = {"sheet": grid.sheet, "created": chart_type,
                                  "anchor": at, "data": grid.a1}
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         expected, verb = pre_count + 1, "created"
         target_sheet = grid.sheet
     else:  # delete
@@ -467,7 +472,8 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
         pkg.expect_removal("xl/charts/", "xl/drawings/")
         pkg._changed["chart"] = {"sheet": sheet,
                                  "deleted": type(target).__name__}
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         expected, verb = pre_count - 1, "deleted"
         target_sheet = sheet
 

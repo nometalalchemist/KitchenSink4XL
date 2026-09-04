@@ -193,6 +193,12 @@ WORKFLOWS: dict[str, dict] = {
             "allow_loss:true as an explicit, backed-up acceptance.",
             "Verify-after-write already runs on every save; validate is "
             "the independent read-back on top of it.",
+            "For one risky save, pass verify_com:true to any mutating "
+            "tool: after the write the file is opened in a hidden Excel "
+            "and a repair-free open is required, or the backup is "
+            "restored and the save refuses. It needs Excel and costs a "
+            "COM round trip, so it is off by default; KS4XL_VERIFY_COM=1 "
+            "turns it on for every save instead.",
         ],
     },
     "migrate-from-incumbent": {

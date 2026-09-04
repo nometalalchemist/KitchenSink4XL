@@ -40,7 +40,8 @@ def set_view(path: str, sheet: str | None = None,
              gridlines: bool | None = None, headings: bool | None = None,
              zoom: int | None = None, selection: str | None = None,
              tab_color: str | None = None, allow_loss: bool = False,
-             backup: bool = True) -> dict:
+             backup: bool = True,
+             verify_com: bool | None = None) -> dict:
     """Set sheet-view state: freeze panes, split panes, gridlines/headings
     visibility, zoom, active selection, tab color. One backup + one
     verified save."""
@@ -146,7 +147,8 @@ def set_view(path: str, sheet: str | None = None,
             detail["tab_color"] = m.group(1).upper()
 
     pkg._changed["view"] = detail
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["set_view"]

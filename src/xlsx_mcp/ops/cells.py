@@ -89,7 +89,8 @@ def read_range(path: str, location: Any, values: str = "cached",
 
 
 def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
-             allow_loss: bool = False, backup: bool = True) -> dict:
+             allow_loss: bool = False, backup: bool = True,
+             verify_com: bool | None = None) -> dict:
     """Write ONE cell. A string beginning with '=' is stored as a formula
     (normalized); anything else is a literal. One backup + one verified save."""
     pkg = WorkbookPackage.open(path)
@@ -99,12 +100,14 @@ def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
             f"set_cell needs a single cell; {grid.a1} is a range. Use "
             "write_range for a block.")
     pkg.set_cell(grid.sheet, gridio.a1(grid.min_row, grid.min_col), value)
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 def write_range(path: str, location: Any, data: list[list[Any]],
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Write a 2D block of values/formulas anchored at the location's top-left.
     Formula strings ('=...') are normalized. One backup + one verified save."""
     if not isinstance(data, list) or (data and not all(
@@ -136,7 +139,8 @@ def write_range(path: str, location: Any, data: list[list[Any]],
     for i, row in enumerate(data):
         for j, val in enumerate(row):
             pkg.set_cell(grid.sheet, gridio.a1(top + i, left + j), val)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["anchor"] = gridio.a1(top, left)
     result["changed"]["shape"] = {"rows": rows, "cols": cols}
     return result
@@ -144,7 +148,8 @@ def write_range(path: str, location: Any, data: list[list[Any]],
 
 def clear_range(path: str, location: Any, what: str = "contents",
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Clear a cell or range: 'contents' (values/formulas), 'formats' (styles),
     or 'all'. One backup + one verified save."""
     if what not in CLEAR_WHAT:
@@ -174,7 +179,8 @@ def clear_range(path: str, location: Any, what: str = "contents",
                 cell.border = Border()
                 cell.alignment = Alignment()
                 cell.number_format = "General"
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["cleared"] = {"range": grid.a1, "what": what}
     return result
 
@@ -224,7 +230,8 @@ def _place(cell, value, *, as_text: bool) -> None:
 
 def copy_range(path: str, source: Any, dest: Any, what: str = "all",
                adjust_formulas: bool = True, sheet: str | None = None,
-               allow_loss: bool = False, backup: bool = True) -> dict:
+               allow_loss: bool = False, backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Copy a source rectangle to a destination anchor: 'all', 'values',
     'formulas', or 'formats'. Relative references in copied formulas shift by
     the paste offset (Excel semantics) unless adjust_formulas=false. One backup
@@ -313,7 +320,8 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
         dob.close()
     if wrote_formula:
         pkg._formula_written = True
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["copied"] = {
         "from": f"{src.sheet}!{src.a1}",
         "to": f"{dst.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
@@ -338,7 +346,8 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
 
 
 def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
-               allow_loss: bool = False, backup: bool = True) -> dict:
+               allow_loss: bool = False, backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Move a rectangle to a new anchor on the SAME sheet, rewriting every
     reference that pointed into the source so the workbook stays coherent
     (references follow the cells, Excel move semantics). One backup + one
@@ -402,7 +411,8 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
     report = _refs.rewrite_workbook(pkg.workbook, edit)
     if wrote_formula or report.formulas:
         pkg._formula_written = True
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["moved"] = {
         "from": f"{src.sheet}!{src.a1}",
         "to": f"{src.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
@@ -850,7 +860,8 @@ def get_cells(path: str, cells: list, values: str = "cached",
 
 
 def set_cells(path: str, cells: list, sheet: str | None = None,
-              allow_loss: bool = False, backup: bool = True) -> dict:
+              allow_loss: bool = False, backup: bool = True,
+              verify_com: bool | None = None) -> dict:
     """Write many individually addressed cells as ONE batch: every address is
     resolved before anything is written, then one backup + one verified save.
     Each item is {cell (or location), value}; '=' strings become formulas."""
@@ -878,7 +889,8 @@ def set_cells(path: str, cells: list, sheet: str | None = None,
         plan.append((grid, item["value"]))
     for grid, value in plan:
         pkg.set_cell(grid.sheet, grid.a1, value)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["cells_written"] = len(plan)
     return result
 
@@ -893,7 +905,8 @@ def _overlaps(a, b) -> bool:
 
 def set_merge(path: str, action: str, location: Any = None,
               sheet: str | None = None, confirm_data_loss: bool = False,
-              allow_loss: bool = False, backup: bool = True) -> dict:
+              allow_loss: bool = False, backup: bool = True,
+              verify_com: bool | None = None) -> dict:
     """Merge or unmerge a cell range, or list merges. Excel semantics: a merge
     keeps only the top-left value; absorbing cells that hold values refuses
     without confirm_data_loss=true rather than discarding them silently."""
@@ -942,7 +955,8 @@ def set_merge(path: str, action: str, location: Any = None,
                 f"{grid.a1} on {grid.sheet!r} is not a merged range "
                 f"(unmerge needs the exact stored range; merges: {listed})")
         ws.unmerge_cells(str(hit))
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         result["changed"]["unmerged"] = {"sheet": grid.sheet,
                                          "range": grid.a1}
         return result
@@ -977,7 +991,8 @@ def set_merge(path: str, action: str, location: Any = None,
         ws[coord] = None
         pkg._intended[(grid.sheet, coord)] = ("value", None)
     ws.merge_cells(grid.a1)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["merged"] = {"sheet": grid.sheet, "range": grid.a1,
                                   "absorbed_cleared": absorbed}
     if absorbed:

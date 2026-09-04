@@ -81,7 +81,8 @@ def _refuse_merges(ws, grid, what: str) -> None:
 
 def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                sheet: str | None = None, allow_loss: bool = False,
-               backup: bool = True) -> dict:
+               backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Sort a range or table body by one or more keys. Backup + verify."""
     if not keys or not isinstance(keys, list):
         raise XlMcpError("keys must be a non-empty list of {column, order}")
@@ -179,7 +180,8 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         "rows_sorted": len(rows), "keys": [
             {"column": header_names[o] if o < len(header_names) else o,
              "order": "desc" if rev else "asc"} for o, rev in key_specs]}
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     notes: list[str] = []
     if uncached_keys:
         notes.append(
@@ -200,7 +202,8 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
 
 def set_filter(path: str, location: Any, criteria: list | None = None,
                sheet: str | None = None, allow_loss: bool = False,
-               backup: bool = True) -> dict:
+               backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Apply an autofilter and hide the non-matching rows. Backup + verify."""
     pkg = WorkbookPackage.open(path)
     grid = pkg.resolve(location, default_sheet=sheet)
@@ -261,14 +264,16 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
         "sheet": grid.sheet, "range": grid.a1,
         "rows_shown": shown, "rows_hidden": hidden,
         "evaluated": "cached-and-literal values, non-matching rows hidden"}
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     if warnings:
         result["warnings"] = list(result.get("warnings", [])) + warnings
     return result
 
 
 def clear_filter(path: str, location: Any = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Remove the autofilter and unhide the rows it hid. Backup + verify."""
     pkg = WorkbookPackage.open(path)
     wb = pkg.workbook
@@ -292,7 +297,8 @@ def clear_filter(path: str, location: Any = None, sheet: str | None = None,
     ws.auto_filter.filterColumn = []
     pkg._changed["filter_cleared"] = {
         "sheet": ws.title, "range": str(ref), "rows_unhidden": unhidden}
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["sort_range", "set_filter", "clear_filter"]

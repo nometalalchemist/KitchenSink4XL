@@ -163,7 +163,8 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
                  style: str = "TableStyleMedium9", row_stripes: bool = True,
                  col_stripes: bool = False, totals_row: bool = False,
                  totals: dict | None = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Turn a range into a table (ListObject). One backup + one verified save."""
     from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo
 
@@ -231,7 +232,8 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
     pkg._changed["table"] = {
         "created": name, "sheet": ws.title, "ref": table.ref,
         "columns": col_names, "header": header, "totals_row": totals_row}
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 # ------------------------------------------------------------------ get_table
@@ -327,7 +329,8 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
                  style: str | None = None, on: bool = True,
                  totals: dict | None = None, row_stripes: bool | None = None,
                  col_stripes: bool | None = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Advanced table lifecycle. One backup + one verified save per call."""
     if action not in TABLE_ACTIONS:
         raise XlMcpError(f"action must be one of {TABLE_ACTIONS}, got {action!r}")
@@ -487,7 +490,8 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
         detail.update(style=table.tableStyleInfo.name)
 
     pkg._changed["table"] = detail
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 def _as_rows(values) -> list[list]:

@@ -154,16 +154,28 @@ def test_menu_matches_registry_and_costs():
         assert f"-> {pack}" in desc, f"task map does not route to {pack}"
 
 
+#: The lite ceiling. Raised from 11,000 in the live-COM-stress fix wave
+#: (2026-09-05) to pay for ONE thing: wiring the documented per-call
+#: verify_com onto the 34 mutating tools, which the round found reachable
+#: from no tool at all (M-4). Measured cost of that parameter across lite:
+#: 10,834 -> 11,290, about 456 tokens, roughly 13 per tool for an
+#: `anyOf: [boolean, null]` with a null default. FLAGGED FOR THE AUTHOR: if
+#: the budget matters more than the per-call route, the revert is to drop
+#: the parameter from the 34 signatures and correct the claim in
+#: core/package.py instead, and this number goes back to 11,000.
+LITE_TOKEN_CEILING = 11_400
+
+
 def test_pack_bills_cost_aware():
     """The 2026-09-02 cost-aware ruling, applied by the 2026-09-04 re-cut
-    with ZERO exceptions claimed: lite inside the author-raised ~10-11k
-    ceiling, and every pack at or above the 1.5k line (com would stand
-    even below it as the environment-gated exception, but does not need
-    to)."""
+    with ZERO exceptions claimed: lite inside the author-raised ceiling,
+    and every pack at or above the 1.5k line (com would stand even below it
+    as the environment-gated exception, but does not need to)."""
     lite_cost = sum(
         packs.approx_tokens(t) for t in packs._REGISTRY["lite"].values()
     )
-    assert lite_cost <= 11000, f"lite breached the ceiling: ~{lite_cost}"
+    assert lite_cost <= LITE_TOKEN_CEILING, (
+        f"lite breached the ceiling: ~{lite_cost}")
     for pack in packs.pack_names():
         assert packs.pack_cost(pack) >= 1500, (
             f"{pack} fell below the 1.5k line; merge or justify"

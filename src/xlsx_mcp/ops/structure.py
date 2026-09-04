@@ -71,7 +71,8 @@ def _resolve_at(pkg: WorkbookPackage, at: Any, action: str,
 
 def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
                           sheet: str | None = None, allow_loss: bool = False,
-                          backup: bool = True) -> dict:
+                          backup: bool = True,
+                          verify_com: bool | None = None) -> dict:
     """Insert or delete rows/columns and rewrite every reference so the
     workbook stays coherent. Backup + verify via WorkbookPackage."""
     if action not in ACTIONS:
@@ -115,7 +116,8 @@ def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
 
     edit = _refs.RefEdit(sheet_title, action, index=index, count=count)
     report = pkg.modify_structure(edit)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     at_label = str(index) if row_axis else get_column_letter(index)
     result["changed"]["structure"] = {
         "action": action, "sheet": sheet_title, "at": at_label,

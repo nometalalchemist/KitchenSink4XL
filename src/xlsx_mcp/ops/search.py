@@ -177,7 +177,8 @@ def replace_cells(path: str, find: str, replace: str,
                   match_case: bool = False, sheet: str | None = None,
                   location: Any = None, dry_run: bool = False,
                   formulas: bool = False, allow_loss: bool = False,
-                  backup: bool = True) -> dict:
+                  backup: bool = True,
+                  verify_com: bool | None = None) -> dict:
     """Find-and-replace over values and/or formulas, with dry_run preview,
     change counts, and the import_data injection lint on replacement text."""
     _validate_scope(look_in, match, find)
@@ -279,7 +280,8 @@ def replace_cells(path: str, find: str, replace: str,
                 pkg._intended[(ch["sheet"], ch["cell"])] = ("value", new_val)
             else:
                 pkg.set_cell(ch["sheet"], ch["cell"], new_val)
-        result = pkg.save(allow_loss=allow_loss, backup=backup)
+        result = pkg.save(allow_loss=allow_loss, backup=backup,
+                          verify_com=verify_com)
         result["changed"]["replaced"] = {
             "find": find, "match": match, "look_in": look_in,
             "cells_changed": len(plan), "occurrences": occurrences}

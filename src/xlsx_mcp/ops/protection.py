@@ -73,7 +73,8 @@ def set_protection(path: str, action: str, sheet: str | None = None,
                    unlock_ranges: list | None = None, locked: bool = False,
                    structure: bool = True, windows: bool = False,
                    scope: str = "all", allow_loss: bool = False,
-                   backup: bool = True) -> dict:
+                   backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Sheet/workbook protection, unlock exceptions, removal, status.
     Backup + verify on write; status is read-only."""
     if action not in PROTECTION_ACTIONS:
@@ -184,7 +185,8 @@ def set_protection(path: str, action: str, sheet: str | None = None,
                 "nothing to remove: no matching protection is set")
         pkg._changed["protection"] = {"removed": removed}
 
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["set_protection", "PROTECTION_ACTIONS", "SHEET_OPTIONS"]

@@ -94,7 +94,8 @@ def import_data(path: str, source: str | None = None,
                 location: Any = None, sheet: str | None = None,
                 header: bool = True, delimiter: str | None = None,
                 encoding: str = "utf-8", formulas: bool = False,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Import CSV / TSV / JSON into a sheet at an anchor. Backup + verify."""
     if fmt not in _FORMATS:
         raise XlMcpError(f"fmt must be one of {_FORMATS}")
@@ -130,7 +131,7 @@ def import_data(path: str, source: str | None = None,
         for j, val in enumerate(row):
             r, c = top + i, left + j
             if isinstance(val, str) and val[:1] in _INJECTION and not formulas:
-                _limits.check_text_storable(
+                _limits.check_cell_text(
                     val, what=f"the imported value for {gridio.a1(r, c)}")
                 cell = ws.cell(r, c)
                 cell.value = val
@@ -139,7 +140,8 @@ def import_data(path: str, source: str | None = None,
                 pkg._intended[(grid.sheet, gridio.a1(r, c))] = ("value", val)
             else:
                 pkg.set_cell(grid.sheet, gridio.a1(r, c), val)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["imported"] = {
         "sheet": grid.sheet, "anchor": gridio.a1(top, left),
         "rows": rows, "cols": ncols, "format": fmt}

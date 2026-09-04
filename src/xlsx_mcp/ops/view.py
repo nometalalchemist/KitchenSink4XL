@@ -139,7 +139,8 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
 
 
 def apply_edits(path: str, edits: list, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Apply many addressed edits as ONE atomic batch (validate every edit
     first, then one backup + one save + one verify).
 
@@ -241,7 +242,8 @@ def apply_edits(path: str, edits: list, allow_loss: bool = False,
                                  val)
                     touched += 1
 
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["edits_applied"] = len(plan)
     result["changed"]["cells_touched"] = touched
     return result

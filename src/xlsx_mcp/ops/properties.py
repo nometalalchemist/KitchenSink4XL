@@ -80,7 +80,8 @@ def set_workbook_properties(path: str, title: str | None = None,
                             max_iterations: int | None = None,
                             max_change: float | None = None,
                             allow_loss: bool = False,
-                            backup: bool = True) -> dict:
+                            backup: bool = True,
+                            verify_com: bool | None = None) -> dict:
     """Set core document properties and/or calc settings; only the given
     parameters change. With nothing given, returns the current values
     read-only. One backup + one verified save when mutating."""
@@ -146,7 +147,8 @@ def set_workbook_properties(path: str, title: str | None = None,
         wb.calculation.iterateDelta = d
         detail["max_change"] = d
     pkg._changed["properties"] = detail
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["warnings"] = result.get("warnings", []) + warnings
     return result
 

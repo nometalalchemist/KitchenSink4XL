@@ -66,8 +66,12 @@ MAX_HEADER_FOOTER_CHARS = 255
 #: (a negative EMU extent is not representable in the drawing XML).
 MIN_IMAGE_EXTENT = 0
 
-#: Cell text. Excel's documented ceiling, enforced elsewhere in the server;
-#: repeated here so the refuse-class table is in one place.
+#: Cell text. Excel's documented ceiling, and check_cell_text below is what
+#: consults it. It used to be a bare constant that nothing on the set_cells
+#: path read, so a 40,000-character cell paid a full write-and-verify cycle
+#: and then refused through the WRONG LAYER: "1 written cell did not read
+#: back as intended", a generic verify failure, instead of "Excel stores at
+#: most 32,767 characters" (live COM stress, L-1).
 MAX_CELL_CHARS = 32_767
 
 
@@ -116,6 +120,23 @@ def check_text_storable(value, *, what: str = "this value"):
 
 
 # --------------------------------------------------------------- the checks
+
+
+def check_cell_text(value, *, what: str = "this cell"):
+    """The storable-text check plus Excel's 32,767-character cell ceiling.
+    Non-strings pass straight through (a number has no length to check).
+
+    openpyxl writes an oversize string happily and the produced package is
+    valid OOXML, so verify-after-write is what used to catch it, one layer too
+    late and with the wrong words. Refusing here costs nothing and says what
+    the limit is."""
+    check_text_storable(value, what=what)
+    if isinstance(value, str) and len(value) > MAX_CELL_CHARS:
+        raise ExcelWouldRefuse(
+            f"{what} is {len(value):,} characters; Excel stores at most "
+            f"{MAX_CELL_CHARS:,} in a cell and truncates or refuses beyond "
+            "that. Shorten the text, or split it across cells.")
+    return value
 
 
 def check_comment_text(text: str) -> str:
@@ -293,7 +314,8 @@ __all__ = [
     "MAX_COMMENT_CHARS", "MAX_DV_FORMULA_CHARS", "DV_FORMULA_SOFT_CHARS",
     "MAX_HEADER_FOOTER_CHARS", "MIN_IMAGE_EXTENT", "MAX_CELL_CHARS",
     "UNSAFE_SCHEMES", "SENSITIVE_PREFIXES",
-    "check_text_storable", "check_comment_text", "check_dv_formula",
+    "check_text_storable", "check_cell_text", "check_comment_text",
+    "check_dv_formula",
     "check_header_footer", "check_hyperlink_target", "check_image_extents",
     "check_sheet_title", "describe",
 ]

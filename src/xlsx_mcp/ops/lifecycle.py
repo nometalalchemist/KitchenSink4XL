@@ -185,7 +185,8 @@ def diagnose_workbook(path: str) -> dict:
 def manage_worksheet(path: str, action: str, sheet: str | None = None,
                      new_name: str | None = None, index: int | None = None,
                      state: str | None = None, allow_loss: bool = False,
-                     backup: bool = True) -> dict:
+                     backup: bool = True,
+                     verify_com: bool | None = None) -> dict:
     """Add / delete / rename / copy / reorder / hide a worksheet. One backup +
     one verified save per call through WorkbookPackage."""
     if action not in WS_ACTIONS:
@@ -286,7 +287,8 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
         detail.update(sheet=name, state="visible")
 
     pkg._changed["worksheet"] = detail
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     return result
 
 

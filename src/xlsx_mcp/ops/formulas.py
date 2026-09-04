@@ -63,7 +63,8 @@ _MAX_LIST = 100
 
 def set_formula(path: str, location: Any, formula: str,
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Write a formula to one cell, or fill a range with the formula's
     relative references adjusted per cell (Excel copy semantics). One
     backup + one verified save; the result carries the staleness note."""
@@ -83,7 +84,8 @@ def set_formula(path: str, location: Any, formula: str,
             cell_formula = raw if (dr == 0 and dc == 0) else \
                 _refs.offset_formula(raw, dr, dc)
             pkg.set_formula(grid.sheet, gridio.a1(r, c), cell_formula)
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     result["changed"]["formula"] = {
         "sheet": grid.sheet, "range": grid.a1, "cells": n,
         "filled": n > 1}

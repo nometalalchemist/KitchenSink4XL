@@ -19,7 +19,14 @@ Contract (carried from the family):
   wraps the module-level function, converting typed exceptions into
   structured {ok: false, error: {...}} refusals with isError=true.
 - Every mutating tool auto-backs-up before the mutation and verifies after
-  the write (the safety core); saves are atomic and validated.
+  the write (the safety core); saves are atomic and validated. Each also
+  takes verify_com:true, the DEEP check: the produced file must open in a
+  real hidden Excel without a repair prompt or the backup is restored and
+  the save refuses. It is off by default (a COM round trip, and Excel is
+  not there in headless CI); KS4XL_VERIFY_COM=1 makes it the default for
+  every save, and the per-call parameter wins over that either way. The
+  parameter was documented from the start and reachable from no tool until
+  the live COM stress round found it (M-4).
 - Every tool carries a pack tag; visibility is the fastmcp 3.x route
   (startup global transform + session-scoped toggles).
 """
@@ -255,7 +262,8 @@ def diagnose_workbook(path: str) -> dict:
 def manage_worksheet(path: str, action: str, sheet: str | None = None,
                      new_name: str | None = None, index: int | None = None,
                      state: str | None = None, allow_loss: bool = False,
-                     backup: bool = True) -> dict:
+                     backup: bool = True,
+                     verify_com: bool | None = None) -> dict:
     """Manage the worksheet lifecycle. action is one of: add (new_name, optional
     index), delete (sheet), rename (sheet, new_name), copy (sheet, optional
     new_name), reorder (sheet, index as 0-based target), hide (sheet, state
@@ -272,7 +280,8 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
     verified save, restored on failed verify. Refuses while open in Excel."""
     return _lifecycle.manage_worksheet(
         path, action, sheet=sheet, new_name=new_name, index=index,
-        state=state, allow_loss=allow_loss, backup=backup)
+        state=state, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # --------------------------------------------------------- cells and ranges
@@ -293,7 +302,8 @@ def read_range(path: str, location: Any, values: str = "cached",
 
 @_tool("lite")
 def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
-             allow_loss: bool = False, backup: bool = True) -> dict:
+             allow_loss: bool = False, backup: bool = True,
+             verify_com: bool | None = None) -> dict:
     """Write a single cell addressed by a location object. A string beginning
     with '=' is ALWAYS stored as a formula (there is no literal escape),
     normalized so modern functions do not land as #NAME? and flagged to
@@ -302,13 +312,15 @@ def set_cell(path: str, location: Any, value: Any, sheet: str | None = None,
     .ks4xl-backups (backup=false skips rotation); atomic verified save,
     restored on failed verify. Refuses while open in Excel."""
     return _cells.set_cell(path, location, value, sheet=sheet,
-                           allow_loss=allow_loss, backup=backup)
+                           allow_loss=allow_loss, backup=backup,
+                               verify_com=verify_com)
 
 
 @_tool("lite")
 def write_range(path: str, location: Any, data: list[list[Any]],
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Write a 2D block of values and formulas anchored at the location's
     top-left cell. data is a list of row lists; a short row writes only its
     own cells (existing content beyond it is kept, never blanked); formula
@@ -317,13 +329,15 @@ def write_range(path: str, location: Any, data: list[list[Any]],
     hazardous workbook refuses unless allow_loss is true. Auto-backup to
     .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _cells.write_range(path, location, data, sheet=sheet,
-                              allow_loss=allow_loss, backup=backup)
+                              allow_loss=allow_loss, backup=backup,
+                                  verify_com=verify_com)
 
 
 @_tool("lite")
 def clear_range(path: str, location: Any, what: str = "contents",
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Clear a cell or range: what='contents' removes values and formulas,
     'formats' resets styles to default, 'all' does both. Neither removes
     merges, conditional formats, validations, comments, or hyperlinks; those
@@ -332,13 +346,15 @@ def clear_range(path: str, location: Any, what: str = "contents",
     in .ks4xl-backups (backup=false skips rotation); atomic verified save,
     restored on failed verify. Refuses while open in Excel."""
     return _cells.clear_range(path, location, what=what, sheet=sheet,
-                              allow_loss=allow_loss, backup=backup)
+                              allow_loss=allow_loss, backup=backup,
+                                  verify_com=verify_com)
 
 
 @_tool("lite")
 def copy_range(path: str, source: Any, dest: Any, what: str = "all",
                adjust_formulas: bool = True, sheet: str | None = None,
-               allow_loss: bool = False, backup: bool = True) -> dict:
+               allow_loss: bool = False, backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Copy a source rectangle to a destination anchor (location objects, may
     name different sheets). what is 'all', 'values', 'formulas', or 'formats'.
     The destination is overwritten; the source is buffered first, so an
@@ -349,12 +365,14 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
     open in Excel."""
     return _cells.copy_range(path, source, dest, what=what,
                              adjust_formulas=adjust_formulas, sheet=sheet,
-                             allow_loss=allow_loss, backup=backup)
+                             allow_loss=allow_loss, backup=backup,
+                                 verify_com=verify_com)
 
 
 @_tool("lite")
 def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
-               allow_loss: bool = False, backup: bool = True) -> dict:
+               allow_loss: bool = False, backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Move a rectangle to a new anchor on the same sheet, rewriting every
     formula, name, conditional format, validation, table ref, and merge that
     pointed into the source so references follow the cells (Excel move
@@ -363,7 +381,8 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
     refuses unless allow_loss is true. Auto-backup to .ks4xl-backups; atomic
     verified save. Refuses while open in Excel."""
     return _cells.move_range(path, source, dest, sheet=sheet,
-                             allow_loss=allow_loss, backup=backup)
+                             allow_loss=allow_loss, backup=backup,
+                                 verify_com=verify_com)
 
 
 @_tool("lite")
@@ -434,7 +453,8 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
 
 @_tool("lite")
 def apply_edits(path: str, edits: list, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Apply many addressed edits as ONE atomic batch. edits is a list of
     {op, location, ...}: set_value {value}, set_formula {formula}, clear
     {what: contents|formats|all}, write_range {data: 2D array}. location is any
@@ -450,7 +470,8 @@ def apply_edits(path: str, edits: list, allow_loss: bool = False,
     hazardous workbook refuses unless allow_loss is true; refuses while the
     file is open in Excel. Returns the count of edits applied and cells
     touched."""
-    return _view.apply_edits(path, edits, allow_loss=allow_loss, backup=backup)
+    return _view.apply_edits(path, edits, allow_loss=allow_loss, backup=backup,
+                             verify_com=verify_com)
 
 
 # --------------------------------------------------------- formatting
@@ -461,7 +482,8 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
                  font: dict | None = None, fill: dict | None = None,
                  border: dict | None = None, alignment: dict | None = None,
                  sheet: str | None = None, allow_loss: bool = False,
-                 backup: bool = True) -> dict:
+                 backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Apply formatting to a range, merging onto the existing style so
     unspecified attributes are preserved. number_format is an Excel format
     code; font is {name, size, bold, italic, underline, strike, color}; fill
@@ -473,7 +495,7 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
     return _format.format_cells(
         path, location, number_format=number_format, font=font, fill=fill,
         border=border, alignment=alignment, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
@@ -483,7 +505,8 @@ def set_dimensions(path: str, sheet: str | None = None,
                    autofit_columns: list | None = None,
                    hide_columns: list | None = None,
                    hide_rows: list | None = None,
-                   allow_loss: bool = False, backup: bool = True) -> dict:
+                   allow_loss: bool = False, backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Set column widths and row heights, hide rows or columns, and service an
     autofit request. column_widths maps column letters or indices to widths in
     Excel character units; row_heights maps row numbers to heights in points;
@@ -494,7 +517,8 @@ def set_dimensions(path: str, sheet: str | None = None,
     return _format.set_dimensions(
         path, sheet=sheet, column_widths=column_widths, row_heights=row_heights,
         autofit_columns=autofit_columns, hide_columns=hide_columns,
-        hide_rows=hide_rows, allow_loss=allow_loss, backup=backup)
+        hide_rows=hide_rows, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # ============================================================ PHASE 3b TOOLS
@@ -514,7 +538,8 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
                  style: str = "TableStyleMedium9", row_stripes: bool = True,
                  col_stripes: bool = False, totals_row: bool = False,
                  totals: dict | None = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Turn a range into an Excel table (ListObject) named name. With header
     true the first row supplies the column names (deduplicated); style is a
     built-in style; row_stripes and col_stripes toggle banding. totals maps
@@ -527,7 +552,7 @@ def create_table(path: str, location: Any, name: str, header: bool = True,
         path, location, name, header=header, style=style,
         row_stripes=row_stripes, col_stripes=col_stripes,
         totals_row=totals_row, totals=totals, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
@@ -551,7 +576,8 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
                  style: str | None = None, on: bool = True,
                  totals: dict | None = None, row_stripes: bool | None = None,
                  col_stripes: bool | None = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Advanced table lifecycle on the table named name. action is one of:
     add_row (values as a row or list of rows), delete_row (index, 1-based data
     row; REMOVES that row's data), add_column (column name, optional values),
@@ -569,7 +595,7 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
         path, name, action, values=values, index=index, column=column,
         new_name=new_name, new_ref=new_ref, style=style, on=on, totals=totals,
         row_stripes=row_stripes, col_stripes=col_stripes, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 # -------------------------------------------------------------- named ranges
@@ -579,7 +605,8 @@ def manage_table(path: str, name: str, action: str, values: list | None = None,
 def manage_name(path: str, action: str, name: str | None = None,
                 refers_to: str | None = None, scope: str | None = None,
                 new_name: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Manage defined names (named ranges). action is one of: add (name,
     refers_to as an A1 reference or a formula; a convenience leading '=' is
     stripped, definitions are stored bare), delete (name, optional scope),
@@ -594,7 +621,8 @@ def manage_name(path: str, action: str, name: str | None = None,
     skips rotation); atomic verified save. Refuses while open in Excel."""
     return _names.manage_name(
         path, action, name=name, refers_to=refers_to, scope=scope,
-        new_name=new_name, allow_loss=allow_loss, backup=backup)
+        new_name=new_name, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # ----------------------------------------------------- conditional formatting
@@ -607,7 +635,8 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
                               sheet: str | None = None,
                               index: int | None = None,
                               allow_loss: bool = False,
-                              backup: bool = True) -> dict:
+                              backup: bool = True,
+                              verify_com: bool | None = None) -> dict:
     """Manage conditional-formatting rules. action is add, list (read-only), or
     delete. For add, location is the range and cf_type picks the rule with its
     params: cell_is {operator, formula (a value or [lo, hi]), fill,
@@ -622,7 +651,8 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
     .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _condformat.manage_conditional_format(
         path, action, location=location, cf_type=cf_type, params=params,
-        sheet=sheet, index=index, allow_loss=allow_loss, backup=backup)
+        sheet=sheet, index=index, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # ------------------------------------------------------------ data validation
@@ -636,7 +666,8 @@ def manage_data_validation(path: str, action: str, location: Any = None,
                            allow_blank: bool = True, prompt: str | None = None,
                            error: str | None = None, sheet: str | None = None,
                            allow_loss: bool = False,
-                           backup: bool = True) -> dict:
+                           backup: bool = True,
+                           verify_com: bool | None = None) -> dict:
     """Manage data-validation rules. action is add, list (read-only), or
     delete. For add, location is the range and dv_type is one of list, whole,
     decimal, date, time, textLength, or custom. A list takes values (inline
@@ -653,7 +684,7 @@ def manage_data_validation(path: str, action: str, location: Any = None,
         path, action, location=location, dv_type=dv_type, values=values,
         operator=operator, formula1=formula1, formula2=formula2,
         allow_blank=allow_blank, prompt=prompt, error=error, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 # ------------------------------------------------------------ sort and filter
@@ -662,7 +693,8 @@ def manage_data_validation(path: str, action: str, location: Any = None,
 @_tool("lite")
 def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                sheet: str | None = None, allow_loss: bool = False,
-               backup: bool = True) -> dict:
+               backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Sort a range or table body by one or more keys, writing the rows back
     reordered. keys is a list of {column, order}: a header name, letter, or
     1-based index; asc or desc; later keys break ties. has_header true keeps
@@ -673,13 +705,14 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
     while open in Excel."""
     return _sortfilter.sort_range(
         path, location, keys, has_header=has_header, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
 def set_filter(path: str, location: Any, criteria: list | None = None,
                sheet: str | None = None, allow_loss: bool = False,
-               backup: bool = True) -> dict:
+               backup: bool = True,
+               verify_com: bool | None = None) -> dict:
     """Apply an autofilter over a range whose first row is the header, and
     actually hide the non-matching rows: an .xlsx stores filter CRITERIA, not
     hidden state, so criteria (a list of {column, op, value}, ops as in
@@ -690,12 +723,13 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
     open in Excel."""
     return _sortfilter.set_filter(
         path, location, criteria=criteria, sheet=sheet, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
 def clear_filter(path: str, location: Any = None, sheet: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Remove the autofilter from a sheet and unhide the rows it hid, the
     reverse of set_filter. location or sheet picks the sheet; the sheet's
     active autofilter range is used when location is omitted. A sheet with no
@@ -705,7 +739,7 @@ def clear_filter(path: str, location: Any = None, sheet: str | None = None,
     save. Refuses while open in Excel."""
     return _sortfilter.clear_filter(
         path, location=location, sheet=sheet, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 # ----------------------------------------------------- comments and hyperlinks
@@ -715,7 +749,8 @@ def clear_filter(path: str, location: Any = None, sheet: str | None = None,
 def manage_comment(path: str, action: str, location: Any = None,
                    text: str | None = None, author: str | None = None,
                    sheet: str | None = None, allow_loss: bool = False,
-                   backup: bool = True) -> dict:
+                   backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Manage legacy cell comments (the sticky notes). action is add (location,
     text, optional author), edit (location, new text or author), delete
     (location), or list (read-only; every comment with its cell, text, and
@@ -729,14 +764,16 @@ def manage_comment(path: str, action: str, location: Any = None,
     .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _annotations.manage_comment(
         path, action, location=location, text=text, author=author,
-        sheet=sheet, allow_loss=allow_loss, backup=backup)
+        sheet=sheet, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 @_tool("lite")
 def manage_hyperlink(path: str, action: str, location: Any = None,
                      target: str | None = None, display: str | None = None,
                      tooltip: str | None = None, sheet: str | None = None,
-                     allow_loss: bool = False, backup: bool = True) -> dict:
+                     allow_loss: bool = False, backup: bool = True,
+                     verify_com: bool | None = None) -> dict:
     """Manage cell hyperlinks. action is add (location, target as a URL or an
     in-workbook 'Sheet!A1' reference, optional display text and tooltip),
     remove (location), or list (read-only). On add, display replaces the
@@ -748,7 +785,8 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
     atomic verified save. Refuses while open in Excel."""
     return _annotations.manage_hyperlink(
         path, action, location=location, target=target, display=display,
-        tooltip=tooltip, sheet=sheet, allow_loss=allow_loss, backup=backup)
+        tooltip=tooltip, sheet=sheet, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # ------------------------------------------------------------ import / export
@@ -760,7 +798,8 @@ def import_data(path: str, source: str | None = None,
                 location: Any = None, sheet: str | None = None,
                 header: bool = True, delimiter: str | None = None,
                 encoding: str = "utf-8", formulas: bool = False,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Import CSV, TSV, or JSON into a sheet at an anchor. Pass source (inline
     text) or source_file (a path); fmt auto-detects from the extension.
     location is the top-left anchor (default A1). A cell whose text begins
@@ -773,7 +812,7 @@ def import_data(path: str, source: str | None = None,
         path, source=source, source_file=source_file, fmt=fmt,
         location=location, sheet=sheet, header=header, delimiter=delimiter,
         encoding=encoding, formulas=formulas, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
@@ -807,7 +846,8 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
 @_tool("lite")
 def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
                           sheet: str | None = None, allow_loss: bool = False,
-                          backup: bool = True) -> dict:
+                          backup: bool = True,
+                          verify_com: bool | None = None) -> dict:
     """Insert or delete rows or columns at a position and REWRITE EVERY
     REFERENCE so the workbook stays coherent: formulas on every sheet
     (cross-sheet refs included), defined names, data validations,
@@ -828,7 +868,7 @@ def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
     slot is the undo for a delete. Refuses while open in Excel."""
     return _structure.modify_grid_structure(
         path, action, at, count=count, sheet=sheet, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 # ------------------------------------------------------------------- merges
@@ -837,7 +877,8 @@ def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
 @_tool("lite")
 def set_merge(path: str, action: str, location: Any = None,
               sheet: str | None = None, confirm_data_loss: bool = False,
-              allow_loss: bool = False, backup: bool = True) -> dict:
+              allow_loss: bool = False, backup: bool = True,
+              verify_com: bool | None = None) -> dict:
     """Merge or unmerge cell ranges, or list every merge. action is merge
     (location is the multi-cell range), unmerge (location must be the exact
     stored merged range), or list (read-only, one sheet or the whole
@@ -852,7 +893,7 @@ def set_merge(path: str, action: str, location: Any = None,
     return _cells.set_merge(
         path, action, location=location, sheet=sheet,
         confirm_data_loss=confirm_data_loss, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 # ----------------------------------------------------------- find / replace
@@ -882,7 +923,8 @@ def replace_cells(path: str, find: str, replace: str,
                   match_case: bool = False, sheet: str | None = None,
                   location: Any = None, dry_run: bool = False,
                   formulas: bool = False, allow_loss: bool = False,
-                  backup: bool = True) -> dict:
+                  backup: bool = True,
+                  verify_com: bool | None = None) -> dict:
     """Find-and-replace across a workbook, sheet, or range. match is exact
     (whole cell), contains (literal substring), or regex (timeout-guarded;
     backreferences like \\1 work in replace). look_in 'values' rewrites
@@ -899,7 +941,7 @@ def replace_cells(path: str, find: str, replace: str,
         path, find, replace, look_in=look_in, match=match,
         match_case=match_case, sheet=sheet, location=location,
         dry_run=dry_run, formulas=formulas, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 # ------------------------------------------------------------ scatter cells
@@ -920,7 +962,8 @@ def get_cells(path: str, cells: list, values: str = "cached",
 
 @_tool("lite")
 def set_cells(path: str, cells: list, sheet: str | None = None,
-              allow_loss: bool = False, backup: bool = True) -> dict:
+              allow_loss: bool = False, backup: bool = True,
+              verify_com: bool | None = None) -> dict:
     """Write many individually addressed cells as ONE atomic batch, the
     scatter complement to write_range. cells is a list of {cell, value}
     items (cell is an A1 string or a location object resolving to one cell;
@@ -930,7 +973,7 @@ def set_cells(path: str, cells: list, sheet: str | None = None,
     allow_loss is true. Auto-backup to .ks4xl-backups; atomic verified
     save. Refuses while open in Excel."""
     return _cells.set_cells(path, cells, sheet=sheet, allow_loss=allow_loss,
-                            backup=backup)
+                            backup=backup, verify_com=verify_com)
 
 
 # ------------------------------------------------------------- style layer
@@ -939,7 +982,8 @@ def set_cells(path: str, cells: list, sheet: str | None = None,
 @_tool("design")
 def apply_style(path: str, style: str, location: Any = None,
                 define: dict | None = None, sheet: str | None = None,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Apply a NAMED cell style to a range, optionally defining it first.
     style is a workbook style or an Excel builtin (Good, Bad, Input, Title,
     Total...); define ({number_format, font, fill, border, alignment})
@@ -950,12 +994,13 @@ def apply_style(path: str, style: str, location: Any = None,
     while open in Excel."""
     return _format.apply_style(
         path, style, location=location, define=define, sheet=sheet,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("design")
 def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """The format painter: copy ONE source cell's complete format (font,
     fill, border, alignment, number format) onto every cell of a
     destination range, leaving values untouched. source must resolve to a
@@ -964,7 +1009,8 @@ def copy_format(path: str, source: Any, dest: Any, sheet: str | None = None,
     Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
     in Excel."""
     return _format.copy_format(path, source, dest, sheet=sheet,
-                               allow_loss=allow_loss, backup=backup)
+                               allow_loss=allow_loss, backup=backup,
+                                   verify_com=verify_com)
 
 
 @_tool("design")
@@ -997,7 +1043,8 @@ def manage_image(path: str, action: str, image_file: str | None = None,
                  location: Any = None, sheet: str | None = None,
                  width: int | None = None, height: int | None = None,
                  index: int | None = None, out_dir: str | None = None,
-                 allow_loss: bool = False, backup: bool = True) -> dict:
+                 allow_loss: bool = False, backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Manage cell-anchored images. action is insert (image_file, location as
     the anchor cell, optional width and height in pixels), list (read-only:
     every image with its sheet, index, anchor, size, and format), delete
@@ -1016,7 +1063,7 @@ def manage_image(path: str, action: str, image_file: str | None = None,
     return _objects.manage_image(
         path, action, image_file=image_file, location=location, sheet=sheet,
         width=width, height=height, index=index, out_dir=out_dir,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("design")
@@ -1026,7 +1073,8 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
                  y_title: str | None = None, anchor: str | None = None,
                  sheet: str | None = None, index: int | None = None,
                  titles_from_data: bool = True, allow_loss: bool = False,
-                 backup: bool = True) -> dict:
+                 backup: bool = True,
+                 verify_com: bool | None = None) -> dict:
     """Create, list, and delete charts. action create takes chart_type (bar,
     bar_horizontal, line, pie, doughnut, area, scatter), data (a location
     object; its first row supplies series titles unless titles_from_data is
@@ -1048,7 +1096,7 @@ def manage_chart(path: str, action: str, chart_type: str | None = None,
         categories=categories, title=title, x_title=x_title,
         y_title=y_title, anchor=anchor, sheet=sheet, index=index,
         titles_from_data=titles_from_data, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 # --------------------------------------------------------------- protection
@@ -1060,7 +1108,8 @@ def set_protection(path: str, action: str, sheet: str | None = None,
                    unlock_ranges: list | None = None, locked: bool = False,
                    structure: bool = True, windows: bool = False,
                    scope: str = "all", allow_loss: bool = False,
-                   backup: bool = True) -> dict:
+                   backup: bool = True,
+                   verify_com: bool | None = None) -> dict:
     """Advisory workbook and sheet protection. action is sheet (protect one
     sheet; options maps per-option names like format_cells, insert_rows,
     sort, auto_filter to true = allowed while protected; optional
@@ -1078,7 +1127,8 @@ def set_protection(path: str, action: str, sheet: str | None = None,
     return _protection.set_protection(
         path, action, sheet=sheet, password=password, options=options,
         unlock_ranges=unlock_ranges, locked=locked, structure=structure,
-        windows=windows, scope=scope, allow_loss=allow_loss, backup=backup)
+        windows=windows, scope=scope, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # -------------------------------------------------------------- page layout
@@ -1095,7 +1145,8 @@ def set_page_layout(path: str, sheet: str | None = None,
                     print_title_cols: str | None = None,
                     gridlines: bool | None = None,
                     headings: bool | None = None, allow_loss: bool = False,
-                    backup: bool = True) -> dict:
+                    backup: bool = True,
+                    verify_com: bool | None = None) -> dict:
     """Set the print-shaped page settings in one call; every parameter is
     optional and unset ones keep their current values. orientation is
     portrait or landscape; paper_size is a name (letter, legal, tabloid,
@@ -1113,14 +1164,15 @@ def set_page_layout(path: str, sheet: str | None = None,
         fit_to_height=fit_to_height, print_area=print_area,
         print_title_rows=print_title_rows, print_title_cols=print_title_cols,
         gridlines=gridlines, headings=headings, allow_loss=allow_loss,
-        backup=backup)
+        backup=backup, verify_com=verify_com)
 
 
 @_tool("io")
 def set_header_footer(path: str, sheet: str | None = None,
                       header: dict | None = None, footer: dict | None = None,
                       apply_to: str = "odd", raw: bool = False,
-                      allow_loss: bool = False, backup: bool = True) -> dict:
+                      allow_loss: bool = False, backup: bool = True,
+                      verify_com: bool | None = None) -> dict:
     """Write the three-section page headers and footers. header and footer
     are {left, center, right} dicts; an empty string clears a section.
     Text is literal by default: & is escaped and the placeholders {page}
@@ -1131,7 +1183,7 @@ def set_header_footer(path: str, sheet: str | None = None,
     Excel."""
     return _pagelayout.set_header_footer(
         path, sheet=sheet, header=header, footer=footer, apply_to=apply_to,
-        raw=raw, allow_loss=allow_loss, backup=backup)
+        raw=raw, allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 # ---------------------------------------------------- read-side inspectors
@@ -1225,7 +1277,8 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
 @_tool("lite")
 def set_formula(path: str, location: Any, formula: str,
                 sheet: str | None = None, allow_loss: bool = False,
-                backup: bool = True) -> dict:
+                backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Write a formula to a single cell, or fill a range where each cell gets
     the formula with its relative references shifted by that cell's offset
     (Excel copy semantics; absolute $ anchors stay put). Formulas are
@@ -1235,7 +1288,8 @@ def set_formula(path: str, location: Any, formula: str,
     Auto-backup to .ks4xl-backups; atomic verified save. Refuses while open
     in Excel."""
     return _formulas.set_formula(path, location, formula, sheet=sheet,
-                                 allow_loss=allow_loss, backup=backup)
+                                 allow_loss=allow_loss, backup=backup,
+                                     verify_com=verify_com)
 
 
 @_tool("lite")
@@ -1336,7 +1390,8 @@ def set_workbook_properties(path: str, title: str | None = None,
                             max_iterations: int | None = None,
                             max_change: float | None = None,
                             allow_loss: bool = False,
-                            backup: bool = True) -> dict:
+                            backup: bool = True,
+                            verify_com: bool | None = None) -> dict:
     """Set core document properties (title, author, subject, keywords,
     category, comments) and calc settings: calc_mode ('auto',
     'autoNoTable', 'manual'), full_calc_on_load, and iterative calculation
@@ -1350,7 +1405,7 @@ def set_workbook_properties(path: str, title: str | None = None,
         category=category, comments=comments, calc_mode=calc_mode,
         full_calc_on_load=full_calc_on_load, iterative_calc=iterative_calc,
         max_iterations=max_iterations, max_change=max_change,
-        allow_loss=allow_loss, backup=backup)
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 @_tool("lite")
@@ -1358,7 +1413,8 @@ def set_view(path: str, sheet: str | None = None, freeze: str | None = None,
              split: dict | None = None, gridlines: bool | None = None,
              headings: bool | None = None, zoom: int | None = None,
              selection: str | None = None, tab_color: str | None = None,
-             allow_loss: bool = False, backup: bool = True) -> dict:
+             allow_loss: bool = False, backup: bool = True,
+             verify_com: bool | None = None) -> dict:
     """Set sheet-view state in one call: freeze panes (freeze='B2' locks the
     rows above and columns left of it; 'clear' removes), split panes
     (split={x, y} positions in points, exclusive with freeze), gridlines
@@ -1370,7 +1426,8 @@ def set_view(path: str, sheet: str | None = None, freeze: str | None = None,
     return _sheetview.set_view(
         path, sheet=sheet, freeze=freeze, split=split, gridlines=gridlines,
         headings=headings, zoom=zoom, selection=selection,
-        tab_color=tab_color, allow_loss=allow_loss, backup=backup)
+        tab_color=tab_color, allow_loss=allow_loss, backup=backup,
+            verify_com=verify_com)
 
 
 # ============================================================== COM TIER
@@ -1555,7 +1612,7 @@ def com_validate_opens_clean(path: str, password: str | None = None,
     Read-only. Also runs inside file-tier saves as the verify_com option,
     which KS4XL_VERIFY_COM=1 turns on for every save. password opens
     encrypted files; without one an encrypted file reports encrypted, and a
-    wrong one surfaces as the operation timeout (Excel re-prompts modally).
+    wrong one refuses at once with Excel's own message.
     Serialized and timeout-bounded."""
     return _comtier.com_validate_opens_clean(
         path, password=password, timeout_seconds=timeout_seconds)

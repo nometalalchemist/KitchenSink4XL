@@ -193,10 +193,12 @@ class WorkbookPackage:
         if isinstance(value, str) and value.startswith("="):
             self.set_formula(sheet, coord, value)
             return
-        # Control characters and lone surrogates: refuse in-envelope here
-        # rather than let openpyxl's IllegalCharacterError escape the Section
-        # 7 shape (and rather than accept a value the reply cannot encode).
-        _limits.check_text_storable(value, what=f"the value for {coord}")
+        # Control characters, lone surrogates, and text past Excel's cell
+        # ceiling: refuse in-envelope here rather than let openpyxl's
+        # IllegalCharacterError escape the Section 7 shape (and rather than
+        # accept a value the reply cannot encode, or one that only the
+        # post-write verify would notice).
+        _limits.check_cell_text(value, what=f"the value for {coord}")
         ws = self._ws(sheet)
         ws[coord] = value
         self._intended[(ws.title, coord.upper())] = ("value", value)
@@ -662,8 +664,11 @@ class WorkbookPackage:
 #: correctly (it got all ten of the round's unopenable files right). This is
 #: the switch that puts it on the write path. It stays OFF by default because
 #: it costs a COM round trip per save and needs Excel installed; a headless
-#: CI run and a Linux install must keep working. Per-call verify_com:true is
-#: unchanged and always wins over the default.
+#: CI run and a Linux install must keep working. Per-call verify_com:true
+#: always wins over the default, and since the live COM stress round (M-4) it
+#: is actually reachable: every mutating tool takes verify_com, so a single
+#: risky save can ask for Excel's verdict without turning it on server-wide.
+#: The claim was true of this API and false of the surface for a whole wave.
 VERIFY_COM_ENV = "KS4XL_VERIFY_COM"
 
 

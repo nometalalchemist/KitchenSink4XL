@@ -112,7 +112,8 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
                               params: dict | None = None,
                               sheet: str | None = None, index: int | None = None,
                               allow_loss: bool = False,
-                              backup: bool = True) -> dict:
+                              backup: bool = True,
+                              verify_com: bool | None = None) -> dict:
     """Add / list / delete conditional-format rules. Backup + verify on write."""
     if action not in CF_ACTIONS:
         raise XlMcpError(f"action must be one of {CF_ACTIONS}, got {action!r}")
@@ -182,7 +183,8 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
         pkg._changed["conditional_format"] = {
             "deleted_rules": removed, "sheet": ws.title, "range": grid.a1}
 
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["manage_conditional_format", "CF_ACTIONS", "CF_TYPES"]

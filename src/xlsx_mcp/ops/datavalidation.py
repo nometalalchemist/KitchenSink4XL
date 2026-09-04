@@ -55,7 +55,8 @@ def manage_data_validation(path: str, action: str, location: Any = None,
                            allow_blank: bool = True, prompt: str | None = None,
                            error: str | None = None, sheet: str | None = None,
                            allow_loss: bool = False,
-                           backup: bool = True) -> dict:
+                           backup: bool = True,
+                           verify_com: bool | None = None) -> dict:
     """Add / list / delete data-validation rules. Backup + verify on write."""
     if action not in DV_ACTIONS:
         raise XlMcpError(f"action must be one of {DV_ACTIONS}, got {action!r}")
@@ -165,7 +166,8 @@ def manage_data_validation(path: str, action: str, location: Any = None,
         pkg._changed["data_validation"] = {
             "deleted": True, "sheet": ws.title, "range": grid.a1}
 
-    result = pkg.save(allow_loss=allow_loss, backup=backup)
+    result = pkg.save(allow_loss=allow_loss, backup=backup,
+                      verify_com=verify_com)
     if warnings:
         result["warnings"] = list(result.get("warnings", [])) + warnings
     return result

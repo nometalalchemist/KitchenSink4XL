@@ -69,7 +69,8 @@ def set_page_layout(path: str, sheet: str | None = None,
                     print_title_cols: str | None = None,
                     gridlines: bool | None = None,
                     headings: bool | None = None,
-                    allow_loss: bool = False, backup: bool = True) -> dict:
+                    allow_loss: bool = False, backup: bool = True,
+                    verify_com: bool | None = None) -> dict:
     """Set the print-shaped page settings. Backup + verify."""
     supplied = [v for v in (orientation, paper_size, margins, scale,
                             fit_to_width, fit_to_height, print_area,
@@ -180,7 +181,8 @@ def set_page_layout(path: str, sheet: str | None = None,
         changed["headings"] = bool(headings)
 
     pkg._changed["page_layout"] = changed
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 def _encode_section(text: str, raw: bool) -> str:
@@ -197,7 +199,8 @@ def set_header_footer(path: str, sheet: str | None = None,
                       header: dict | None = None,
                       footer: dict | None = None,
                       apply_to: str = "odd", raw: bool = False,
-                      allow_loss: bool = False, backup: bool = True) -> dict:
+                      allow_loss: bool = False, backup: bool = True,
+                      verify_com: bool | None = None) -> dict:
     """Write three-section headers/footers with & code escaping.
     Backup + verify."""
     if header is None and footer is None:
@@ -266,7 +269,8 @@ def set_header_footer(path: str, sheet: str | None = None,
         changed[name] = done
 
     pkg._changed["header_footer"] = changed
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["set_page_layout", "set_header_footer", "PAPER_SIZES",

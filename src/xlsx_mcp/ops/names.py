@@ -170,7 +170,8 @@ def _normalize_refers_to(refers_to: str) -> str:
 def manage_name(path: str, action: str, name: str | None = None,
                 refers_to: str | None = None, scope: str | None = None,
                 new_name: str | None = None,
-                allow_loss: bool = False, backup: bool = True) -> dict:
+                allow_loss: bool = False, backup: bool = True,
+                verify_com: bool | None = None) -> dict:
     """Add / delete / rename / update / list defined names. Backup + verify."""
     if action not in NAME_ACTIONS:
         raise XlMcpError(f"action must be one of {NAME_ACTIONS}, got {action!r}")
@@ -249,7 +250,8 @@ def manage_name(path: str, action: str, name: str | None = None,
         detail.update(name=name, scope=scope_name, refers_to=rt)
 
     pkg._changed["name"] = detail
-    return pkg.save(allow_loss=allow_loss, backup=backup)
+    return pkg.save(allow_loss=allow_loss, backup=backup,
+                    verify_com=verify_com)
 
 
 __all__ = ["manage_name", "NAME_ACTIONS"]
