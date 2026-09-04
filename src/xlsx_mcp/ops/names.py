@@ -63,11 +63,19 @@ def _find(wb, name: str, scope: str | None):
     return hits[0]
 
 
-#: Excel's grammar for a defined name: first character a letter, underscore,
-#: or backslash; then letters, digits, periods, underscores; no spaces; at
-#: most 255 characters; and never something Excel would read as a cell
-#: reference (A1 style or R1C1 style), nor the bare letters R and C.
-_NAME_RE = _re.compile(r"[A-Za-z_\\][A-Za-z0-9_.\\]*", _re.UNICODE)
+#: Excel's grammar for a defined name: first character a LETTER (in any
+#: script), underscore, or backslash; then letters, digits, periods,
+#: underscores; no spaces; at most 255 characters; and never something Excel
+#: would read as a cell reference (A1 style or R1C1 style), nor the bare
+#: letters R and C.
+#:
+#: "Letter" is not "A-Za-z". The class was written ASCII-only under a
+#: re.UNICODE flag that could not widen a literal range, so Excel-legal
+#: non-ASCII names were refused: the insane round was turned away from the
+#: Korean name 환율 with a message claiming Excel requires a letter, which is
+#: exactly what 환율 is (L-1). [^\W\d] under UNICODE is "a word character
+#: that is not a digit", i.e. any script's letter plus the underscore.
+_NAME_RE = _re.compile(r"(?:[^\W\d]|\\)[\w.\\]*", _re.UNICODE)
 _LOOKS_LIKE_A1 = _re.compile(r"\$?[A-Za-z]{1,3}\$?[0-9]{1,7}$")
 _LOOKS_LIKE_R1C1 = _re.compile(r"[Rr][0-9]*[Cc][0-9]*$")
 
@@ -91,10 +99,10 @@ def _validate_name(name: str) -> str:
     if not _NAME_RE.fullmatch(name):
         raise XlMcpError(
             f"{name!r} is not a valid defined name: Excel requires the first "
-            "character to be a letter, underscore, or backslash and the rest "
-            "to be letters, digits, periods, or underscores (no spaces, no "
-            "operators). Excel refuses to open a workbook carrying an "
-            "invalid name, so this is refused here.")
+            "character to be a letter (any script), underscore, or backslash "
+            "and the rest to be letters, digits, periods, or underscores (no "
+            "spaces, no operators). Excel refuses to open a workbook carrying "
+            "an invalid name, so this is refused here.")
     if (_LOOKS_LIKE_A1.fullmatch(name) or _LOOKS_LIKE_R1C1.fullmatch(name)
             or name.upper() in ("R", "C")):
         raise XlMcpError(

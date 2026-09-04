@@ -119,7 +119,10 @@ def audit_formulas(path: str, location: Any = None,
                    sheet: str | None = None) -> dict:
     """Read-only formula intelligence for a range, a sheet, or the whole
     workbook: the formula list plus external refs, volatile functions,
-    missing cached values, error cells, and cross-sheet dependencies."""
+    missing cached values, error cells, and cross-sheet dependencies.
+
+    Each formula carries the STORED text under 'formula' and, when the two
+    differ, the display form read_range returns under 'formula_display'."""
     formula_wb = gridio.open_wb(path, data_only=False)
     cached_wb = gridio.open_wb(path, data_only=True)
     try:
@@ -168,7 +171,19 @@ def audit_formulas(path: str, location: Any = None,
                         errors.append({"sheet": ws.title, "cell": addr,
                                        "error": cached, "formula": None})
                     continue
+                # TWO strings, both labelled, because they are genuinely
+                # different things and reporting only the stored one made
+                # audit_formulas and read_range disagree about the same cell:
+                # =_xlfn.LAMBDA(_xlpm.x,_xlop.y,...) here against
+                # =LAMBDA(x,[y],...) there, so an agent that read one and
+                # wrote back the other got a different result (insane round,
+                # M-6). 'formula' stays the STORED text (this is an audit),
+                # and 'formula_display' is what read_range returns and what
+                # Excel's own formula bar shows.
+                display = _calc.denormalize_formula(text)
                 entry = {"sheet": ws.title, "cell": addr, "formula": text}
+                if display != text:
+                    entry["formula_display"] = display
                 formulas.append(entry)
                 body = _strip_strings(text[1:])
 

@@ -27,6 +27,7 @@ at construction) and exposes the mapping protocol over structured_content.
 from __future__ import annotations
 
 import json as _json
+import re as _re
 import zipfile
 from typing import Any
 from xml.etree.ElementTree import ParseError as _XmlParseError
@@ -36,6 +37,9 @@ from fastmcp.exceptions import ToolError as _FmcpToolError
 from fastmcp.exceptions import ValidationError as _FmcpValidation
 from fastmcp.server.middleware import Middleware as _FmcpMiddleware
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
+from openpyxl.utils.exceptions import (
+    IllegalCharacterError as _IllegalCharacterError,
+)
 
 from . import packs as _packs
 from .core import errors as _err
@@ -65,9 +69,17 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (_err.ExcelBlocked, "APP_BLOCKED"),
     (_err.ExcelDisconnected, "CONFLICT"),
     (SandboxViolation, "BAD_PARAMS"),
+    (_err.ExcelWouldRefuse, "BAD_PARAMS"),
     (_err.XlMcpError, "BAD_PARAMS"),
     (FileExistsError, "CONFLICT"),
     (FileNotFoundError, "NOT_FOUND"),
+    # openpyxl's own refusal for text Excel cannot store (control characters
+    # in a cell value). The ops layer refuses these first with a better
+    # message (core.limits.check_text_storable); this is the backstop for any
+    # path it does not cover. Without it the error escaped the Section 7
+    # envelope entirely: no structuredContent, no code, a full Rich traceback
+    # on stderr, and the raw control bytes echoed back (insane round, M-2).
+    (_IllegalCharacterError, "BAD_PARAMS"),
     # A file that is not a zip reaches the READ paths as a raw BadZipFile
     # (the mutation path converts it to WorkbookCorrupt first). Adversarial
     # round: get_workbook_metadata on a garbage .xlsx answered "Error calling
@@ -204,16 +216,46 @@ def pack_hint(exc: BaseException) -> str | None:
     )
 
 
+#: Control characters must never be echoed back verbatim: a refusal that
+#: repeats the caller's \x01 or \x0b puts raw control bytes on the wire and,
+#: for a lone surrogate, makes the reply itself unencodable.
+_CTRL = _re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff]")
+
+
+def _safe_message(text: str) -> str:
+    """The exception text with any unstorable character replaced by its code
+    point, so the refusal is readable and the reply always encodes."""
+    return _CTRL.sub(lambda m: f"<U+{ord(m.group(0)):04X}>", text)
+
+
+def _declared_code(exc: BaseException) -> str | None:
+    """A raise-site code override, but only when it is one of OUR closed
+    codes. xml.etree's ParseError carries an expat `.code` INTEGER, which
+    went straight into the payload as {"code": 3} -- the one refusal in the
+    package whose code was not a string enum (insane round, L-2)."""
+    code = getattr(exc, "code", None)
+    return code if isinstance(code, str) and code in CLOSED_CODES else None
+
+
 def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
-    code = getattr(exc, "code", None) or classify(exc)
-    message = str(exc)
+    code = _declared_code(exc) or classify(exc)
+    message = _safe_message(str(exc))
     if isinstance(exc, LookupError) and len(message) < 40:
-        message = (
-            f"internal lookup failed on {message}: a nested parameter "
-            "probably has the wrong shape (list where a dict belongs, or "
-            "vice versa)"
-        )
+        part = message.strip("'\"")
+        if part.lower().endswith((".xml", ".rels", ".bin")):
+            # A missing OOXML part: say what the package is missing instead
+            # of handing back a bare KeyError repr.
+            code = "UNSUPPORTED_CONTENT"
+            message = (
+                f"the workbook package is missing {part}, which every reader "
+                "needs; the file is not a usable .xlsx/.xlsm")
+        else:
+            message = (
+                f"internal lookup failed on {message}: a nested parameter "
+                "probably has the wrong shape (list where a dict belongs, or "
+                "vice versa)"
+            )
     hint = HINTS.get(code, "")
     ph = pack_hint(exc)
     if ph:
