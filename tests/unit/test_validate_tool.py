@@ -81,7 +81,13 @@ def test_structure_clean_and_corrupt(tmp_path):
     p = _make(tmp_path)
     out = _validation.validate(p, checks=["structure"])
     f = out["results"]["structure"]["findings"]
-    assert f["opens_clean"] is True and f["visible_sheets"] == 1
+    # opens_clean is Excel's verdict, and nothing asked Excel here: the field
+    # says so rather than claiming a pass openpyxl cannot vouch for (insane
+    # round M-1 -- ten workbooks Excel refused were reported opens_clean:true
+    # because the field was hard-coded).
+    assert f["opens_clean"] == _validation.NOT_CHECKED
+    assert f["openpyxl_loads"] is True and f["visible_sheets"] == 1
+    assert "Excel was NOT asked" in f["opens_clean_source"]
     bad = tmp_path / "bad.xlsx"
     bad.write_bytes(b"this is no zip")
     out = _validation.validate(str(bad), checks=["structure"])

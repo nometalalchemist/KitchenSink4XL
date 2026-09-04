@@ -420,11 +420,16 @@ def main() -> int:  # noqa: PLR0915
         traceback.print_exc()
         check(False, f"unhandled exception: {type(exc).__name__}: {exc}")
     finally:
-        # PID-precise teardown: reclaim ONLY journal-owned PIDs.
-        ex.shutdown()
+        # PID-precise teardown: reclaim ONLY journal-owned PIDs. The journal
+        # is snapshotted BEFORE shutdown, because shutdown now reaps the
+        # pooled worker by owned PID and forgets each one it confirms gone
+        # (the H-4 fix); reading afterwards reported owned=[] and then counted
+        # the still-terminating process as FOREIGN.
         mgr = com_session.ExcelInstanceManager(
             journal_path=scratch / "_gate_journal.json")
         owned = sorted(mgr.journal.owned_pids())
+        ex.shutdown()
+        owned = sorted(set(owned) | set(mgr.journal.owned_pids()))
         for pid in owned:
             if pid_alive(pid):
                 taskkill(pid)

@@ -23,6 +23,12 @@ with Excel CLOSED, through the shipped tool bodies only.
      identical mixed-type data.
   5. CALC SETTINGS: manual mode, fullCalcOnLoad, iterative calc, volatiles.
   6. verify_com deep verification wired into a real structural-edit save.
+  7. THE REFUSE-CLASS BATTERY (added after the insane-mode adversarial round,
+     2026-09-05): every route that round found from a single tool call to a
+     workbook Excel will not open, replayed through the shipped tool bodies.
+     Two outcomes are acceptable and no third: a loud refusal that leaves the
+     file byte-identical, or a file Excel itself opens. The boundary values
+     are exercised too, so the refusals cannot be a blunt over-refusal.
 
 PID DISCIPLINE: private DispatchEx workers only, journaled; SKIPS honestly if
 a foreign EXCEL.EXE is present at start; never touches a foreign PID.
@@ -1051,6 +1057,195 @@ def item6(scratch: Path) -> None:
     check(False, "6.0 a rich corpus fixture survived a file-tier edit")
 
 
+def item7(scratch: Path) -> None:
+    """ITEM 7: THE REFUSE-CLASS BATTERY (insane round, 2026-09-05).
+
+    The round's headline was ten single tool calls that returned
+    ok/saved/verified and produced a workbook Excel answers "Open method of
+    Workbooks class failed" for. Each route is replayed here through the
+    SHIPPED tool bodies, and the gate asserts the only two acceptable
+    outcomes: a loud refusal that leaves the file byte-identical, or a file
+    EXCEL ITSELF OPENS. Nothing in between."""
+    print("\n=== ITEM 7: refuse-class battery (Excel is the judge) ===")
+    import hashlib
+
+    from xlsx_mcp.core.errors import (
+        ExcelWouldRefuse, FormulaRejected, UnsupportedStructure,
+    )
+    from xlsx_mcp.ops import (
+        annotations, datavalidation, objects, pagelayout, search, sortfilter,
+    )
+    from openpyxl.worksheet.formula import ArrayFormula
+
+    def md5(p) -> str:
+        return hashlib.md5(Path(p).read_bytes()).hexdigest()
+
+    def fresh(name: str, sheets=("Data",)) -> Path:
+        p = scratch / f"r7_{name}.xlsx"
+        wb = openpyxl.Workbook()
+        wb.active.title = sheets[0]
+        for extra in sheets[1:]:
+            wb.create_sheet(extra)
+        for i in range(1, 4):
+            wb[sheets[0]].cell(i, 1).value = i
+        wb.save(p)
+        return p
+
+    def excel_opens(p) -> bool:
+        try:
+            return bool(com_session.opens_clean(str(p)).get("opens_clean"))
+        except Exception as exc:  # noqa: BLE001
+            note(f"item 7: opens_clean raised on {Path(p).name}: {exc}")
+            return False
+
+    REFUSALS = (ExcelWouldRefuse, FormulaRejected, UnsupportedStructure)
+
+    def route(label: str, name: str, call, sheets=("Data",)):
+        """Run one route; assert refusal-with-file-untouched OR Excel opens."""
+        p = fresh(name, sheets)
+        before = md5(p)
+        try:
+            call(str(p))
+        except REFUSALS as exc:
+            ok = md5(p) == before
+            check(ok, f"7.{label} refused ({type(exc).__name__}) and left the "
+                      f"file byte-identical")
+            return
+        check(excel_opens(p),
+              f"7.{label} produced a file EXCEL OPENS (no refusal was raised)")
+
+    # --- C-1: quoted sheet names that used to disable the _xlpm pass -------
+    for i, formula in enumerate((
+            "=LET(x,'Q1 (draft'!A1,x+1)",
+            "=LET(x,'It''s (fun'!A1,x+1)",
+            "=LAMBDA(x,'Q1 (draft'!A1+x)(1)",
+    ), start=1):
+        route(f"1{i} C-1 {formula}", f"c1_{i}",
+              lambda pp, f=formula: formulas.set_formula(
+                  pp, {"cell": "A1"}, f, sheet="Data"),
+              sheets=("Data", "Q1 (draft", "It's (fun"))
+
+    # --- C-2: whitespace before a builtin's paren -------------------------
+    route("2 C-2 spaced builtin call", "c2",
+          lambda pp: formulas.set_formula(
+              pp, {"cell": "A1"}, "=LET(sum,2,sum+SUM (1,2))", sheet="Data"))
+
+    # --- H-2: a defined name colliding with a LET parameter ---------------
+    p = fresh("h2")
+    from xlsx_mcp.ops import names as _names
+    _names.manage_name(str(p), "add", name="Rate", refers_to="=Data!$A$1")
+    formulas.set_formula(str(p), {"cell": "B1"}, "=LET(Rate,1,Rate)+Rate",
+                         sheet="Data")
+    stored = formulas_of(p, {"Data": ["B1"]})["Data!B1"]
+    check(stored == "=_xlfn.LET(_xlpm.Rate,1,_xlpm.Rate)+Rate",
+          f"7.3a H-2 the out-of-scope name stays bare, as Excel stores it "
+          f"({stored!r})")
+    check(excel_opens(p), "7.3b H-2 the scoped output opens in Excel")
+    comtier.recalculate(str(p))
+    v = cached(p, "Data", "B1")
+    check(v == 2, f"7.3c H-2 Excel computes LET(Rate,1,Rate)+Rate = 2 "
+                  f"(got {v!r})")
+
+    # --- C-3 / H-3: legacy CSE arrays --------------------------------------
+    def cse(name: str) -> Path:
+        p = scratch / f"r7_{name}.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Data"
+        for i in range(1, 6):
+            ws.cell(i, 1).value = i
+            ws.cell(i, 4).value = 6 - i
+        ws["B1"] = ArrayFormula("B1:B5", "=A1:A5*2")
+        ws["C1"] = ArrayFormula("C1", "=SUM(A1:A5*2)")
+        wb.save(p)
+        return p
+
+    for label, name, call in (
+        ("4a sort over a CSE array", "cse_sort",
+         lambda pp: sortfilter.sort_range(pp, {"range": "A1:D5"},
+                                          [{"column": 4, "order": "asc"}],
+                                          has_header=False)),
+        ("4b delete_rows across a CSE array", "cse_del",
+         lambda pp: structure.modify_grid_structure(pp, "delete_rows", 1, 1)),
+    ):
+        p = cse(name)
+        before = md5(p)
+        try:
+            call(str(p))
+            check(excel_opens(p), f"7.{label}: no refusal, so Excel must open "
+                                  "the result")
+        except REFUSALS:
+            check(md5(p) == before,
+                  f"7.{label}: refused and left the file byte-identical")
+
+    p = cse("cse_copy")
+    cells.copy_range(str(p), {"range": "A1:B5"}, {"cell": "F1"}, what="all")
+    check(excel_opens(p),
+          "7.4c a CSE array copied with its anchor rebased opens in Excel")
+    comtier.recalculate(str(p))
+    got = cached_many(p, {"Data": ["B1", "G1", "G5"]})
+    check(approx(got["Data!B1"], 2) and approx(got["Data!G1"], 2),
+          f"7.4d the copied array computes at its new address ({got})")
+
+    p = cse("cse_replace")
+    search.replace_cells(str(p), "A1:A5", "A1:A4", look_in="formulas")
+    check(excel_opens(p), "7.4e replace_cells kept the array and Excel opens "
+                          "the result")
+    comtier.recalculate(str(p))
+    v = cached(p, "Data", "C1")
+    check(approx(v, 20),
+          f"7.4f the rewritten array still computes as an ARRAY (C1={v!r}; "
+          "the de-arrayed form gives 2 by implicit intersection)")
+
+    # --- C-4: the five parameter routes ------------------------------------
+    route("5a oversize comment", "c4_comment",
+          lambda pp: annotations.manage_comment(
+              pp, "add", location={"cell": "A1"}, text="z" * 60000,
+              sheet="Data"))
+    route("5b oversize DV list", "c4_dv",
+          lambda pp: datavalidation.manage_data_validation(
+              pp, "add", location={"range": "A1:A3"}, dv_type="list",
+              values=[f"x{i}" for i in range(10000)], sheet="Data"))
+    route("5c oversize header", "c4_hf",
+          lambda pp: pagelayout.set_header_footer(
+              pp, sheet="Data", header={"left": "&Z&bad" * 500}))
+    route("5d invalid hyperlink authority", "c4_link",
+          lambda pp: annotations.manage_hyperlink(
+              pp, "add", location={"cell": "A1"},
+              target='http://x"/><evil a="', sheet="Data"))
+
+    png = scratch / "r7.png"
+    if not png.exists():
+        png.write_bytes(bytes.fromhex(
+            "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+            "0000000a49444154789c636000000200010005fe02fe0000000049454e44ae426082"))
+    route("5e negative image extents", "c4_img",
+          lambda pp: objects.manage_image(
+              pp, "insert", location={"cell": "B2"}, image_file=str(png),
+              width=-5, height=-5, sheet="Data"))
+
+    # --- the boundary must still be usable ---------------------------------
+    p = fresh("c4_ok")
+    annotations.manage_comment(str(p), "add", location={"cell": "A1"},
+                               text="z" * 32767, sheet="Data")
+    check(excel_opens(p),
+          "7.6a a comment at Excel's exact 32,767 limit still opens")
+    p = fresh("c4_ok2")
+    annotations.manage_hyperlink(str(p), "add", location={"cell": "A1"},
+                                 target="https://example.com/a b",
+                                 sheet="Data")
+    check(excel_opens(p),
+          "7.6b a legal hyperlink with a space in the PATH still opens")
+
+    # --- M-1: the file tier no longer vouches for what it did not check ----
+    from xlsx_mcp.ops import validation as _validation
+    f = _validation.validate(str(fresh("m1")), checks=["structure"])[
+        "results"]["structure"]["findings"]
+    check(f["opens_clean"] == _validation.NOT_CHECKED,
+          "7.7 validate reports opens_clean as 'not checked' rather than "
+          "claiming an Excel verdict it never asked for")
+
+
 # --------------------------------------------------------------- driver
 
 def main() -> int:
@@ -1081,7 +1276,8 @@ def main() -> int:
     print(f"excel: {_excel_version()}")
 
     try:
-        for fn in (item1, item2, item2b, item2c, item3, item4, item5, item6):
+        for fn in (item1, item2, item2b, item2c, item3, item4, item5, item6,
+                   item7):
             try:
                 fn(scratch)
             except Exception as exc:  # noqa: BLE001
@@ -1094,10 +1290,16 @@ def main() -> int:
               f"ops={st['ops_completed']} timeouts={st['timeouts']}")
         check(st["timeouts"] == 0, "gate: zero COM timeouts")
     finally:
-        ex.shutdown()
+        # Snapshot the journal BEFORE shutdown. Shutdown now reaps the pooled
+        # worker by owned PID and forgets each PID once it is confirmed gone
+        # (the H-4 fix), so reading the journal afterwards would report
+        # owned=[] and then count the still-terminating process as FOREIGN.
+        # The accounting this gate exists to do needs the pre-shutdown list.
         mgr = com_session.ExcelInstanceManager(
             journal_path=scratch / "_gate_journal.json")
         owned = sorted(mgr.journal.owned_pids())
+        ex.shutdown()
+        owned = sorted(set(owned) | set(mgr.journal.owned_pids()))
         for pid in owned:
             if pid_alive(pid):
                 taskkill(pid)
