@@ -23,6 +23,7 @@ from typing import Any
 
 from openpyxl.utils import column_index_from_string, get_column_letter
 
+from ..core import arrays as _arrays
 from ..core import refs as _refs
 from ..core.errors import RangeOutOfBounds, XlMcpError
 from ..core.package import WorkbookPackage
@@ -93,6 +94,12 @@ def modify_grid_structure(path: str, action: str, at: Any, count: int = 1,
         raise RangeOutOfBounds(
             f"deleting {count} {axis}s from {index} runs past the grid "
             f"limit of {limit:,}")
+    # An edit that cuts an array formula in half destroys it: openpyxl's
+    # delete_rows left the CSE workbook with NO <f> at all, both arrays
+    # replaced by their stale literal values, no warning (insane round, H-3).
+    # Excel refuses the identical Rows(n).Insert() / Delete() with "You can't
+    # change part of an array" (core.arrays, COM ground truth).
+    _arrays.refuse_if_split(pkg.workbook[sheet_title], action, index, count)
     if action in (_refs.INSERT_ROWS, _refs.INSERT_COLS):
         # Excel refuses an insert that would push value-bearing cells off the
         # grid edge; mirror that instead of silently truncating.

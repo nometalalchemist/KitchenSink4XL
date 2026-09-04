@@ -25,7 +25,9 @@ import re as _stdre
 from typing import Any
 
 from ..core import _regex
+from ..core import arrays as _arrays
 from ..core import calc as _calc
+from ..core import limits as _limits
 from ..core.errors import XlMcpError
 from ..core.package import WorkbookPackage
 from .dataio import _coerce
@@ -201,7 +203,18 @@ def replace_cells(path: str, find: str, replace: str,
                 if n == 0 or new == formula:
                     continue
                 plan.append({"sheet": title, "cell": gridio.a1(r, c),
-                             "kind": "formula", "from": formula, "to": new})
+                             "kind": "formula", "from": formula, "to": new,
+                             # An ARRAY formula's text is reachable through
+                             # formula_text_of, but writing the replacement
+                             # back as a plain string STRIPS t="array" ref=,
+                             # and Excel then resolves the de-arrayed formula
+                             # with implicit intersection: SUM(A1:A5*2) read
+                             # 30 before and 2 after, clean open, no warning
+                             # (insane round, H-3). The array-ness travels
+                             # with the plan entry.
+                             "array": _arrays.array_formula_of_value(
+                                 pkg.workbook[title][gridio.a1(r, c)].value)
+                             is not None})
                 occurrences += n
             else:
                 if look_in not in ("values", "both"):
@@ -235,9 +248,21 @@ def replace_cells(path: str, find: str, replace: str,
                     "note": "no cell matched; nothing was written"}
 
         neutralized = 0
+        arrays_kept = 0
         for ch in plan:
             ws = pkg.workbook[ch["sheet"]]
             if ch["kind"] == "formula":
+                if ch.get("array"):
+                    cell = ws[ch["cell"]]
+                    af = _arrays.array_formula_of_value(cell.value)
+                    text = ch["to"]
+                    normalized, _p = _calc.normalize_formula(text)
+                    cell.value = _arrays.retext(af, normalized)
+                    pkg._intended[(ch["sheet"], ch["cell"].upper())] = (
+                        "formula", normalized)
+                    pkg._formula_written = True
+                    arrays_kept += 1
+                    continue
                 pkg.set_cell(ch["sheet"], ch["cell"], ch["to"])
                 continue
             new_val = ch["new_value"]
@@ -245,6 +270,8 @@ def replace_cells(path: str, find: str, replace: str,
                     and not formulas:
                 # The import_data injection lint: text that a spreadsheet
                 # would execute as a formula is written as TEXT.
+                _limits.check_text_storable(
+                    new_val, what=f"the replacement for {ch['cell']}")
                 cell = ws[ch["cell"]]
                 cell.value = new_val
                 cell.data_type = "s"
@@ -256,6 +283,9 @@ def replace_cells(path: str, find: str, replace: str,
         result["changed"]["replaced"] = {
             "find": find, "match": match, "look_in": look_in,
             "cells_changed": len(plan), "occurrences": occurrences}
+        if arrays_kept:
+            result["changed"]["replaced"]["array_formulas_preserved"] = \
+                arrays_kept
         warnings = list(result.get("warnings", []))
         if neutralized:
             warnings.append(

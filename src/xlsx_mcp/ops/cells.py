@@ -26,6 +26,7 @@ from __future__ import annotations
 from copy import copy as _copy
 from typing import Any
 
+from ..core import arrays as _arrays
 from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import RangeOutOfBounds, TargetNotFound, XlMcpError
@@ -152,6 +153,10 @@ def clear_range(path: str, location: Any, what: str = "contents",
     grid = pkg.resolve(location, default_sheet=sheet)
     gridio.guard_cell_count(grid)
     ws = pkg.workbook[grid.sheet]
+    if what in ("contents", "all"):
+        # Clearing half an array leaves the other half declaring a rectangle
+        # that no longer holds it; Excel refuses the same edit (core.arrays).
+        _arrays.refuse_if_partial(ws, grid, "clear")
     from openpyxl.styles import Alignment, Border, Font, PatternFill
     n = 0
     for r in range(grid.min_row, grid.max_row + 1):
@@ -194,6 +199,22 @@ def _read_block(ws, grid, data_only_ws=None):
     return block
 
 
+class _PasteRect:
+    """The destination rectangle a copy/move would overwrite, in the shape
+    core.arrays expects (a ResolvedGrid duck-type: bounds plus an A1 label)."""
+
+    def __init__(self, min_row: int, min_col: int, max_row: int,
+                 max_col: int):
+        self.min_row, self.min_col = min_row, min_col
+        self.max_row, self.max_col = max_row, max_col
+
+    @property
+    def a1(self) -> str:
+        lo = gridio.a1(self.min_row, self.min_col)
+        hi = gridio.a1(self.max_row, self.max_col)
+        return lo if lo == hi else f"{lo}:{hi}"
+
+
 def _place(cell, value, *, as_text: bool) -> None:
     """Write a buffered value into a cell, keeping neutralized text TEXT."""
     cell.value = value
@@ -216,6 +237,14 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
     gridio.guard_cell_count(src)
     sws = pkg.workbook[src.sheet]
     dws = pkg.workbook[dst.sheet]
+    # Half an array formula cannot be copied (the copy would declare a
+    # rectangle it does not own), and a paste landing on half of one would
+    # break the array already there. Excel refuses both (core.arrays).
+    _arrays.refuse_if_partial(sws, src, "copy")
+    dst_rect = _PasteRect(dst.min_row, dst.min_col,
+                          dst.min_row + src.max_row - src.min_row,
+                          dst.min_col + src.max_col - src.min_col)
+    _arrays.refuse_if_partial(dws, dst_rect, "paste over")
     dows = None
     if what == "values":
         dob = gridio.open_wb(path, data_only=True)
@@ -232,12 +261,39 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
     #: absent-cache honesty pass missed (edge audit 2026-09-04). Same
     #: ABSENT_WARNING the read surfaces use, plus the cell list.
     absent_sources: list[str] = []
+    arrays_copied = 0
     for i, row in enumerate(block):
         for j, (val, style, cached, is_text) in enumerate(row):
             tcell = dws.cell(dst.min_row + i, dst.min_col + j)
             if what in ("all", "values", "formulas"):
                 out = val
                 as_text = is_text
+                # An ARRAY formula is an object, not a string. Re-placing it
+                # untouched carried its ORIGINAL ref anchor to the new address
+                # and Excel then refused to open the workbook; and in values
+                # mode it pasted a LIVE formula, a flat contract violation,
+                # because the is_live test was the same isinstance(str) check
+                # (insane round, C-3). Excel's own copy rebases the anchor and
+                # offsets the text (core.arrays.rebase).
+                af = _arrays.array_formula_of_value(val)
+                if af is not None:
+                    if what == "values":
+                        out = cached
+                        if cached is None:
+                            absent_sources.append(
+                                gridio.a1(src.min_row + i, src.min_col + j))
+                        _place(tcell, out, as_text=False)
+                    else:
+                        tcell.value = _arrays.rebase(
+                            af, dr if adjust_formulas else 0,
+                            dc if adjust_formulas else 0,
+                            lambda t, r_, c_: _refs.offset_formula(
+                                t, r_, c_, src.sheet))
+                        wrote_formula = True
+                        arrays_copied += 1
+                    if what in ("all", "formats"):
+                        tcell._style = _copy(style)
+                    continue
                 if what == "values":
                     is_live = (isinstance(val, str) and val.startswith("=")
                                and not is_text)
@@ -262,6 +318,9 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
         "from": f"{src.sheet}!{src.a1}",
         "to": f"{dst.sheet}!{gridio.a1(dst.min_row, dst.min_col)}",
         "what": what}
+    if arrays_copied:
+        result["changed"]["copied"]["array_formulas_translated"] = \
+            arrays_copied
     if absent_sources:
         shown = absent_sources[:25]
         result["changed"]["copied"]["pasted_blank_absent_cache"] = shown
@@ -293,6 +352,12 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
             "clear_range the source")
     gridio.guard_cell_count(src)
     ws = pkg.workbook[src.sheet]
+    _arrays.refuse_if_partial(ws, src, "move")
+    _arrays.refuse_if_partial(
+        ws, _PasteRect(dst.min_row, dst.min_col,
+                       dst.min_row + src.max_row - src.min_row,
+                       dst.min_col + src.max_col - src.min_col),
+        "move onto")
     block = _read_block(ws, src)
     dr = dst.min_row - src.min_row
     dc = dst.min_col - src.min_col
@@ -314,6 +379,17 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
     for i, row in enumerate(block):
         for j, (val, style, _cached, is_text) in enumerate(row):
             tcell = ws.cell(dst.min_row + i, dst.min_col + j)
+            af = _arrays.array_formula_of_value(val)
+            if af is not None:
+                # A whole array travels with its anchor rebased; the
+                # reference rewrite below then repairs what pointed at it.
+                tcell.value = _arrays.rebase(
+                    af, dr, dc,
+                    lambda t, r_, c_: _refs.offset_formula(t, r_, c_,
+                                                           src.sheet))
+                tcell._style = _copy(style)
+                wrote_formula = True
+                continue
             _place(tcell, val, as_text=is_text)
             tcell._style = _copy(style)
             if isinstance(val, str) and val.startswith("=") and not is_text:

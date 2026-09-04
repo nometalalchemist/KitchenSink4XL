@@ -26,6 +26,7 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
+from ..core import arrays as _arrays
 from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import UnsupportedStructure, XlMcpError
@@ -91,6 +92,10 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
     gridio.guard_cell_count(grid)
     ws = pkg.workbook[grid.sheet]
     _refuse_merges(ws, grid, "sort")
+    # An array formula cannot be reordered row by row: its ref anchor stays
+    # behind and the workbook stops opening. Excel refuses the identical Sort
+    # with "You can't change part of an array" (core.arrays).
+    _arrays.refuse_if_touched(ws, grid, "sort")
     cached = gridio.open_wb(path, data_only=True)
     cws = cached[grid.sheet]
 
@@ -114,6 +119,13 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
 
     key_offsets = {o for o, _rev in key_specs}
     uncached_keys = 0
+    #: Formula cells in the sorted block that DID have a cached value. The
+    #: openpyxl round-trip does not carry a cache through, so every one of
+    #: them reads back 'absent' after this save. uncached_keys counts the
+    #: opposite population (cells with no cache at read time), which is why a
+    #: fully-computed workbook produced zero warnings while losing all of its
+    #: numbers (insane round, M-5).
+    dropped_cache = 0
     rows = []
     for r in range(data_top, max_row + 1):
         vals, styles, sortvals, texts = [], [], [], []
@@ -126,9 +138,12 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
             # string type through the rewrite instead of going live.
             texts.append(_calc.looks_like_formula_text(cell))
             cv = cws.cell(r, c).value
-            if (cv is None and _calc.is_formula_cell(cell)
-                    and (c - min_col) in key_offsets):
-                uncached_keys += 1  # sorts by formula TEXT, not its value
+            if _calc.is_formula_cell(cell):
+                if cv is None:
+                    if (c - min_col) in key_offsets:
+                        uncached_keys += 1  # sorts by formula TEXT, not value
+                else:
+                    dropped_cache += 1
             sortvals.append(cv if cv is not None else cell.value)
         rows.append({"src": r, "vals": vals, "styles": styles,
                      "sort": sortvals, "text": texts})
@@ -165,12 +180,21 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
             {"column": header_names[o] if o < len(header_names) else o,
              "order": "desc" if rev else "asc"} for o, rev in key_specs]}
     result = pkg.save(allow_loss=allow_loss, backup=backup)
+    notes: list[str] = []
     if uncached_keys:
-        result["warnings"] = list(result.get("warnings", [])) + [
+        notes.append(
             f"{uncached_keys} sort-key cell(s) hold a formula with no cached "
             "value and were ordered by their formula TEXT, not their result. "
             "Run recalculate or open in Excel first for a value-accurate "
-            "sort."]
+            "sort.")
+    if dropped_cache:
+        notes.append(
+            f"{dropped_cache} formula cell(s) in the sorted range had a "
+            "cached value before this sort and have none after it (label "
+            "'absent'): a file-based save cannot carry Excel's cache through "
+            "a formula rewrite. " + gridio.ABSENT_WARNING)
+    if notes:
+        result["warnings"] = list(result.get("warnings", [])) + notes
     return result
 
 

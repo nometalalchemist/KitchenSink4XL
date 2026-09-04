@@ -439,6 +439,12 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
             got = wb[sheet][coord].value
             if kind == "formula":
                 exp = expected if str(expected).startswith("=") else "=" + str(expected)
+                # An ARRAY formula's value is an openpyxl ArrayFormula OBJECT
+                # carrying the text on .text; str() of it is the repr, which
+                # made every array write fail read-back as a "mismatch".
+                text = getattr(got, "text", None)
+                if isinstance(text, str):
+                    got = text
                 gots = got if isinstance(got, str) else str(got)
                 if not gots.startswith("="):
                     gots = "=" + gots
