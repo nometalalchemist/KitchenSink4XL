@@ -27,11 +27,13 @@ at construction) and exposes the mapping protocol over structured_content.
 from __future__ import annotations
 
 import json as _json
+import zipfile
 from typing import Any
 from xml.etree.ElementTree import ParseError as _XmlParseError
 
 from fastmcp.exceptions import NotFoundError as _FmcpNotFound
 from fastmcp.exceptions import ToolError as _FmcpToolError
+from fastmcp.exceptions import ValidationError as _FmcpValidation
 from fastmcp.server.middleware import Middleware as _FmcpMiddleware
 from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 
@@ -66,6 +68,17 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     (_err.XlMcpError, "BAD_PARAMS"),
     (FileExistsError, "CONFLICT"),
     (FileNotFoundError, "NOT_FOUND"),
+    # A file that is not a zip reaches the READ paths as a raw BadZipFile
+    # (the mutation path converts it to WorkbookCorrupt first). Adversarial
+    # round: get_workbook_metadata on a garbage .xlsx answered "Error calling
+    # tool ...: File is not a zip file" with no envelope and no code.
+    (zipfile.BadZipFile, "UNSUPPORTED_CONTENT"),
+    # PermissionError is the file-held-open signal on Windows (and what a
+    # directory passed as a path raises); IsADirectoryError is its POSIX
+    # spelling. Everything else OS-level lands as BAD_PARAMS rather than a
+    # raw traceback with an absolute path in it.
+    (PermissionError, "WORKBOOK_LOCKED"),
+    (IsADirectoryError, "BAD_PARAMS"),
     (ValueError, "BAD_PARAMS"),
     (TypeError, "BAD_PARAMS"),
     # Deliberate widening carried from the sibling hardening rounds: parser
@@ -80,6 +93,9 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     # KeyError repr ("0") on the client.
     (KeyError, "BAD_PARAMS"),
     (IndexError, "BAD_PARAMS"),
+    # Last-resort OS backstop (a path that is a device, a broken junction, a
+    # cross-volume replace): refuse in-envelope, never as a raw traceback.
+    (OSError, "BAD_PARAMS"),
 )
 
 
@@ -244,6 +260,76 @@ class RefusalResult(_FmcpToolResult):
 def refuse(exc: BaseException) -> RefusalResult:
     """One-call convenience for the tool boundary wrapper."""
     return RefusalResult(refusal(exc))
+
+
+#: fastmcp validates tool arguments against the generated schema BEFORE the
+#: tool body (and therefore before the boundary wrapper) ever runs, so an
+#: unknown keyword, a list where a string belongs, or a null in a typed field
+#: used to come back as a bare pydantic dump with no code and no hint: the one
+#: refusal class that escaped the envelope entirely. Adversarial round: 66 of
+#: 244 multiplex-abuse calls landed this way.
+_SCHEMA_MARKERS = (
+    "validation error for",
+    "Input should be",
+    "Unexpected keyword argument",
+    "Missing required argument",
+    "Field required",
+)
+
+
+def _is_schema_error(text: str) -> bool:
+    return any(m in text for m in _SCHEMA_MARKERS)
+
+
+class InputValidationEnvelope(_FmcpMiddleware):
+    """Turn fastmcp's own argument-validation failures into the Section 7
+    refusal shape, so EVERY refusal a caller can provoke carries a closed
+    code and a usable hint. The pydantic detail is kept verbatim in the
+    message (it names the offending field precisely); only the shape
+    changes."""
+
+    async def on_call_tool(self, context, call_next):
+        name = getattr(context.message, "name", "the tool")
+        try:
+            result = await call_next(context)
+        except (_FmcpValidation, _FmcpToolError) as exc:
+            text = str(exc)
+            cause = exc.__cause__
+            if cause is not None and not _is_schema_error(text):
+                text = f"{text}: {cause}"
+            if not _is_schema_error(text):
+                raise
+            return self._refuse(name, text)
+        # fastmcp does not always raise: an argument-validation failure comes
+        # back as an error ToolResult carrying the pydantic text and NO
+        # structured content, which is exactly the shape the envelope exists
+        # to eliminate.
+        if getattr(result, "is_error", False) and not getattr(
+                result, "structured_content", None):
+            text = _text_of(result)
+            if _is_schema_error(text):
+                return self._refuse(name, text)
+        return result
+
+    @staticmethod
+    def _refuse(name: str, text: str) -> "RefusalResult":
+        err = _err.XlMcpError(
+            f"{name}: the arguments do not match the tool's schema. {text}")
+        payload = refusal(err)
+        payload["error"]["hint"] = (
+            "check the parameter names and types in the tool's schema; "
+            "unknown parameters are never ignored silently"
+        )
+        return RefusalResult(payload)
+
+
+def _text_of(result) -> str:
+    """Flatten a ToolResult's content blocks to text (best effort)."""
+    try:
+        return "\n".join(
+            getattr(b, "text", "") or "" for b in (result.content or ()))
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 class DisabledToolSignpost(_FmcpMiddleware):

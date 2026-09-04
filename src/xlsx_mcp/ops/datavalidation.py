@@ -28,7 +28,15 @@ _OPERATORS = ("between", "notBetween", "equal", "notEqual", "greaterThan",
 def _list_formula(values: Any) -> tuple[str, bool]:
     """Return (formula1, is_range). A list of items becomes a quoted CSV; a
     string that looks like a range or reference is passed through as a ref."""
+    if values is None:
+        # str(None) used to sail through as the literal source "None", which
+        # writes a dropdown pointing at a name that does not exist.
+        raise XlMcpError(
+            "a list validation needs values: inline items (a list) or a "
+            "range/formula (a string like Lists!$A$1:$A$9)")
     if isinstance(values, list):
+        if not values:
+            raise XlMcpError("a list validation needs at least one item")
         joined = ",".join(str(v) for v in values)
         return '"' + joined.replace('"', '""') + '"', False
     s = str(values).strip()

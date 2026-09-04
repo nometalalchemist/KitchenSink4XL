@@ -27,10 +27,18 @@ Two deliberate NON-flags, verified empirically (re-audit round-trips):
   cosmetic (page-setup device settings; the pageSetup element itself
   survives). It stays unflagged by policy and is treated as a routine drop.
 
-KNOWN LIMIT: hazards that live INSIDE surviving parts (x14 conditional
-formatting, sparklines, in-sheet extLst extensions) are invisible to a
-part-level scan; the container parts that can be detected (metadata.xml,
-charts) are flagged conservatively instead.
+KNOWN LIMIT, now measured: hazards that live INSIDE surviving parts (x14
+conditional formatting, sparklines, in-sheet extLst extensions) are invisible
+to a part-level scan; the container parts that can be detected (metadata.xml,
+charts) are flagged conservatively instead. The adversarial + fidelity gate
+turned that limit into evidence: an Excel-authored data bar plus icon set
+(tests/fixtures corpus x14_condformat.xlsx) adds NO part at all, so this scan
+reports CLEAN, a mutation is applied without a murmur, and the x14 rules are
+gone from the saved file. The compensating control is not here (a namelist
+cannot see it) but in core/package.py: the openpyxl load captures openpyxl's
+own "... extension is not supported and will be removed" warnings and the
+save reports them, so the loss is announced rather than silent. Whether that
+should escalate from a warning to a refusal is an open author decision.
 """
 
 from __future__ import annotations
@@ -426,6 +434,27 @@ def _refine_drawings(
     hz.parts = [p for p in hz.parts if p in keep]
 
 
+def _normalized(name: str) -> str:
+    r"""A part name reduced to the spelling the matchers expect.
+
+    Zip member names are attacker-controlled text, and a package can carry the
+    same part under a spelling the prefix matchers miss: './xl/slicers/x.xml',
+    '/xl/slicers/x.xml', 'xl//slicers/x.xml', or backslash separators.
+    Adversarial round: those four evaded the hazard scan, so the mutation was
+    NOT refused up front (the default-fail inventory check in
+    verify-after-write still caught the loss and refused the save, which is
+    why nothing was destroyed). Normalizing for the MATCH restores the loud,
+    specific up-front refusal; the reported part keeps its real name, because
+    the inventory diff compares against the real one."""
+    low = name.replace("\\", "/")
+    while low.startswith("./"):
+        low = low[2:]
+    low = low.lstrip("/")
+    while "//" in low:
+        low = low.replace("//", "/")
+    return low
+
+
 def scan_names(names: Iterable[str], path: str = "<names>", *,
                rels_reader: Callable[[str], bytes] | None = None) -> HazardReport:
     """Classify a pre-listed set of archive member names. Split out so the
@@ -436,8 +465,9 @@ def scan_names(names: Iterable[str], path: str = "<names>", *,
     nameset = set(names)
     found: dict[str, Hazard] = {}
     for name in names:
+        probe = _normalized(name)
         for spec in HAZARD_SPECS:
-            if spec.matcher(name):
+            if spec.matcher(name) or (probe != name and spec.matcher(probe)):
                 h = found.get(spec.key)
                 if h is None:
                     h = Hazard(

@@ -54,6 +54,7 @@ from .errors import (
     WorkbookCorrupt,
     WorkbookLocked,
     WorkbookNotFound,
+    XlMcpError,
 )
 from .sandbox import check_path
 
@@ -79,6 +80,19 @@ class WorkbookPackage:
         self._changed: dict[str, Any] = {}
         self._expected_removals: set[str] = set()
         self._expected_preserved: set[str] = set()
+        #: (mtime_ns, size) of the file the model and the hazard scan were
+        #: read from. save() re-stats under the write lock and refuses if
+        #: another writer changed the file in between (see _check_unchanged).
+        self._stamp: tuple[int, int] | None = None
+        #: extensions openpyxl announced it was discarding at load time
+        #: (x14 conditional formatting, sparkline and slicer-list extLst
+        #: blocks); they live INSIDE surviving parts, so no part-level scan
+        #: and no part-level verify can see them.
+        self._dropped_extensions: list[str] = []
+        #: hazard keys the caller was explicitly warned would be dropped when
+        #: they passed allow_loss; the verify gate excuses these and nothing
+        #: else (allow_loss is not a blanket amnesty for fragile parts).
+        self._warned_loss_keys: set[str] = set()
 
     # ------------------------------------------------------------- open
 
@@ -90,6 +104,10 @@ class WorkbookPackage:
         p = check_path(path, "open workbook")
         if not os.path.exists(p):
             raise WorkbookNotFound(f"no such workbook: {p}")
+        if os.path.isdir(p):
+            raise XlMcpError(
+                f"{p} is a directory, not a workbook file; pass the path of "
+                "an .xlsx/.xlsm file")
         pkg = cls(p, com_manager=com_manager)
         rep = _hazard.scan_path(p)
         if rep.error is not None:
@@ -97,7 +115,31 @@ class WorkbookPackage:
         pkg._hazard = rep
         pkg._pre_parts = list(rep.parts)
         pkg._pre_sizes = dict(rep.sizes)
+        pkg._stamp = _file_stamp(p)
         return pkg
+
+    def _check_unchanged(self) -> None:
+        """Refuse if the file changed since this package read it.
+
+        The write lock serializes THIS server's writers, but Excel, another
+        tool, or a second process can land a write between open() (which took
+        the hazard scan and the part inventory) and save() (which writes the
+        model loaded from the older bytes). Without this check that write is
+        silently clobbered, and the pre-write inventory the verify gate
+        compares against describes a file that no longer exists. Adversarial
+        round: reproduced end to end, the concurrent cell simply vanished."""
+        if self._stamp is None:
+            return
+        now = _file_stamp(self.path)
+        if now is None or now == self._stamp:
+            return
+        exc = XlMcpError(
+            f"{Path(self.path).name} changed on disk after this operation "
+            "read it (another process or Excel wrote to it). Refusing rather "
+            "than overwriting that change with a stale copy; re-run the "
+            "operation against the current file.")
+        exc.code = "CONFLICT"
+        raise exc
 
     @property
     def hazard(self) -> _hazard.HazardReport:
@@ -111,9 +153,13 @@ class WorkbookPackage:
         .xlsm so the VBA project survives the round-trip (Phase 1 finding 4)."""
         if self._workbook is None:
             import openpyxl
-            self._workbook = openpyxl.load_workbook(
-                self.path, keep_vba=self._keep_vba, data_only=False,
-                rich_text=False)
+            import warnings as _warnings
+            with _warnings.catch_warnings(record=True) as caught:
+                _warnings.simplefilter("always")
+                self._workbook = openpyxl.load_workbook(
+                    self.path, keep_vba=self._keep_vba, data_only=False,
+                    rich_text=False)
+            self._dropped_extensions = _extension_drops(caught)
         return self._workbook
 
     # ------------------------------------------------------------- address
@@ -227,11 +273,33 @@ class WorkbookPackage:
             writable = False
         return present, writable
 
+    def _extension_warnings(self) -> list[str]:
+        """Surface the in-part extension blocks openpyxl discarded at load.
+
+        A part-level hazard scan cannot see these: x14 conditional formatting
+        (every modern data bar and icon set), sparkline and slicer-list
+        extLst blocks live INSIDE xl/worksheets/sheetN.xml, which survives the
+        save at full size, so neither the scan nor the part-inventory verify
+        can flag them. openpyxl itself announces each drop as a warning at
+        load time, and that announcement is the only signal there is. The
+        fidelity gate proved the silent case: an Excel-authored data-bar
+        workbook scans CLEAN, mutates without a murmur, and comes back with
+        the x14 rules gone."""
+        if not self._dropped_extensions:
+            return []
+        return ["openpyxl discarded in-part extension blocks on load, so "
+                "they are NOT in the saved file: "
+                + "; ".join(self._dropped_extensions)
+                + ". These live inside the worksheet part (x14 conditional "
+                  "formatting, sparklines, slicer lists), so no part-level "
+                  "check can catch them; use the com pack to edit this "
+                  "workbook with full fidelity."]
+
     def _hazard_gate(self, allow_loss: bool) -> list[str]:
         """Apply the routing decision. Returns advisory warnings; raises
         HazardRefused when a drop-risk mutation has no loss-safe path."""
         rep = self.hazard
-        warnings: list[str] = []
+        warnings: list[str] = self._extension_warnings()
         if rep.clean:
             return warnings
         drop_keys = list(rep.lossy_keys)  # SEV_DROPS
@@ -279,6 +347,10 @@ class WorkbookPackage:
                                      "allow_loss:true with backup"]}
             raise exc
         if drop_keys and allow_loss:
+            # Record exactly which hazard families the caller was told they
+            # were sacrificing; verify-after-write excuses those and only
+            # those (see verify.part_loss_check loss_keys).
+            self._warned_loss_keys = set(drop_keys)
             labels = [next(h.label for h in rep.hazards if h.key == k)
                       for k in drop_keys]
             warnings.append(
@@ -304,6 +376,31 @@ class WorkbookPackage:
                 pass
         wb.save(tmp)
 
+    def _run_verify(self, target: str, allow_loss: bool) -> _verify.VerifyResult:
+        """Run the verify gate and NEVER let it raise.
+
+        Every check inside verify reads a package the server just produced,
+        and a package that is broken in the right way makes those readers
+        throw rather than return a verdict (adversarial round: a dangling
+        chart relationship made content_readback's openpyxl load raise
+        KeyError straight out of save). A raising verify is worse than a
+        failing one: in the POST-promote position the exception skips the
+        restore-from-backup branch entirely and leaves the broken file in
+        place. An exception is therefore a verification FAILURE, reported as
+        one."""
+        try:
+            return _verify.verify_after_write(
+                target, pre_parts=self._pre_parts, intended=self._intended,
+                allow_loss=allow_loss, pre_sizes=self._pre_sizes,
+                expected_removals=frozenset(self._expected_removals),
+                loss_keys=self._warned_loss_keys or None)
+        except Exception as exc:  # noqa: BLE001
+            return _verify.VerifyResult(
+                ok=False,
+                reasons=[f"the verification pass could not read the produced "
+                         f"package ({type(exc).__name__}: {exc}); treating "
+                         "that as a failed verify"])
+
     def _restore_from_backup(self) -> bool:
         import shutil
         slot = _safesave.slot_dir(self.path) / _safesave.PREV_SLOT
@@ -323,6 +420,7 @@ class WorkbookPackage:
         restores it from the backup)."""
         path = self.path
         with _safesave.write_lock(path):
+            self._check_unchanged()
             lock_present, writable = self._lock_state()
             if not writable:
                 raise WorkbookLocked(
@@ -347,10 +445,7 @@ class WorkbookPackage:
                     f"{Path(path).name}: cannot write (it may be open in "
                     f"Excel). {exc}")
 
-            pre = _verify.verify_after_write(
-                tmp, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss, pre_sizes=self._pre_sizes,
-                expected_removals=frozenset(self._expected_removals))
+            pre = self._run_verify(tmp, allow_loss)
             if not pre.ok:
                 _silent_remove(tmp)
                 raise ValidationFailed(
@@ -369,10 +464,7 @@ class WorkbookPackage:
                     f"{Path(path).name}: cannot replace the file (it may be "
                     f"open in Excel). {exc}")
 
-            post = _verify.verify_after_write(
-                path, pre_parts=self._pre_parts, intended=self._intended,
-                allow_loss=allow_loss, pre_sizes=self._pre_sizes,
-                expected_removals=frozenset(self._expected_removals))
+            post = self._run_verify(path, allow_loss)
             if not post.ok:
                 restored = False
                 if backup:
@@ -404,6 +496,11 @@ class WorkbookPackage:
             self._changed = {}
             self._expected_removals = set()
             self._expected_preserved = set()
+            self._warned_loss_keys = set()
+            self._dropped_extensions = []
+            # The file we just wrote is now the baseline a second save on this
+            # package must compare against.
+            self._stamp = _file_stamp(path)
             result = {
                 "ok": True,
                 "file": path,
@@ -461,6 +558,31 @@ class WorkbookPackage:
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+
+def _file_stamp(path: str) -> tuple[int, int] | None:
+    """(mtime_ns, size) identity of the file on disk, or None if it is gone."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+#: openpyxl's own wording when it discards an extLst block it cannot model
+#: ("Conditional Formatting extension is not supported and will be removed",
+#: "Slicer List extension ...", "Unknown extension ...").
+_EXT_DROP_MARKER = "is not supported and will be removed"
+
+
+def _extension_drops(caught) -> list[str]:
+    """De-duplicated extension-drop notices from a captured warning list."""
+    out: list[str] = []
+    for w in caught or ():
+        text = str(getattr(w, "message", w))
+        if _EXT_DROP_MARKER in text and text not in out:
+            out.append(text)
+    return out
 
 
 def _silent_remove(path: str) -> None:

@@ -109,6 +109,14 @@ def write_range(path: str, location: Any, data: list[list[Any]],
     if not isinstance(data, list) or (data and not all(
             isinstance(r, list) for r in data)):
         raise XlMcpError("data must be a 2D array (list of row lists)")
+    widths = {len(r) for r in data}
+    if len(widths) > 1:
+        # A ragged block used to be accepted and written row by row, so the
+        # short rows quietly left whatever was underneath them in place.
+        raise XlMcpError(
+            f"data rows have different lengths {sorted(widths)}; a written "
+            "block must be rectangular (pad the short rows with null to "
+            "clear those cells)")
     pkg = WorkbookPackage.open(path)
     grid = pkg.resolve(location, default_sheet=sheet)
     rows = len(data)
@@ -446,6 +454,17 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
 
         matched_rows = [r for r in body if keep(r)]
         matched = len(matched_rows)
+
+        if group_by and not aggregate:
+            # Grouping only exists inside aggregate mode. A group_by on its
+            # own used to be dropped on the floor: the caller asked for a
+            # grouped summary, got ungrouped rows, and nothing said so (the
+            # column name was not even validated).
+            raise XlMcpError(
+                "group_by only applies in aggregate mode; pass aggregate "
+                "(for example [{'func': 'count'}] or "
+                "[{'func': 'sum', 'column': 'Amount'}]) alongside it, or use "
+                "distinct=true to get unique rows")
 
         # aggregate mode
         if aggregate:

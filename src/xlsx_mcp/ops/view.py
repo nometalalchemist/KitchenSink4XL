@@ -191,6 +191,15 @@ def apply_edits(path: str, edits: list, allow_loss: bool = False,
             if not isinstance(data, list) or not data or not all(
                     isinstance(r, list) for r in data):
                 raise XlMcpError(f"edit #{i}: write_range needs 2D 'data'")
+            widths = {len(r) for r in data}
+            if len(widths) > 1:
+                # A ragged block was written row by row, so short rows left
+                # whatever sat under them in place (write_range has the same
+                # guard).
+                raise XlMcpError(
+                    f"edit #{i}: write_range rows have different lengths "
+                    f"{sorted(widths)}; the block must be rectangular (pad "
+                    "short rows with null to clear those cells)")
         plan.append((edit, grid))
 
     # ---- apply pass: every op is now known-valid; mutate the in-memory model.

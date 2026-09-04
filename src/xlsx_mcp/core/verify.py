@@ -237,6 +237,7 @@ def structural_check(path: str) -> tuple[bool, list[str]]:
 
 def part_loss_check(pre_parts, path: str, *, allow_loss: bool,
                     expected_removals: Iterable[str] = (),
+                    loss_keys: Iterable[str] | None = None,
                     ) -> tuple[bool, list[str]]:
     """Diff the produced part list against the pre-write scan. A fragile part
     that vanished unexpectedly (and was not allow_loss-covered) fails.
@@ -249,7 +250,15 @@ def part_loss_check(pre_parts, path: str, *, allow_loss: bool,
     excuse exactly those losses here. Without this, a deliberate chart or
     image delete could never pass verify (OBSERVED: removing a model chart
     drops xl/charts/chart1.xml plus xl/drawings/drawing1.xml on save).
-    Anything not covered by a registered prefix still fails by default."""
+    Anything not covered by a registered prefix still fails by default.
+
+    loss_keys SCOPES the allow_loss excuse to the hazard families the caller
+    was actually warned about (the SEV_DROPS keys the gate named when it let
+    the mutation through). Without it, allow_loss was a blanket amnesty for
+    every fragile family: a caller who accepted the loss of slicers also,
+    silently, accepted a chart part vanishing whole, even though the gate had
+    only told them charts might DEGRADE. None keeps the old behavior for
+    direct callers that cannot know the warned set."""
     try:
         with zipfile.ZipFile(path) as zf:
             post = set(zf.namelist())
@@ -258,7 +267,9 @@ def part_loss_check(pre_parts, path: str, *, allow_loss: bool,
     pre = set(pre_parts)
     lost = pre - post
     exp = tuple(e.lower() for e in expected_removals)
+    keys = None if loss_keys is None else {k.lower() for k in loss_keys}
     fragile_lost: list[str] = []
+    unexcused: list[str] = []
     for name in sorted(lost):
         low = name.lower()
         if low in EXPECTED_DROPPABLE:
@@ -268,9 +279,13 @@ def part_loss_check(pre_parts, path: str, *, allow_loss: bool,
         for spec in _hazard.HAZARD_SPECS:
             if spec.matcher(name):
                 fragile_lost.append(name)
+                if keys is not None and spec.key not in keys:
+                    unexcused.append(f"{name} ({spec.label})")
                 break
     if fragile_lost and not allow_loss:
         return False, fragile_lost
+    if allow_loss and unexcused:
+        return False, unexcused
     return True, fragile_lost if allow_loss else []
 
 
@@ -405,7 +420,16 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
     mismatches: list[dict] = []
     import openpyxl
     keep_vba = path.lower().endswith(".xlsm")
-    wb = openpyxl.load_workbook(path, keep_vba=keep_vba, data_only=False)
+    try:
+        wb = openpyxl.load_workbook(path, keep_vba=keep_vba, data_only=False)
+    except Exception as exc:  # noqa: BLE001
+        # A produced package can be broken in ways that make the reader throw
+        # rather than answer (a dangling chart relationship raises KeyError
+        # deep inside openpyxl's reader). That is a failed read-back, not an
+        # excuse to escape the gate.
+        return False, [{"problem": "the produced file could not be re-opened "
+                                   "for read-back",
+                        "error": f"{type(exc).__name__}: {exc}"}]
     try:
         for (sheet, coord), (kind, expected) in intended.items():
             if sheet not in wb.sheetnames:
@@ -433,7 +457,8 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
 def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
                        allow_loss: bool = False,
                        pre_sizes: dict | None = None,
-                       expected_removals: Iterable[str] = ()) -> VerifyResult:
+                       expected_removals: Iterable[str] = (),
+                       loss_keys: Iterable[str] | None = None) -> VerifyResult:
     """Run the full verify gate on a produced (temp) package. Returns a
     VerifyResult; the caller raises ValidationFailed and refuses to promote on
     ``ok is False``."""
@@ -446,13 +471,16 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
         return result  # a structurally broken file is fatal; stop here
 
     ok, lost = part_loss_check(pre_parts, path, allow_loss=allow_loss,
-                               expected_removals=expected_removals)
+                               expected_removals=expected_removals,
+                               loss_keys=loss_keys)
     if not ok:
         result.ok = False
         result.lost_parts = lost
         result.reasons.append(
-            "the write would drop fragile part(s) that were present before: "
-            + ", ".join(lost))
+            "the write would drop fragile part(s) that were present before"
+            + (" and were NOT among the families allow_loss accepted"
+               if allow_loss else "")
+            + ": " + ", ".join(lost))
 
     # default-fail inventory diff over everything the fragile checks do not
     # own; falls back to a name-only inventory when no pre-scan sizes exist.

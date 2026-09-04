@@ -16,6 +16,9 @@ tests/corpus/*.xlsm
 tests/corpus/*.xlsb
 tests/corpus/*.xls
 
+# Corpus build byproducts (PID journal, scratch sources), never fixtures.
+tests/fixtures/corpus/_*
+
 # Internal build-planning docs (gitignored-class internals; the public repo
 # tells the sanitized version).
 PLAN.md

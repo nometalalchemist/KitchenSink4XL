@@ -126,6 +126,7 @@ class _SuccessEnvelope(_FmcpMiddleware):
 
 mcp.add_middleware(_SuccessEnvelope())
 mcp.add_middleware(_envelope.DisabledToolSignpost())
+mcp.add_middleware(_envelope.InputValidationEnvelope())
 
 
 def _tool(pack: str):

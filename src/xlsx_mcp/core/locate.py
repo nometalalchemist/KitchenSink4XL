@@ -83,6 +83,20 @@ RESERVED_SELECTORS: tuple[str, ...] = ()
 #: refuses as malformed rather than mis-resolving.
 _ANCHOR_TAG = "gv1"
 
+#: Fingerprint field shape (blake2b, digest_size=5 -> 10 hex chars). A token
+#: whose fingerprint field is not this shape is MALFORMED, not stale, and says
+#: so (adversarial round: a truncated token used to report STALE_ANCHOR, which
+#: sent the caller looking for a content change that never happened).
+_FP_RE = re.compile(r"[0-9a-f]{10}")
+
+#: Ceiling on the rectangle an anchor token may name. A view can only ever
+#: anchor what it showed (at most 200 x 100 cells), but the token is caller-
+#: supplied text, and the fingerprint walks every cell of the rectangle it
+#: names: a hand-edited 'A1:XFD1048576' token costs ~17.2 BILLION cell reads
+#: (measured: 20-40 CPU-minutes) inside a single-threaded stdio server, i.e. a
+#: one-call hang. The rectangle is bounds-checked BEFORE any fingerprint work.
+_MAX_ANCHOR_CELLS = 200_000
+
 MAX_ROW = 1_048_576
 MAX_COL = 16_384
 MAX_CELL_CHARS = 32_767
@@ -634,8 +648,14 @@ def grid_fingerprint(ws, min_row: int, min_col: int, max_row: int,
     (formula strings and literals, the data_only=False value space) keyed by
     coordinate, so any value change, move, insert, or delete inside the
     rectangle changes the digest. Formatting-only changes do not; the anchor
-    guards content, not cosmetics."""
+    guards content, not cosmetics.
+
+    The BOUNDS are hashed in as well, so a token cannot be widened by hand:
+    before that, an A1:C4 token re-pointed at A1:Z2000 still verified (the
+    added cells were empty and empty cells contribute nothing), which let an
+    edit land on cells the view never showed."""
     h = hashlib.blake2b(digest_size=5)
+    h.update(f"{min_row},{min_col},{max_row},{max_col}|".encode("ascii"))
     cells = getattr(ws, "_cells", None)
     for r in range(min_row, max_row + 1):
         for c in range(min_col, max_col + 1):
@@ -674,7 +694,7 @@ def _resolve_anchor(wb, token: Any) -> ResolvedGrid:
         a1_ref, fp = rest.rsplit(":", 1)
         pad = "=" * (-len(b64) % 4)
         sheet = base64.urlsafe_b64decode(b64 + pad).decode("utf-8")
-        if not sheet or not a1_ref or not fp:
+        if not sheet or not a1_ref or not _FP_RE.fullmatch(fp):
             raise ValueError
     except (ValueError, UnicodeDecodeError):
         raise bad
@@ -690,6 +710,13 @@ def _resolve_anchor(wb, token: Any) -> ResolvedGrid:
     if None in (min_col, min_row, max_col, max_row):
         raise bad
     _check_bounds(min_col, min_row, max_col, max_row, f"anchor {a1_ref!r}")
+    cells = (max_row - min_row + 1) * (max_col - min_col + 1)
+    if cells > _MAX_ANCHOR_CELLS:
+        raise RangeOutOfBounds(
+            f"anchor {a1_ref!r} names {cells:,} cells, over the "
+            f"{_MAX_ANCHOR_CELLS:,}-cell anchor ceiling; a get_grid_view "
+            "anchor never covers more than the rectangle it showed, so this "
+            "token was edited by hand. Re-run get_grid_view for a fresh one")
     current = grid_fingerprint(ws, min_row, min_col, max_row, max_col)
     if current != fp:
         raise StaleAnchor(

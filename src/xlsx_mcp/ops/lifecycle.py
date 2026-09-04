@@ -205,7 +205,13 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
 
     detail: dict[str, Any] = {"action": action}
     if action == "add":
-        name = new_name or sheet or "Sheet"
+        name = new_name or sheet
+        if not name:
+            # It used to default to "Sheet", so a call that forgot new_name
+            # silently created a differently named sheet than the caller
+            # meant, and only the SECOND such call ever complained.
+            raise XlMcpError(
+                "add needs new_name (the title for the new sheet)")
         if name in wb.sheetnames:
             raise XlMcpError(f"a sheet named {name!r} already exists")
         if len(name) > 31:

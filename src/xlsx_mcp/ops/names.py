@@ -13,6 +13,7 @@ path. Mutations route through WorkbookPackage for the backup and verify.
 
 from __future__ import annotations
 
+import re as _re
 from typing import Any
 
 from ..core import locate as _locate
@@ -62,6 +63,89 @@ def _find(wb, name: str, scope: str | None):
     return hits[0]
 
 
+#: Excel's grammar for a defined name: first character a letter, underscore,
+#: or backslash; then letters, digits, periods, underscores; no spaces; at
+#: most 255 characters; and never something Excel would read as a cell
+#: reference (A1 style or R1C1 style), nor the bare letters R and C.
+_NAME_RE = _re.compile(r"[A-Za-z_\\][A-Za-z0-9_.\\]*", _re.UNICODE)
+_LOOKS_LIKE_A1 = _re.compile(r"\$?[A-Za-z]{1,3}\$?[0-9]{1,7}$")
+_LOOKS_LIKE_R1C1 = _re.compile(r"[Rr][0-9]*[Cc][0-9]*$")
+
+
+def _validate_name(name: str) -> str:
+    """Refuse a defined name Excel's own grammar rejects.
+
+    This is a corruption guard, not a style check: the adversarial round
+    added the name '1bad' through this tool, the save verified clean, and
+    then EXCEL REFUSED TO OPEN THE FILE (repair prompt). Nothing downstream
+    can catch that, because the part inventory and the XML are both intact;
+    only the grammar is wrong."""
+    if not isinstance(name, str) or not name.strip():
+        raise XlMcpError("name must be a non-empty string")
+    if len(name) > 255:
+        raise XlMcpError(
+            f"defined name {name[:40]!r}... is {len(name)} characters; "
+            "Excel's limit is 255")
+    if name.startswith("_xlnm"):
+        return name  # the built-ins, handled by the reserved-name guards
+    if not _NAME_RE.fullmatch(name):
+        raise XlMcpError(
+            f"{name!r} is not a valid defined name: Excel requires the first "
+            "character to be a letter, underscore, or backslash and the rest "
+            "to be letters, digits, periods, or underscores (no spaces, no "
+            "operators). Excel refuses to open a workbook carrying an "
+            "invalid name, so this is refused here.")
+    if (_LOOKS_LIKE_A1.fullmatch(name) or _LOOKS_LIKE_R1C1.fullmatch(name)
+            or name.upper() in ("R", "C")):
+        raise XlMcpError(
+            f"{name!r} reads as a cell reference, which Excel does not allow "
+            "as a defined name; pick a name that cannot be parsed as an "
+            "address")
+    return name
+
+
+def _validate_refers_to(rt: str) -> str:
+    """Cheap syntax sanity on a definition body.
+
+    Not a formula parser: it catches the shapes that make Excel demand a
+    repair on open (unbalanced parentheses or quotes, a definition that is
+    only operators, a stray leading operator). '(((' passed before, and the
+    workbook it produced would not open."""
+    if len(rt) > 8192:
+        raise XlMcpError("refers_to is too long to be a valid definition")
+    depth = 0
+    in_quote = False
+    for ch in rt:
+        if ch == '"':
+            in_quote = not in_quote
+            continue
+        if in_quote:
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth < 0:
+                break
+    if in_quote or depth != 0:
+        raise XlMcpError(
+            f"refers_to {rt[:60]!r} has unbalanced parentheses or quotes; "
+            "Excel refuses to open a workbook whose defined name does not "
+            "parse")
+    if rt.count("'") % 2:
+        raise XlMcpError(
+            f"refers_to {rt[:60]!r} has an unbalanced sheet-name quote (')")
+    if not _re.search(r"[A-Za-z0-9_$]", rt):
+        raise XlMcpError(
+            f"refers_to {rt[:60]!r} holds no reference, number, or name; "
+            "give an A1 reference like Sheet1!$A$1:$B$9 or a formula")
+    if rt[-1] in "+-*/^&,=<>(":
+        raise XlMcpError(
+            f"refers_to {rt[:60]!r} ends on an operator; the definition is "
+            "incomplete")
+    return rt
+
+
 def _normalize_refers_to(refers_to: str) -> str:
     """Defined-name definitions are stored WITHOUT a leading '=' (workbook.xml
     holds the bare expression). A definition saved with '=' breaks openpyxl's
@@ -72,7 +156,7 @@ def _normalize_refers_to(refers_to: str) -> str:
         rt = rt[1:].strip()
     if not rt:
         raise XlMcpError("refers_to must be a non-empty A1 reference or formula")
-    return rt
+    return _validate_refers_to(rt)
 
 
 def manage_name(path: str, action: str, name: str | None = None,
@@ -106,6 +190,7 @@ def manage_name(path: str, action: str, name: str | None = None,
     if action == "add":
         if not name or not refers_to:
             raise XlMcpError("add needs name and refers_to")
+        _validate_name(name)
         rt = _normalize_refers_to(refers_to)
         if scope in (None, "workbook"):
             target = wb.defined_names
@@ -135,6 +220,7 @@ def manage_name(path: str, action: str, name: str | None = None,
     elif action == "rename":
         if not name or not new_name:
             raise XlMcpError("rename needs name and new_name")
+        _validate_name(new_name)
         if _is_reserved(name):
             raise XlMcpError(f"{name!r} is a reserved built-in name; protected")
         scope_name, dnd, defn = _find(wb, name, scope)

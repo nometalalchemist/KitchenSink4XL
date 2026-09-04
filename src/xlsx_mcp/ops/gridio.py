@@ -23,7 +23,12 @@ from openpyxl.utils import get_column_letter
 
 from ..core import calc as _calc
 from ..core import locate as _locate
-from ..core.errors import RangeOutOfBounds, WorkbookNotFound, XlMcpError
+from ..core.errors import (
+    RangeOutOfBounds,
+    WorkbookCorrupt,
+    WorkbookNotFound,
+    XlMcpError,
+)
 from ..core.sandbox import check_path
 
 #: A single read that would materialize more than this many cells refuses and
@@ -41,10 +46,23 @@ def open_wb(path: str, *, data_only: bool = False):
     p = check_path(path, "open workbook")
     if not os.path.exists(p):
         raise WorkbookNotFound(f"no such workbook: {p}")
+    if os.path.isdir(p):
+        raise XlMcpError(
+            f"{p} is a directory, not a workbook file; pass the path of an "
+            ".xlsx/.xlsm file")
     import openpyxl
+    import zipfile
     keep_vba = p.lower().endswith(".xlsm")
-    return openpyxl.load_workbook(
-        p, data_only=data_only, keep_vba=keep_vba, rich_text=False)
+    try:
+        return openpyxl.load_workbook(
+            p, data_only=data_only, keep_vba=keep_vba, rich_text=False)
+    except zipfile.BadZipFile as exc:
+        # Reads used to surface this as a raw "File is not a zip file" tool
+        # error with no envelope; mutations already refused properly through
+        # the hazard scan.
+        raise WorkbookCorrupt(
+            f"{p}: not a valid .xlsx/.xlsm package (not a readable zip). "
+            f"{exc}") from exc
 
 
 def resolve(wb, location: Any, *, default_sheet: str | None = None,

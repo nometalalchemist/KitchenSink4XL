@@ -27,7 +27,7 @@ from typing import Any
 from openpyxl.utils import get_column_letter
 
 from ..core import refs as _refs
-from ..core.errors import XlMcpError
+from ..core.errors import UnsupportedStructure, XlMcpError
 from ..core.package import WorkbookPackage
 from . import cells as _cells
 from . import gridio
@@ -54,6 +54,29 @@ def _header_names(ws, row: int, min_col: int, max_col: int) -> list[str]:
             for c in range(min_col, max_col + 1)]
 
 
+def _refuse_merges(ws, grid, what: str) -> None:
+    """Refuse when the target rectangle overlaps a merged range.
+
+    Rewriting rows under a merge is not a thing openpyxl can do: only the
+    top-left of a merge holds a value and the rest are read-only MergedCell
+    objects, so the write half of a sort died mid-flight with
+    "'MergedCell' object attribute 'value' is read-only" (adversarial round)
+    after the reads had already run. Refuse up front, name the merges, and
+    say the remedy."""
+    overlapping = []
+    for mr in list(getattr(ws, "merged_cells", None).ranges
+                   if getattr(ws, "merged_cells", None) else []):
+        if (mr.min_row <= grid.max_row and mr.max_row >= grid.min_row
+                and mr.min_col <= grid.max_col and mr.max_col >= grid.min_col):
+            overlapping.append(str(mr))
+    if overlapping:
+        raise UnsupportedStructure(
+            f"cannot {what} {grid.a1} on {grid.sheet!r}: it overlaps merged "
+            f"range(s) {', '.join(sorted(overlapping))}, and merged cells "
+            f"cannot be rewritten row by row. Unmerge them first "
+            f"(set_merge action='unmerge'), then {what}.")
+
+
 def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                sheet: str | None = None, allow_loss: bool = False,
                backup: bool = True) -> dict:
@@ -66,6 +89,7 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         raise XlMcpError("cannot sort an empty range")
     gridio.guard_cell_count(grid)
     ws = pkg.workbook[grid.sheet]
+    _refuse_merges(ws, grid, "sort")
     cached = gridio.open_wb(path, data_only=True)
     cws = cached[grid.sheet]
 
