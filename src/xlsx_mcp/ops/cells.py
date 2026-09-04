@@ -631,10 +631,15 @@ def _round(x):
     return round(x, 10) if isinstance(x, float) else x
 
 
-#: Excel's cached error literals, which sort after booleans.
+#: Excel's cached error literals, which sort after booleans. Includes the
+#: rich-data / linked-data-type era values (xlErrField and friends, plus
+#: #PYTHON! from Python in Excel): a literal missing here silently falls
+#: into the TEXT run and sorts among the words (edge audit 2026-09-04).
 _ERROR_LITERALS = frozenset({
     "#REF!", "#NAME?", "#VALUE!", "#DIV/0!", "#N/A", "#NULL!", "#NUM!",
     "#SPILL!", "#CALC!", "#GETTING_DATA",
+    "#FIELD!", "#BLOCKED!", "#CONNECT!", "#BUSY!", "#UNKNOWN!",
+    "#EXTERNAL!", "#PYTHON!",
 })
 
 

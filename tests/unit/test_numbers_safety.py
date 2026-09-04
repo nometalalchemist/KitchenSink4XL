@@ -61,6 +61,15 @@ def test_xlpm_prefixes_a_lambda_valued_parameter_at_its_call_site():
     assert "_xlpm.f(_xlpm.x)" in out
 
 
+def test_xlpm_leaves_a_sheet_qualifier_bare():
+    # COM ground truth (edge audit 2026-09-04): Excel stores
+    # =LET(Sales,1,Sales+Sales!A1) as
+    # _xlfn.LET(_xlpm.Sales,1,_xlpm.Sales+Sales!A1) -- a name followed by
+    # "!" is a sheet qualifier, never a parameter use, and stays bare.
+    out, _ = core_calc.normalize_formula("=LET(Sales,1,Sales+Sales!A1)")
+    assert out == "=_xlfn.LET(_xlpm.Sales,1,_xlpm.Sales+Sales!A1)"
+
+
 def test_normalizing_is_idempotent():
     once, _ = core_calc.normalize_formula("=LET(x,A1,x+1)")
     twice, _ = core_calc.normalize_formula(once)
@@ -299,6 +308,16 @@ def test_sort_key_follows_excels_type_ranking():
     asc = sorted(values, key=cells._sort_key)
     assert asc == [-7, 42, "10", "apple", "Zebra", False, True, "#DIV/0!",
                    None]
+
+
+def test_rich_data_error_literals_rank_as_errors_not_text():
+    # The rich-data / Python-in-Excel error values are errors, not words: a
+    # literal missing from _ERROR_LITERALS silently sorts into the text run
+    # (edge audit 2026-09-04).
+    for lit in ("#FIELD!", "#BLOCKED!", "#CONNECT!", "#BUSY!", "#UNKNOWN!",
+                "#EXTERNAL!", "#PYTHON!"):
+        assert cells._sort_key(lit)[0] == cells._sort_key("#DIV/0!")[0], lit
+        assert cells._sort_key(lit)[0] != cells._sort_key("word")[0], lit
 
 
 def test_blanks_sort_last_in_both_directions():

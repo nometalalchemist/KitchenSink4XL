@@ -171,8 +171,13 @@ def _declared_names(body: str) -> list[str]:
 
 def _prefix_params(segment: str, names: list[str]) -> str:
     for name in sorted(set(names), key=len, reverse=True):
+        # The trailing "!" exclusion: a token followed by "!" is a SHEET
+        # qualifier (Sales!A1), never a parameter use; Excel stores it bare
+        # (COM ground truth, edge audit 2026-09-04). Without it a declared
+        # name that collides with a sheet name was rewritten to
+        # _xlpm.Sales!A1, which is not a formula Excel ever stores.
         pattern = re.compile(
-            r"(?<![A-Za-z0-9_.$!])(" + re.escape(name) + r")(?![A-Za-z0-9_.])",
+            r"(?<![A-Za-z0-9_.$!])(" + re.escape(name) + r")(?![A-Za-z0-9_.!])",
             re.IGNORECASE)
 
         def rep(m: re.Match) -> str:
