@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import RangeOutOfBounds, XlMcpError
 from ..core.package import WorkbookPackage
@@ -99,15 +100,12 @@ def _strip_strings(body: str) -> str:
     return _STRING_RE.sub('""', body)
 
 
-def _formula_text(value: Any) -> str | None:
-    """The formula string of a cell value, or None. openpyxl surfaces CSE /
+def _formula_text(cell: Any) -> str | None:
+    """The formula string of a CELL, or None. Asks the cell's type, not the
+    leading '=', so import_data's neutralized injection text (stored as TEXT
+    on purpose) is never audited as a live formula. openpyxl surfaces CSE /
     dynamic-array formulas as ArrayFormula objects carrying .text."""
-    if isinstance(value, str) and value.startswith("="):
-        return value
-    text = getattr(value, "text", None)
-    if isinstance(text, str) and text.startswith("="):
-        return text
-    return None
+    return _calc.formula_text_of(cell)
 
 
 def _capped(items: list, cap: int = _MAX_LIST) -> dict:
@@ -159,7 +157,7 @@ def audit_formulas(path: str, location: Any = None,
                         rect.min_row <= r <= rect.max_row
                         and rect.min_col <= c <= rect.max_col):
                     continue
-                text = _formula_text(cell.value)
+                text = _formula_text(cell)
                 cached = cws.cell(r, c).value
                 addr = gridio.a1(r, c)
                 is_error_cached = isinstance(cached, str) \

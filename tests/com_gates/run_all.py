@@ -32,7 +32,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-PER_GATE_TIMEOUT = 900  # seconds; each gate polls its own zombies
+# seconds; each gate polls its own zombies. The numbers-safety gate drives
+# hundreds of formula writes and a dozen recalculations through real Excel,
+# so the ceiling is generous.
+PER_GATE_TIMEOUT = 2400
 
 
 def discover() -> list[Path]:

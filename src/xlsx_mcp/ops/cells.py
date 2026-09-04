@@ -26,6 +26,7 @@ from __future__ import annotations
 from copy import copy as _copy
 from typing import Any
 
+from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import RangeOutOfBounds, TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
@@ -63,7 +64,8 @@ def read_range(path: str, location: Any, values: str = "cached",
                     "values": [], "value_mode": values}
         gridio.guard_cell_count(grid)
         vals, labels, has_formula = gridio.read_matrix(
-            grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
+            grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb,
+            path=path)
         vals = [[gridio.compact_value(v) for v in row] for row in vals]
         out: dict[str, Any] = {
             "sheet": grid.sheet, "range": grid.a1,
@@ -72,11 +74,9 @@ def read_range(path: str, location: Any, values: str = "cached",
         }
         if has_formula and values != "formula":
             out["labels"] = labels
-            if any("absent" in row for row in labels):
-                out["warning"] = (
-                    "some cells hold formulas with no cached value (label "
-                    "'absent'); run recalculate or open in Excel to populate "
-                    "them")
+            note = gridio.absent_note(labels)
+            if note:
+                out["warning"] = note
         return out
     finally:
         for wb in (formula_wb, cached_wb):
@@ -178,16 +178,27 @@ def clear_range(path: str, location: Any, what: str = "contents",
 
 
 def _read_block(ws, grid, data_only_ws=None):
-    """Buffer (value, style, is_formula) for each cell of a rectangle."""
+    """Buffer (value, style, cached, text_lookalike) for each cell of a
+    rectangle. The last flag marks a TEXT cell whose string starts with '='
+    (import_data's neutralized injection text), which must be written back as
+    text rather than re-armed into a live formula."""
     block = []
     for r in range(grid.min_row, grid.max_row + 1):
         row = []
         for c in range(grid.min_col, grid.max_col + 1):
             cell = ws.cell(r, c)
             cached = data_only_ws.cell(r, c).value if data_only_ws else None
-            row.append((cell.value, _copy(cell._style), cached))
+            row.append((cell.value, _copy(cell._style), cached,
+                        _calc.looks_like_formula_text(cell)))
         block.append(row)
     return block
+
+
+def _place(cell, value, *, as_text: bool) -> None:
+    """Write a buffered value into a cell, keeping neutralized text TEXT."""
+    cell.value = value
+    if as_text and isinstance(value, str):
+        cell.data_type = "s"
 
 
 def copy_range(path: str, source: Any, dest: Any, what: str = "all",
@@ -217,18 +228,21 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
         raise RangeOutOfBounds("the paste would extend past the grid limits")
     wrote_formula = False
     for i, row in enumerate(block):
-        for j, (val, style, cached) in enumerate(row):
+        for j, (val, style, cached, is_text) in enumerate(row):
             tcell = dws.cell(dst.min_row + i, dst.min_col + j)
             if what in ("all", "values", "formulas"):
                 out = val
+                as_text = is_text
                 if what == "values":
                     out = cached if (isinstance(val, str)
-                                     and val.startswith("=")) else val
-                elif isinstance(val, str) and val.startswith("="):
+                                     and val.startswith("=")
+                                     and not is_text) else val
+                elif isinstance(val, str) and val.startswith("=") \
+                        and not is_text:
                     if adjust_formulas:
                         out = _refs.offset_formula(val, dr, dc, src.sheet)
                     wrote_formula = True
-                tcell.value = out
+                _place(tcell, out, as_text=as_text)
             if what in ("all", "formats"):
                 tcell._style = _copy(style)
     if dows is not None:
@@ -277,11 +291,11 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
             cell.number_format = "General"
     wrote_formula = False
     for i, row in enumerate(block):
-        for j, (val, style, _cached) in enumerate(row):
+        for j, (val, style, _cached, is_text) in enumerate(row):
             tcell = ws.cell(dst.min_row + i, dst.min_col + j)
-            tcell.value = val
+            _place(tcell, val, as_text=is_text)
             tcell._style = _copy(style)
-            if isinstance(val, str) and val.startswith("="):
+            if isinstance(val, str) and val.startswith("=") and not is_text:
                 wrote_formula = True
     # References that pointed into the source rectangle now follow it to dest.
     edit = _refs.RefEdit(
@@ -406,6 +420,23 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
         matrix = [[gridio.compact_value(ws.cell(r, c).value)
                    for c in range(grid.min_col, grid.max_col + 1)]
                   for r in range(grid.min_row, grid.max_row + 1)]
+        # STALENESS: on the cached load an uncalculated formula cell is
+        # indistinguishable from a blank one, so a filter skipped it and an
+        # aggregate summed around it while the caller saw a clean number.
+        # Probe only when a blank actually appeared in the rectangle.
+        stale_cells: list[str] = []
+        if data_only and any(v is None for row in matrix for v in row):
+            mask = gridio.formula_mask(path, grid)
+            if mask:
+                for (r, c) in sorted(mask):
+                    if matrix[r - grid.min_row][c - grid.min_col] is None:
+                        stale_cells.append(gridio.a1(r, c))
+        stale_note = (
+            f"{len(stale_cells)} cell(s) in {grid.a1} hold formulas with NO "
+            "cached value; they were read as BLANK, so filters skipped them "
+            "and aggregates were computed without them. Run recalculate (com "
+            "pack) or open in Excel before trusting these numbers"
+        ) if stale_cells else None
         # column names + data rows
         from openpyxl.utils import get_column_letter
         letters = [get_column_letter(c)
@@ -497,11 +528,15 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
                 if gbs:
                     entry["group"] = {gbs[i]: key[i] for i in range(len(gbs))}
                 out_groups.append(entry)
-            return {
+            agg_out = {
                 "sheet": grid.sheet, "source": grid.a1, "mode": "aggregate",
                 "group_by": gbs, "groups": out_groups,
                 "matched": matched, "scanned": scanned,
             }
+            if stale_note:
+                agg_out["warning"] = stale_note
+                agg_out["uncalculated_cells"] = stale_cells[:100]
+            return agg_out
 
         # sort BEFORE projection, so order_by works on any source column,
         # projected or not (before the re-audit an order_by column missing
@@ -513,7 +548,8 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
                 desc = isinstance(spec, dict) and \
                     str(spec.get("dir", "asc")).lower() in ("desc", "descending")
                 matched_rows.sort(
-                    key=lambda r, k=ci: _sort_key(r[k] if k < len(r) else None),
+                    key=lambda r, k=ci, d=desc: _sort_key(
+                        r[k] if k < len(r) else None, reverse=d),
                     reverse=desc)
         # projection
         proj_idx = ([col_i(c) for c in columns] if columns
@@ -541,7 +577,7 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
             rows = rows[: int(limit)]
         payload_rows = ([dict(zip(proj_names, r)) for r in rows]
                         if records else rows)
-        return {
+        row_out = {
             "sheet": grid.sheet, "source": grid.a1, "mode": "rows",
             "header": header, "columns": proj_names,
             "rows": payload_rows,
@@ -549,6 +585,10 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
             "scanned": scanned, "distinct_after_filter": total_after_filter,
             "truncated": truncated, "value_mode": values,
         }
+        if stale_note:
+            row_out["warning"] = stale_note
+            row_out["uncalculated_cells"] = stale_cells[:100]
+        return row_out
     finally:
         wb.close()
 
@@ -591,13 +631,53 @@ def _round(x):
     return round(x, 10) if isinstance(x, float) else x
 
 
-def _sort_key(v):
-    n = _num(v)
-    if n is not None:
-        return (0, n)
-    if v is None:
-        return (2, "")
-    return (1, str(v))
+#: Excel's cached error literals, which sort after booleans.
+_ERROR_LITERALS = frozenset({
+    "#REF!", "#NAME?", "#VALUE!", "#DIV/0!", "#N/A", "#NULL!", "#NUM!",
+    "#SPILL!", "#CALC!", "#GETTING_DATA",
+})
+
+
+def _excel_serial(v) -> float:
+    """A date/time as Excel's own serial number, so a date column sorts with
+    numbers exactly as Excel sorts it."""
+    import datetime as _dt
+    if isinstance(v, _dt.datetime):
+        base = _dt.datetime(1899, 12, 30)
+        return (v - base).total_seconds() / 86400.0
+    if isinstance(v, _dt.date):
+        return float((v - _dt.date(1899, 12, 30)).days)
+    if isinstance(v, _dt.time):
+        return (v.hour * 3600 + v.minute * 60 + v.second) / 86400.0
+    if isinstance(v, _dt.timedelta):
+        return v.total_seconds() / 86400.0
+    return 0.0
+
+
+def _sort_key(v, *, reverse: bool = False):
+    """Excel's own sort order for a mixed-type column.
+
+    Excel ranks ascending: numbers, then text (case-insensitively), then
+    FALSE, then TRUE, then error values, and BLANKS ALWAYS LAST -- in both
+    directions, which is why the blank rank flips when the caller sorts
+    descending. The pre-gate key sorted blanks first on a descending sort,
+    compared text case-SENSITIVELY (so 'Zebra' preceded 'apple'), coerced
+    numeric TEXT like '10' into a number (Excel keeps it text, after every
+    real number), and dropped booleans and error literals into the text run.
+    """
+    import datetime as _dt
+    if v is None or v == "":
+        return (-1 if reverse else 5, 0.0, "")
+    if isinstance(v, bool):
+        return (2, 1.0 if v else 0.0, "")
+    if isinstance(v, (int, float)):
+        return (0, float(v), "")
+    if isinstance(v, (_dt.datetime, _dt.date, _dt.time, _dt.timedelta)):
+        return (0, _excel_serial(v), "")
+    s = str(v)
+    if s in _ERROR_LITERALS:
+        return (3, 0.0, s)
+    return (1, 0.0, s.casefold())
 
 
 # ------------------------------------------------------- scatter read / write
@@ -643,7 +723,8 @@ def get_cells(path: str, cells: list, values: str = "cached",
         for i, item in enumerate(cells):
             grid = _single_cell_grid(base, item, i, sheet, path=path)
             vals, labels, _hf = gridio.read_matrix(
-                grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
+                grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb,
+                path=path)
             label = labels[0][0]
             if label == "absent":
                 absent += 1
@@ -653,9 +734,7 @@ def get_cells(path: str, cells: list, values: str = "cached",
         result: dict[str, Any] = {
             "count": len(out), "value_mode": values, "cells": out}
         if absent:
-            result["warning"] = (
-                f"{absent} cell(s) hold formulas with no cached value (label "
-                "'absent'); run recalculate or open in Excel to populate them")
+            result["warning"] = f"{absent} of them: " + gridio.ABSENT_WARNING
         return result
     finally:
         for wb in (formula_wb, cached_wb):

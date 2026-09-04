@@ -176,8 +176,9 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
             return {"sheet": grid.sheet, "range": grid.a1, "format": fmt,
                     "rows": 0, "content": content, "value_mode": values}
         gridio.guard_cell_count(grid)
-        vals, _labels, _hf = gridio.read_matrix(
-            grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb)
+        vals, labels, _hf = gridio.read_matrix(
+            grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb,
+            path=path)
         vals = [[gridio.compact_value(v) for v in row] for row in vals]
         if fmt == "json":
             if header and vals:
@@ -201,6 +202,16 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
             "sheet": grid.sheet, "range": grid.a1, "format": fmt,
             "rows": len(vals), "cols": len(vals[0]) if vals else 0,
             "value_mode": values}
+        # An export is the one read whose output leaves the server entirely,
+        # so an uncalculated formula cell silently exported as an empty field
+        # is a wrong number in someone else's spreadsheet.
+        note = gridio.absent_note(labels)
+        if note:
+            out["warning"] = note
+            out["absent_cells"] = [
+                gridio.a1(grid.min_row + i, grid.min_col + j)
+                for i, row in enumerate(labels)
+                for j, lab in enumerate(row) if lab == "absent"][:100]
         if out_file:
             op = check_path(out_file, "write export file")
             with open(op, "w", encoding="utf-8", newline="") as fh:
@@ -275,6 +286,7 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 f"no sheet(s) named {missing}; sheets: {base.sheetnames}")
         per_sheet: dict[str, Any] = {}
         exported: list[dict] = []
+        absent_total = 0
         for name in wanted:
             grid = gridio.resolve(base, {"used_range": name})
             if grid.empty:
@@ -282,18 +294,25 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 exported.append({"sheet": name, "rows": 0, "empty": True})
                 continue
             gridio.guard_cell_count(grid)
-            vals, _labels, _hf = gridio.read_matrix(
+            vals, labels, _hf = gridio.read_matrix(
                 grid, mode=values, formula_wb=formula_wb,
-                cached_wb=cached_wb)
+                cached_wb=cached_wb, path=path)
             vals = [[gridio.compact_value(v) for v in row] for row in vals]
             per_sheet[name] = _serialize_matrix(
                 vals, fmt, header, records, grid.min_col)
-            exported.append({"sheet": name, "range": grid.a1,
-                             "rows": len(vals)})
+            n_absent = sum(row.count("absent") for row in labels)
+            absent_total += n_absent
+            entry = {"sheet": name, "range": grid.a1, "rows": len(vals)}
+            if n_absent:
+                entry["absent_cells"] = n_absent
+            exported.append(entry)
 
         out: dict[str, Any] = {"format": fmt, "value_mode": values,
                                "sheets": exported,
                                "sheet_count": len(exported)}
+        if absent_total:
+            out["warning"] = (f"{absent_total} exported cell(s): "
+                              + gridio.ABSENT_WARNING)
         if fmt == "json":
             bundle = {"workbook": os.path.basename(path),
                       "value_mode": values, "sheets": per_sheet}

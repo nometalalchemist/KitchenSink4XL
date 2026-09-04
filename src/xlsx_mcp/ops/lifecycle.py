@@ -20,6 +20,7 @@ from typing import Any
 
 from ..core import hazard as _hazard
 from ..core import locate as _locate
+from ..core import calc as _calc
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 from ..core.sandbox import check_path
@@ -156,8 +157,7 @@ def diagnose_workbook(path: str) -> dict:
             if cells is None:
                 continue
             for cell in cells.values():
-                v = cell.value
-                if isinstance(v, str) and v.startswith("="):
+                if _calc.is_formula_cell(cell):
                     formula_cells += 1
         health = {
             "sheet_count": len(wb.worksheets),

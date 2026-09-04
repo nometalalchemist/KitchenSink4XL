@@ -115,16 +115,57 @@ def _cell_value(cell, data_only: bool):
     return v
 
 
-def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None
+def formula_mask(path: str, grid) -> dict[tuple[int, int], str] | None:
+    """Which cells of a rectangle actually hold a formula, and its text.
+
+    A data_only=True load cannot tell an uncalculated formula cell from a
+    blank one, which is how the DEFAULT read mode ('cached') used to hand
+    back a silent blank where a number belongs. This probe answers that
+    question over the rectangle only, streaming (read_only) so the default
+    read path does not pay for a second full model build.
+
+    Returns None if the probe could not run; a read must degrade to its old
+    unlabelled behavior rather than fail.
+    """
+    import openpyxl
+    wb = None
+    try:
+        p = check_path(path, "probe formulas")
+        wb = openpyxl.load_workbook(
+            p, data_only=False, read_only=True,
+            keep_vba=p.lower().endswith(".xlsm"))
+        ws = wb[grid.sheet]
+        out: dict[tuple[int, int], str] = {}
+        for row in ws.iter_rows(min_row=grid.min_row, max_row=grid.max_row,
+                                min_col=grid.min_col, max_col=grid.max_col):
+            for cell in row:
+                text = _calc.formula_text_of(cell)
+                if text is not None:
+                    out[(cell.row, cell.column)] = text
+        return out
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None,
+                path: str | None = None
                 ) -> tuple[list[list[Any]], list[list[str]], bool]:
     """Return (values, labels, has_formula) for a resolved rectangle.
 
-    mode: cached -> last cached values (absent where a formula never calculated);
+    mode: cached -> last cached values, labelled cached | absent | value;
           formula -> formula strings / literals;
           both -> values are cached, labels tell formula cells apart and a
                   parallel formula read is folded into the label set.
     formula_wb is a data_only=False load; cached_wb is a data_only=True load.
-    The caller supplies whichever loads the mode needs.
+    The caller supplies whichever loads the mode needs. In 'cached' mode,
+    passing `path` buys the honest label (a streaming formula probe over the
+    rectangle); without it the mode falls back to the old blind labelling.
     """
     if mode not in VALUE_MODES:
         raise XlMcpError(
@@ -134,15 +175,17 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None
     has_formula = False
     fws = formula_wb[grid.sheet] if formula_wb is not None else None
     cws = cached_wb[grid.sheet] if cached_wb is not None else None
+    mask = formula_mask(path, grid) \
+        if (mode == "cached" and path is not None) else None
     for r in range(grid.min_row, grid.max_row + 1):
         vrow: list[Any] = []
         lrow: list[str] = []
         for c in range(grid.min_col, grid.max_col + 1):
             formula = None
             if fws is not None:
-                fv = fws.cell(r, c).value
-                if isinstance(fv, str) and fv.startswith("="):
-                    formula = fv
+                formula = _calc.formula_text_of(fws.cell(r, c))
+            elif mask is not None:
+                formula = mask.get((r, c))
             cached = cws.cell(r, c).value if cws is not None else None
             if formula is not None:
                 has_formula = True
@@ -150,12 +193,12 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None
                 out = fws.cell(r, c).value
                 label = _calc.label_cell(formula, None)
             elif mode == "cached":
-                # Cached-only did not load formulas, so it cannot tell an empty
-                # formula cell from a blank cell; it labels present values
-                # 'value' and never over-claims 'absent'. Pass mode='both' for
-                # the formula-aware label.
+                # The probe (when available) is what lets this mode say
+                # 'absent' instead of handing back a silent blank; without
+                # it nothing is over-claimed.
                 out = cached
-                label = _calc.LABEL_VALUE
+                label = _calc.label_cell(formula, cached) if mask is not None \
+                    else _calc.LABEL_VALUE
             else:  # both
                 out = cached if formula is not None else (
                     cached if cached is not None else (
@@ -166,6 +209,22 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None
         values.append(vrow)
         labels.append(lrow)
     return values, labels, has_formula
+
+
+#: The one sentence every read surface says when it hands back a formula cell
+#: that no engine has computed yet.
+ABSENT_WARNING = (
+    "some cells hold formulas with NO cached value (label 'absent') and read "
+    "as blank to every non-Excel consumer; run recalculate (com pack) or open "
+    "in Excel to populate them before trusting these numbers")
+
+
+def absent_note(labels) -> str | None:
+    """The absent-cache warning if any label in a matrix says 'absent'."""
+    for row in labels:
+        if _calc.LABEL_ABSENT in row:
+            return ABSENT_WARNING
+    return None
 
 
 def compact_value(v: Any) -> Any:
@@ -179,5 +238,6 @@ def compact_value(v: Any) -> Any:
 
 __all__ = [
     "MAX_READ_CELLS", "VALUE_MODES", "open_wb", "resolve", "guard_cell_count",
-    "a1", "CellRead", "read_matrix", "compact_value",
+    "a1", "CellRead", "read_matrix", "compact_value", "formula_mask",
+    "absent_note", "ABSENT_WARNING",
 ]

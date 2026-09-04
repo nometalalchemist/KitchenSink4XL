@@ -24,10 +24,23 @@ from openpyxl.utils import (
     range_boundaries,
 )
 
+from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 from . import gridio
+
+
+class _ProbeGrid:
+    """The three fields gridio.formula_mask reads off a resolved grid, for
+    callers (get_table) that address a rectangle without resolving one."""
+
+    def __init__(self, sheet, min_row, min_col, max_row, max_col):
+        self.sheet = sheet
+        self.min_row = min_row
+        self.min_col = min_col
+        self.max_row = max_row
+        self.max_col = max_col
 
 #: Excel table (ListObject) name grammar: a letter or underscore, then letters,
 #: digits, periods, underscores; never a cell-reference shape like "A1".
@@ -259,6 +272,16 @@ def get_table(path: str, name: str, columns: list | None = None,
         rws = base[ws.title]
         cws = cached_wb[ws.title] if cached_wb is not None else None
         fws = formula_wb[ws.title] if formula_wb is not None else None
+        # A table body is where a totals or calculated-column formula lives,
+        # so 'cached' handing back a null for an uncalculated one is exactly
+        # the silent blank the numbers-safety rule forbids. The mask names
+        # them; the caller gets the addresses and the remedy.
+        mask = None
+        if values == "cached":
+            probe_grid = _ProbeGrid(ws.title, data_top, min_col,
+                                    data_bottom, max_col)
+            mask = gridio.formula_mask(path, probe_grid) or {}
+        absent_cells: list[str] = []
         out_rows: list[Any] = []
         for r in range(data_top, data_bottom + 1):
             row = []
@@ -268,18 +291,27 @@ def get_table(path: str, name: str, columns: list | None = None,
                     v = fws.cell(r, c).value
                 elif values == "cached":
                     v = cws.cell(r, c).value
+                    if v is None and mask and (r, c) in mask:
+                        absent_cells.append(gridio.a1(r, c))
                 else:
-                    fv = fws.cell(r, c).value
-                    v = cws.cell(r, c).value if not (
-                        isinstance(fv, str) and fv.startswith("=")) else fv
+                    fcell = fws.cell(r, c)
+                    v = fcell.value if _calc.is_formula_cell(fcell) \
+                        else cws.cell(r, c).value
+                    if _calc.is_formula_cell(fcell) \
+                            and cws.cell(r, c).value is None:
+                        absent_cells.append(gridio.a1(r, c))
                 row.append(gridio.compact_value(v))
             out_rows.append(dict(zip(proj_names, row)) if records else row)
-        return {
+        result = {
             "sheet": ws.title, "table": table.displayName or table.name,
             "ref": table.ref, "columns": proj_names,
             "rows": out_rows, "row_count": len(out_rows),
             "has_totals_row": trc > 0, "value_mode": values,
         }
+        if absent_cells:
+            result["absent_cells"] = absent_cells[:100]
+            result["warning"] = gridio.ABSENT_WARNING
+        return result
     finally:
         for wb in (formula_wb, cached_wb):
             if wb is not None:

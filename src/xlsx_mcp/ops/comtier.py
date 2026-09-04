@@ -299,9 +299,15 @@ def recalculate(path: str, engine: str = "auto",
         }
 
     absent_before = _count_absent_cached(p)
+    seeded: list[int] = [0]
 
     def body(app, wb) -> dict:
         app.CalculateFull()
+        try:
+            if bool(app.Iteration):
+                seeded[0] = _reseed_iterative_errors(app, wb)
+        except Exception:  # noqa: BLE001
+            pass
         return {"calculated": "CalculateFull"}
 
     result = _run_mutation(f"recalculate({Path(p).name})", p, body,
@@ -316,7 +322,48 @@ def recalculate(path: str, engine: str = "auto",
     result["freshness"] = (
         "cached values were computed by Excel just now (label: computed); "
         "reads through any engine will see current results")
+    if seeded[0]:
+        result["changed"]["iterative_cells_reseeded"] = seeded[0]
+        result["warnings"] = list(result.get("warnings", [])) + [
+            f"{seeded[0]} formula cell(s) under iterative calculation had no "
+            "seed value and were loading as errors; their formulas were "
+            "re-entered so Excel could iterate them"]
     return result
+
+
+def _reseed_iterative_errors(app, wb) -> int:
+    """Re-enter error-valued formulas so iterative calculation can converge.
+
+    Under iterative calc Excel seeds every pass from the cell's CURRENT
+    value. A formula that arrived from a file-tier write has NO cached value,
+    so Excel loads it as an error and each iteration propagates that error:
+    the numbers-safety gate caught =B1+1 stuck at #VALUE! forever in a
+    workbook where Excel's own authoring of the identical formula converges.
+    Re-entering the formula through Excel restores a numeric seed. Cells whose
+    error is genuine (#REF!, #DIV/0!) are unharmed: re-entering the same
+    formula recomputes the same error. Legacy CSE array cells are skipped,
+    since assigning .Formula would break the array."""
+    xl_cell_type_formulas, xl_errors = -4123, 16
+    total = 0
+    for ws in wb.Worksheets:
+        try:
+            errors = ws.Cells.SpecialCells(xl_cell_type_formulas, xl_errors)
+        except Exception:  # noqa: BLE001
+            continue  # SpecialCells raises when the sheet has no error cells
+        try:
+            for cell in errors:
+                try:
+                    if cell.HasArray:
+                        continue
+                    cell.Formula = cell.Formula
+                    total += 1
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001
+            continue
+    if total:
+        app.CalculateFull()
+    return total
 
 
 def _formulas_compute_only(path: str) -> dict:
@@ -353,10 +400,11 @@ def _count_absent_cached(path: str) -> int:
         for ws in fwb.worksheets:
             cws = cwb[ws.title]
             for (r, c), cell in getattr(ws, "_cells", {}).items():
-                v = cell.value
-                text = v if isinstance(v, str) and v.startswith("=") \
-                    else getattr(v, "text", None)
-                if text and cws.cell(r, c).value is None:
+                # cell TYPE, not a leading '=': neutralized injection text is
+                # data, and counting it as an uncalculated formula made the
+                # recalculate report claim work it never had to do.
+                if (_calc.is_formula_cell(cell)
+                        and cws.cell(r, c).value is None):
                     n += 1
         return n
     finally:

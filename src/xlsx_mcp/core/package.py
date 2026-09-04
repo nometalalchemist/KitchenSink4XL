@@ -426,6 +426,15 @@ class WorkbookPackage:
             except Exception:
                 pass
         wb.save(tmp)
+        # openpyxl leaves an EMPTY <v></v> on every formula cell it writes.
+        # Excel reads it as an error value, which a normal recalculation
+        # overwrites but an ITERATIVE one seeds from, leaving a circular
+        # formula stuck at #VALUE! (numbers-safety gate). Strip it before the
+        # verify gate sees the package.
+        try:
+            _calc.strip_empty_cached_values(tmp)
+        except Exception:  # noqa: BLE001
+            pass  # cosmetic-plus: never fail a save over this
 
     def _run_verify(self, target: str, allow_loss: bool) -> _verify.VerifyResult:
         """Run the verify gate and NEVER let it raise.

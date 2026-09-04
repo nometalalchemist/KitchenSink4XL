@@ -42,6 +42,8 @@ from dataclasses import dataclass, field
 
 from openpyxl.utils import column_index_from_string, get_column_letter
 
+from . import calc as _calc
+
 # --------------------------------------------------------------- edit model
 
 INSERT_ROWS = "insert_rows"
@@ -619,7 +621,11 @@ def rewrite_workbook(wb, edit: RefEdit) -> RewriteReport:
             c for row in ws.iter_rows() for c in row)
         for cell in list(iterator):
             val = cell.value
-            if isinstance(val, str) and val.startswith("="):
+            # data_type, not the leading '=': a TEXT cell holding "=A1+1"
+            # (import_data's neutralized injection text) is DATA. Rewriting
+            # its references would edit the user's text, and the write-back
+            # would re-type it as a live formula.
+            if isinstance(val, str) and _calc.is_formula_cell(cell):
                 new = transpose_formula(val, edit, home)
                 if new != val:
                     cell.value = new

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core import calc as _calc
 from ..core import hazard as _hazard
 from ..core import locate as _locate
 from ..core.errors import XlMcpError
@@ -91,7 +92,7 @@ def get_grid_view(path: str, location: Any = None, sheet: str | None = None,
             cells = []
             for c in cols:
                 fv = fws.cell(r, c).value
-                is_formula = isinstance(fv, str) and fv.startswith("=")
+                is_formula = _calc.is_formula_cell(fws.cell(r, c))
                 if values == "formula" and is_formula:
                     text = _render_cell(fv)
                 else:

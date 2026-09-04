@@ -26,6 +26,7 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
+from ..core import calc as _calc
 from ..core import refs as _refs
 from ..core.errors import UnsupportedStructure, XlMcpError
 from ..core.package import WorkbookPackage
@@ -115,36 +116,44 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
     uncached_keys = 0
     rows = []
     for r in range(data_top, max_row + 1):
-        vals, styles, sortvals = [], [], []
+        vals, styles, sortvals, texts = [], [], [], []
         for c in range(min_col, max_col + 1):
             cell = ws.cell(r, c)
             vals.append(cell.value)
             styles.append(_copy(cell._style))
+            # A TEXT cell that merely starts with '=' is data, not a formula
+            # (import_data's neutralized injection text); it must keep its
+            # string type through the rewrite instead of going live.
+            texts.append(_calc.looks_like_formula_text(cell))
             cv = cws.cell(r, c).value
-            fv = cell.value
-            if (cv is None and isinstance(fv, str) and fv.startswith("=")
+            if (cv is None and _calc.is_formula_cell(cell)
                     and (c - min_col) in key_offsets):
                 uncached_keys += 1  # sorts by formula TEXT, not its value
             sortvals.append(cv if cv is not None else cell.value)
         rows.append({"src": r, "vals": vals, "styles": styles,
-                     "sort": sortvals})
+                     "sort": sortvals, "text": texts})
     cached.close()
 
     for offset, reverse in reversed(key_specs):
-        rows.sort(key=lambda row, o=offset: _cells._sort_key(row["sort"][o]),
-                  reverse=reverse)
+        rows.sort(key=lambda row, o=offset, rv=reverse: _cells._sort_key(
+            row["sort"][o], reverse=rv), reverse=reverse)
 
     wrote_formula = False
     for i, row in enumerate(rows):
         dest_r = data_top + i
         dr = dest_r - row["src"]
-        for j, (val, style) in enumerate(zip(row["vals"], row["styles"])):
+        for j, (val, style, is_text) in enumerate(
+                zip(row["vals"], row["styles"], row["text"])):
             cell = ws.cell(dest_r, min_col + j)
             out = val
-            if isinstance(val, str) and val.startswith("=") and dr != 0:
-                out = _refs.offset_formula(val, dr, 0, grid.sheet)
-                wrote_formula = True
-            elif isinstance(val, str) and val.startswith("="):
+            if is_text:
+                cell.value = out
+                cell.data_type = "s"   # stays TEXT, never re-armed
+                cell._style = _copy(style)
+                continue
+            if isinstance(val, str) and val.startswith("="):
+                if dr != 0:
+                    out = _refs.offset_formula(val, dr, 0, grid.sheet)
                 wrote_formula = True
             cell.value = out
             cell._style = _copy(style)
@@ -199,7 +208,7 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
             c = min_col + offset
             cv = cws.cell(r, c).value
             fv = ws.cell(r, c).value
-            if cv is None and isinstance(fv, str) and fv.startswith("="):
+            if cv is None and _calc.is_formula_cell(ws.cell(r, c)):
                 uneval += 1
                 continue  # cannot evaluate a formula with no cached value
             if not _cells._cmp(cv if cv is not None else fv, op, value):

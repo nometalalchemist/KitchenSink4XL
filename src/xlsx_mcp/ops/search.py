@@ -25,6 +25,7 @@ import re as _stdre
 from typing import Any
 
 from ..core import _regex
+from ..core import calc as _calc
 from ..core.errors import XlMcpError
 from ..core.package import WorkbookPackage
 from .dataio import _coerce
@@ -94,8 +95,7 @@ def _iter_scope(formula_wb, sheet: str | None, location: Any):
             val = cell.value
             if val is None:
                 continue
-            formula = val if isinstance(val, str) and val.startswith("=") \
-                else None
+            formula = _calc.formula_text_of(cell)
             yield ws.title, r, c, formula, val
 
 

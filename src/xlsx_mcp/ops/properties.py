@@ -128,7 +128,11 @@ def set_workbook_properties(path: str, title: str | None = None,
                 "iterative calculation is on: circular references now "
                 "converge instead of erroring, bounded by max_iterations "
                 "and max_change; unintended circular references become "
-                "silent wrong numbers, so use audit_formulas to check")
+                "silent wrong numbers, so use audit_formulas to check. A "
+                "circular formula written here has no seed value, and Excel "
+                "iterates from the cell's current value, so run recalculate "
+                "(com pack) after writing one or Excel shows #VALUE! until "
+                "the cell is re-entered by hand")
     if max_iterations is not None:
         n = int(max_iterations)
         if not 1 <= n <= 32767:
