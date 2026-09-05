@@ -391,19 +391,33 @@ def _text_of(result) -> str:
 class DisabledToolSignpost(_FmcpMiddleware):
     """Discoverability rule 2 at the transport layer: a tools/call to a
     registered but currently disabled tool must name the owning pack and
-    the exact enable_tools call, not dead-end with a bare "Unknown tool"."""
+    the exact enable_tools call, not dead-end with a bare "Unknown tool".
+
+    Both refusals return the Section 7 envelope (RefusalResult with
+    isError=true) rather than raising a raw fastmcp ToolError: the old
+    raise produced excellent TEXT with no {ok, error: {code, message,
+    hint}} shape, the one refusal class outside the error contract
+    (fresh-eyes round, L-2)."""
 
     async def on_call_tool(self, context, call_next):
         try:
             return await call_next(context)
-        except _FmcpNotFound as exc:
+        except _FmcpNotFound:
             name = getattr(context.message, "name", "")
             pack = _packs.pack_of(name)
             if pack and pack != "lite" and not _packs.is_tool_enabled(name):
-                raise _FmcpToolError(
+                err = _err.TargetNotFound(
                     f"tool {name!r} exists but is currently disabled: it "
-                    f"belongs to the {pack!r} pack. Call "
-                    f"enable_tools(packs=['{pack}']) to turn it on, "
-                    "then retry this call."
-                ) from exc
-            raise
+                    f"belongs to the {pack!r} pack.")
+                payload = refusal(err)
+                payload["error"]["hint"] = (
+                    f"call enable_tools(packs=['{pack}']) to turn it on, "
+                    "then retry this call")
+                return RefusalResult(payload)
+            err = _err.TargetNotFound(
+                f"no tool named {name!r} on this server.")
+            payload = refusal(err)
+            payload["error"]["hint"] = (
+                "list the current tools (tools/list); optional packs add "
+                "more via enable_tools, get_server_info names them")
+            return RefusalResult(payload)

@@ -718,3 +718,44 @@ class TestSetFilterUnknownKeys:
             str(book), {"range": "A1:C6"},
             criteria=[{"column": "Region", "op": "not_blank"}])
         assert r["changed"]["filter"]["rows_hidden"] == 0
+
+
+# ======================================================================
+# Fresh-eyes L-2: gated/unknown-tool refusals carry the envelope
+# ======================================================================
+
+
+class TestGatedRefusalEnvelope:
+    def test_disabled_and_unknown_tool_refusals_are_enveloped(self):
+        import asyncio
+        from fastmcp import Client
+        from fastmcp.exceptions import ToolError
+        from fastmcp.server.transforms.visibility import Visibility
+        from xlsx_mcp import server
+
+        async def run():
+            transform = Visibility(
+                False, names=server._startup_disabled_names())
+            server.mcp.add_transform(transform)
+            out = {}
+            try:
+                async with Client(server.mcp) as c:
+                    with pytest.raises(ToolError) as e1:
+                        await c.call_tool("manage_chart", {
+                            "path": "x.xlsx", "action": "list"})
+                    out["disabled"] = str(e1.value)
+                    with pytest.raises(ToolError) as e2:
+                        await c.call_tool("no_such_tool_xyz", {})
+                    out["unknown"] = str(e2.value)
+            finally:
+                server.mcp._transforms.remove(transform)
+            return out
+
+        out = asyncio.run(run())
+        # the disabled refusal keeps its excellent content AND the shape
+        assert '"code": "NOT_FOUND"' in out["disabled"]
+        assert "enable_tools(packs=['design'])" in out["disabled"]
+        assert '"hint"' in out["disabled"]
+        # the unknown-tool refusal is enveloped too
+        assert '"code": "NOT_FOUND"' in out["unknown"]
+        assert '"hint"' in out["unknown"]
