@@ -1,15 +1,38 @@
 [project]
 name = "kitchensink4xl"
-version = "0.0.0"
-description = "Kitchen-sink Microsoft Excel (.xlsx) MCP server: round-trip-safe, honest calc, tiered loading"
+version = "1.0.0"
+description = "Everything plus the kitchen sink for Microsoft Excel - a .xlsx MCP server engineered not to corrupt: every value labeled calculated, cached or absent, structural edits that carry their formulas, Excel-exact sort, atomic validated saves, tiered loading"
 readme = "README.md"
 license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "nometalalchemist" }]
 keywords = [
     "mcp", "excel", "xlsx", "ooxml", "spreadsheet", "claude",
     "model-context-protocol", "openpyxl", "xlsxwriter", "pivot-tables",
     "formulas", "conditional-formatting", "data-validation", "charts",
-    "round-trip-safety", "tiered-loading",
+    "round-trip-safety", "tiered-loading", "recalculation", "lambda",
+    "named-ranges", "csv", "office", "com",
+]
+# No Development Status trove classifier, matching the shipped siblings
+# (kitchensink4word and kitchensink4ppt carry none). The version number
+# carries the maturity claim; README and llms.txt say what backs it.
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business :: Financial :: Spreadsheet",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup :: XML",
+    "Typing :: Typed",
 ]
 requires-python = ">=3.12"
 dependencies = [
@@ -34,6 +57,15 @@ dev = [
     "pytest",
     "pytest-timeout",
 ]
+
+[project.urls]
+Homepage = "https://nometalalchemist.github.io/KitchenSink4XL/"
+Source = "https://github.com/nometalalchemist/KitchenSink4XL"
+Issues = "https://github.com/nometalalchemist/KitchenSink4XL/issues"
+Changelog = "https://github.com/nometalalchemist/KitchenSink4XL/releases"
+Documentation = "https://github.com/nometalalchemist/KitchenSink4XL#readme"
+"Agent manifest (llms.txt)" = "https://nometalalchemist.github.io/KitchenSink4XL/llms.txt"
+"Commercial license" = "https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml"
 
 [project.scripts]
 xl-mcp = "xlsx_mcp.server:main"

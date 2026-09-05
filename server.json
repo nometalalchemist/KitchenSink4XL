@@ -2,8 +2,9 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nometalalchemist/kitchensink4xl",
   "title": "KitchenSink4XL",
-  "description": "Kitchen-sink Microsoft Excel (.xlsx) MCP server: round-trip-safe, honest calc, tiered loading",
-  "version": "0.0.0",
+  "description": "Everything plus the kitchen sink for Microsoft Excel: the .xlsx MCP server that never hands your AI a number it cannot back up.",
+  "version": "1.0.0",
+  "websiteUrl": "https://nometalalchemist.github.io/KitchenSink4XL/",
   "repository": {
     "url": "https://github.com/nometalalchemist/KitchenSink4XL",
     "source": "github"
@@ -12,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4xl",
-      "version": "0.0.0",
+      "version": "1.0.0",
       "transport": {
         "type": "stdio"
       }

@@ -1,0 +1,188 @@
+# KitchenSink4XL
+
+> Excel (.xlsx) MCP server for agents. 129 workbook operations across 67
+> tools, plus two pack toggles. stdio. Every mutation is preceded by an
+> automatic backup and committed by an atomic verified save. Every value a
+> read returns carries a label saying whether it is current.
+
+Release: v1.0.0
+MCP registry name: io.github.nometalalchemist/kitchensink4xl
+Transport: stdio.
+Platform: the file tier is cross-platform and needs no Excel installation.
+The `com` pack requires Windows with Microsoft Excel installed; it drives a
+private hidden Excel instance and never touches the user's open session.
+
+This document is written for the agent that will call these tools. Every line
+below is a behavior you can rely on without testing it first.
+
+## 1. Token economics
+
+- Session start loads 40 tools, about 11,300 tokens. Nothing else is on the wire until you ask for it.
+- `enable_tools(["<pack>"])` adds a pack mid-session. `disable_tools([...])` removes one. Both take effect on the next `tools/list`, announced by `tools/list_changed`.
+- Pack costs, from `scripts/measure_surface.py`: design 9 tools / 3.4k, io 9 / 2.5k, com 11 / 2.6k.
+- Everything enabled: 69 tools (67 workbook tools plus the two pack toggles), about 19,700 tokens.
+- `enable_tools(["everything"])` is the convenience alias for all packs.
+- Set `KS4XL_MODE=full` at server start to skip tiering, or `KS4XL_MODE=design,com` for a fixed subset. `KS4XL_PACK_POLICY=locked` makes the startup surface final and refuses runtime pack changes.
+- The lite core contains no degraded stand-ins for pack capabilities. A lite tool asked for out-of-scope work returns the pack name and the exact `enable_tools` call to run. You never have to guess which pack holds a capability.
+- `get_workflows` recipes name the pack each step needs before that step runs.
+- Reads are token-shaped on purpose: `get_grid_view` projects a sheet instead of dumping it, and `query_range` filters, groups and aggregates SERVER-SIDE so rows never cross the wire. Prefer both over `read_range` on anything large.
+- Clients that defer tool schemas until first call pay close to zero at startup.
+- Client caveat: some clients drop a disabled tool's schema and do not re-register it on re-enable. If a re-enabled tool reports "no such tool", refresh the client's tool list.
+
+## 2. The calculation contract
+
+An .xlsx file stores each formula cell's value as of the last time Excel
+calculated it. No pure-Python engine recomputes it. This server therefore
+never returns a bare number: every returned cell value carries a label from a
+closed five-value vocabulary.
+
+- `value` a plain literal. No formula behind it. Nothing to be stale.
+- `cached` a formula cell, carrying the value a prior real calculation left in the file. It may be stale.
+- `computed` a formula cell this session actually recalculated. Produced by `recalculate` (com pack), never inferred.
+- `absent` a formula cell with NO cached value at all, common in files written by other tools. It is not blank, and it is never reported as blank.
+- `formula` the read returned the formula string rather than a value, because that is what was asked for.
+
+Behaviors that follow:
+
+- Reads name the affected addresses when anything they touch is `cached` or `absent`. You get the cells, not just a warning.
+- Aggregations state which cells a filter skipped, so a total is never quietly computed over fewer rows than you think.
+- `recalculate` (com pack) asks Excel itself to compute; its values come back `computed`. That is the only route to `computed`.
+- A file-tier write cannot recompute anything downstream of itself. Cells depending on your edit keep their old `cached` values until Excel recalculates.
+- Formula detection is by cell TYPE, not by a leading `=`. Text that merely looks like a formula is never re-armed as a formula on copy, move, sort, or reference rewrite.
+- Lay-facing copy on the website and in the README says "calculated" where the wire says `computed`. Branch on the wire value.
+
+## 3. Behavioral contracts
+
+- Backup before mutation: every file mutation first rotates the current content into two bounded slots in a hidden `.ks4xl-backups/` folder beside the workbook. `manage_backups` lists, restores, purges, and snapshots them. Storage stays bounded no matter how many edits a session makes.
+- Atomic verified save: the write goes to a temporary file, the result is re-opened and validated, then swapped in. A failed operation leaves the original byte-identical.
+- Deep verification on request: pass `verify_com: true` to any mutating tool and the produced file must open in a real hidden Excel with no repair prompt, or the backup is restored and the save refuses. Off by default (it costs a COM round trip and needs Excel installed). `KS4XL_VERIFY_COM=1` makes it the default for every save; the per-call parameter wins over the environment either way.
+- Round-trip hazard scan: before a mutating save, parts the file writer cannot preserve are named to the caller by class. A loss is refused (`HAZARD_REFUSED`) unless the caller explicitly allows the named classes with `allow_loss`.
+- Structural edits carry their references. `modify_grid_structure` rewrites formulas, tables, named ranges, charts and cross-sheet references when rows or columns are inserted or deleted, and the result is checked against an independent expectation of Excel's own behavior.
+- Sorting matches Excel's ranking exactly: numbers, then text case-insensitively, then FALSE, TRUE, errors, blanks last, in both directions.
+- Modern functions are written with correct `_xlfn` and `_xlpm` prefixing, so LAMBDA and its relatives open without a repair prompt.
+- Batches are all-or-nothing: `apply_edits` validates the whole batch first, then applies every edit under ONE backup and ONE save, or mutates nothing.
+- Closed error vocabulary: every refusal is `{ok: false, error: {code, message, hint}}` with `code` from the 15 values in Section 5. Branch on `code`, never on message text.
+- Refusals ride the wire with `isError=true`. A refusal never arrives as a success.
+- `hint` carries the next call to make, not a restatement of the failure.
+- File-tier tools refuse a workbook that is open in Excel (`WORKBOOK_LOCKED`) rather than racing it.
+- The COM tier opens its own hidden Excel instance, journals process IDs, and leaves no orphan processes. Calls against it are serialized, so concurrent agents queue instead of interleaving writes.
+- Deleting or renaming a sheet does NOT rewrite references. That is Excel's own behavior; references to a deleted sheet break to `#REF!` on open. Audit first.
+- Test evidence for v1.0.0: 793 tests; roughly 600 adversarial calls through the raw MCP transport across six waves; a nine-phase live COM stress round of roughly 600 executor operations over 40-plus Excel processes, returning zero critical and zero high findings and verifying 87 properties including zero lost updates under eight concurrent writers; a 61-check numbers-safety gate against a real Excel covering insert, delete, sort, move, merge and composed edits; 80 formulas across every documented function family opened with zero repair prompts and 80 of 80 correct values; a discoverability gate where six fresh agents found the right pack six times out of six; zero corruptions across the fixture corpus.
+
+## 4. Addressing model
+
+- Positional tools take one `location` object carrying EXACTLY ONE selector key. It resolves to a normalized rectangle before the tool acts.
+- Selectors: `{"cell": "B7"}`, `{"range": "A1:C10"}`, `{"a1": ...}` for either, `{"r1c1": "R7C2"}`, `{"name": "SalesTotal"}` (alias `named_range`), `{"table": "Sales", "column": "Amount", "part": "data"}`, `{"used_range": "Q3"}`, `{"region": {"near": "B7"}}`, `{"search": {...}}`, `{"anchor": "<token>"}`.
+- Add `"sheet"` to any selector that does not name one. Without it, the active sheet is used.
+- `used_range` computes the TRUE value-bearing bounds, which is not the same as the dimension string the file carries. Use it rather than trusting a stored dimension.
+- `get_grid_view` returns an anchor token for the rectangle it SHOWED: sheet, bounds, and a content fingerprint. Feed the token straight back as `{"anchor": token}`.
+- An anchor whose content changed since the view refuses with `STALE_ANCHOR` and tells you to re-run the view. It never falls back to a nearby rectangle.
+- No tool acts on first match. A search or name resolving to more than one target refuses with `AMBIGUOUS_LOCATION` carrying every match and the address that disambiguates it.
+- Zero matches refuse with `NOT_FOUND` plus nearest-miss hints. Inverted or off-grid rectangles refuse with `RANGE_OUT_OF_BOUNDS` naming the valid bounds.
+- Read once, edit in bulk: one `get_grid_view` plus one `apply_edits` replaces a read-modify-verify loop per cell.
+
+## 5. Documented refusals
+
+These are contracts. Handle them; do not retry blindly. The 15 closed codes:
+
+- `AMBIGUOUS_LOCATION` several targets matched. The message lists them with disambiguating addresses. Re-issue with one.
+- `NOT_FOUND` the target does not exist. Re-run `get_workbook_metadata` or `get_grid_view` for current sheets, the true used range, and anchors.
+- `STALE_ANCHOR` the sheet changed since the view was taken. Re-run `get_grid_view` and resend with fresh anchors.
+- `RANGE_OUT_OF_BOUNDS` the range is inverted or exceeds the grid. The message names the valid bounds.
+- `WORKBOOK_LOCKED` the file is open in Excel or held by another process. Close it and retry.
+- `VALIDATION_FAILED` the produced package failed its post-write check. The original was NOT modified.
+- `HAZARD_REFUSED` the workbook holds parts the file writer would drop on save. The message names the classes and the routes: enable the com pack, or pass `allow_loss: true` to proceed with a backup.
+- `FORMULA_REJECTED` the write hit the formula-injection or unsafe-function policy. The message names the function and the override.
+- `CALC_UNAVAILABLE` a fidelity recalculation needs Excel (the com pack) or functions the fallback does not cover. The message lists what it hit.
+- `UNSUPPORTED_CONTENT` structurally unsupported or password-protected content, refused instead of written partially.
+- `CONFLICT` the destination path exists and overwrite was not requested.
+- `BAD_PARAMS` bad arguments, including a value Excel itself would reject and a path outside the configured sandbox roots.
+- `APP_NOT_RUNNING` the operation needs Excel installed and reachable.
+- `APP_BUSY` Excel is showing a dialog or running a command. Clear it and retry.
+- `APP_BLOCKED` Excel is not answering. Wait or restart it.
+
+Refusals are the reliability feature, not the failure mode. A refusal names
+what was wrong, leaves the file untouched, and carries the next call in
+`hint`. Retrying the same call unchanged is never the fix.
+
+## 6. Recipes
+
+`get_workflows()` returns the recipe list. `get_workflows(task="<name>")`
+returns ordered steps, the tool for each step, why the step exists, and the
+pack that step needs.
+
+- `merge-workbooks`: combine data from several workbooks into one target without silently losing anything either side holds.
+- `report-build`: raw data to report workbook. Import, table, formulas, chart, then the page and view polish.
+- `data-cleanup`: find and replace, then validation rules, then sort, verified at each end.
+- `formatting-audit-and-fix`: diagnose style bloat against the 64,000-format ceiling and consolidate formatting.
+- `safe-edit-of-rich-workbook`: editing a workbook holding pivots, charts, macros or queries without silent loss. Diagnose, hazard-aware edit, verify.
+- `migrate-from-incumbent`: tool-by-tool mapping from the common file-based Excel MCP server surface onto this one.
+
+## 7. Inventory: 129 operations, 67 tools, 3 packs plus the lite core
+
+### lite core: 40 tools, loaded at startup
+`get_grid_view`, `read_range`, `get_cells`, `query_range`, `find_cells`, `get_table`, `get_workbook_metadata`, `set_cell`, `set_cells`, `write_range`, `apply_edits`, `replace_cells`, `clear_range`, `copy_range`, `move_range`, `modify_grid_structure`, `sort_range`, `set_filter`, `clear_filter`, `set_formula`, `audit_formulas`, `format_cells`, `set_dimensions`, `set_merge`, `set_view`, `create_table`, `manage_worksheet`, `create_workbook`, `copy_workbook`, `set_workbook_properties`, `manage_hyperlink`, `import_data`, `export_range`, `manage_backups`, `diagnose_workbook`, `validate`, `get_workflows`, `get_server_info`, `enable_tools`, `disable_tools`.
+
+### design: 9 tools
+`apply_style`, `copy_format`, `audit_styles`, `manage_conditional_format`, `manage_data_validation`, `manage_image`, `manage_chart`, `manage_table`, `manage_name`.
+
+### io: 9 tools
+`set_page_layout`, `set_header_footer`, `set_protection`, `manage_comment`, `export_file`, `get_external_links`, `inspect_vba`, `get_pivot`, `get_connections`.
+
+### com: 11 tools, Windows with Excel only
+`recalculate`, `com_manage_pivot`, `com_goal_seek`, `com_export_pdf`, `com_render_sheet`, `com_convert_format`, `com_save_with_password`, `com_set_sparkline`, `com_autofit`, `com_validate_opens_clean`, `com_status`.
+
+### Multiplexers: where the extra operations live
+- `manage_table(action=...)`: add and delete columns and rows, rename, resize, set style, toggle totals, convert to range. Nine operations.
+- `validate(checks=[...])`: nine read-only batteries, `structure`, `references`, `names`, `merges`, `tables`, `formatting_bloat`, `hazards`, `external_links`, `calc_staleness`.
+- `manage_worksheet(action=...)`: add, delete, rename, copy, reorder, hide, unhide. The workbook always keeps one visible sheet, so the last one refuses.
+- `manage_comment(action=...)`: add, edit, delete, reply, resolve, list.
+- `manage_name(action=...)`: add, update, rename, delete, list, including LAMBDA definitions.
+- `set_protection(action=...)`: sheet, workbook, unlock, remove, status.
+- `modify_grid_structure(action=...)`: insert and delete rows and columns, with full reference carry.
+- `apply_edits(edits=[{op: ...}])`: `set_value`, `set_formula`, `write_range`, `clear`, batched under one backup and one save.
+- `manage_image`, `manage_chart`, `manage_conditional_format`, `manage_data_validation`, `manage_hyperlink`, `manage_backups`, `set_merge`, `com_manage_pivot`, `com_set_sparkline`: lifecycle verbs on one object family per tool.
+
+The operations figure is produced by `scripts/count_operations.py`, which
+reads the dispatch values each tool actually validates out of committed
+source. Its docstring carries the counting definition and the exclusions.
+
+## 8. Install
+
+- Claude Desktop: download the `.mcpb` bundle from the latest GitHub release and open it. Requires `uv` on PATH.
+- Claude Code: `claude mcp add xl -s user -- uvx kitchensink4xl`
+- pip: `pip install kitchensink4xl` (COM pack: `pip install kitchensink4xl[com]`, a no-op off Windows)
+- uvx, no install: `uvx kitchensink4xl`
+- Any MCP client: run the `kitchensink4xl` (or `xl-mcp`) executable over stdio, for example `{"mcpServers": {"xl": {"command": "kitchensink4xl"}}}`
+
+Environment: `KS4XL_MODE`, `KS4XL_PACK_POLICY`, `KS4XL_ALLOWED_ROOTS` (an
+`os.pathsep`-separated path sandbox, gating reads as well as writes),
+`KS4XL_VERIFY_COM`, `KS4XL_VALIDATE_COM`, `KS4XL_COM_TIMEOUT`.
+
+## 9. Known limits
+
+- `com_render_sheet` goes through Excel's clipboard and needs an interactive window station. It fails in non-interactive sessions and works from a normal signed-in desktop.
+- One user, one machine. The server runs over stdio under a single account, and the COM tier drives an Excel belonging to that Windows session. It is not a shared service.
+- A file-tier write leaves downstream cached values stale until Excel recalculates. The labels say so; `recalculate` fixes it.
+
+## 10. Links
+
+- GitHub: https://github.com/nometalalchemist/KitchenSink4XL
+- PyPI: https://pypi.org/project/kitchensink4xl/
+- Landing page: https://nometalalchemist.github.io/KitchenSink4XL/
+- Family: https://nometalalchemist.github.io/
+- Issues, including licensing: https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose
+
+## 11. License
+
+AGPL-3.0. Free for individuals and personal use. A company building this into
+a product of its own needs a commercial license, with terms worked out case by
+case, arranged here:
+https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml
+
+## 12. Trademarks
+
+Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel
+are trademarks of Microsoft Corporation. KitchenSink4XL works with Microsoft
+Excel files; the trademarks are used nominatively to describe that
+compatibility, and no Microsoft logos or trade dress are used.
