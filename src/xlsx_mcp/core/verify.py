@@ -452,6 +452,15 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
                     mismatches.append({"sheet": sheet, "cell": coord,
                                        "expected": exp, "got": got})
             else:
+                # An empty string and an empty cell are the same "blank" in
+                # Excel: openpyxl serializes value "" as an absent cell, which
+                # reads back as None. Treating that as a mismatch made it
+                # IMPOSSIBLE to write a blank string through any write tool --
+                # the safety net rejected a write that had in fact done exactly
+                # the right thing (author field testing, empty-string critical).
+                if (expected == "" and got is None) or \
+                        (expected is None and got == ""):
+                    continue
                 if got != expected:
                     mismatches.append({"sheet": sheet, "cell": coord,
                                        "expected": expected, "got": got})

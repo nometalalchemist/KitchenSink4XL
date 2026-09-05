@@ -23,6 +23,7 @@ silently).
 
 from __future__ import annotations
 
+import json as _json
 from copy import copy as _copy
 from typing import Any
 
@@ -512,6 +513,18 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
         raise XlMcpError("match must be 'all' or 'any'")
     if values not in gridio.VALUE_MODES:
         raise XlMcpError(f"values must be one of {gridio.VALUE_MODES}")
+    # group_by is typed Any (no schema type), so some MCP clients hand it over
+    # as a JSON-ENCODED STRING ('["Region"]' or '"Region"') rather than a
+    # parsed list/str. Left as-is it was looked up as a literal column name and
+    # failed with no column '["Region"]'. Decode the JSON-looking string form
+    # so the natural payload works (author field testing, group_by).
+    if isinstance(group_by, str):
+        s = group_by.strip()
+        if s[:1] in ("[", '"'):
+            try:
+                group_by = _json.loads(s)
+            except (ValueError, TypeError):
+                pass
     data_only = values != "formula"
     wb = gridio.open_wb(path, data_only=data_only)
     try:
@@ -652,8 +665,24 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
             for spec in reversed(order_by):
                 ci = col_i(spec["column"]) if isinstance(spec, dict) \
                     else col_i(spec)
-                desc = isinstance(spec, dict) and \
-                    str(spec.get("dir", "asc")).lower() in ("desc", "descending")
+                # Direction: accept dir / order / direction (a caller reaching
+                # for the SQL word "order" used to be ignored SILENTLY, so a
+                # {"order": "desc"} spec sorted ascending with no error -- a
+                # silent wrong result, the worst kind (author field testing).
+                # An unrecognized direction word now refuses rather than
+                # defaulting quietly to ascending.
+                desc = False
+                if isinstance(spec, dict):
+                    d = spec.get("dir", spec.get("order",
+                                                 spec.get("direction", "asc")))
+                    dl = str(d).strip().lower()
+                    if dl in ("desc", "descending"):
+                        desc = True
+                    elif dl not in ("asc", "ascending"):
+                        raise XlMcpError(
+                            f"order_by direction {d!r} is not understood; use "
+                            "'asc' or 'desc' (key 'dir', 'order', or "
+                            "'direction')")
                 matched_rows.sort(
                     key=lambda r, k=ci, d=desc: _sort_key(
                         r[k] if k < len(r) else None, reverse=d),
