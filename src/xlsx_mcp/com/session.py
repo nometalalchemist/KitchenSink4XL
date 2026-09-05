@@ -269,13 +269,18 @@ _CFB_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
 def is_encrypted_package(path: str) -> bool:
-    """True when the file is an OLE/CFB container (Excel's real encryption
-    wraps the package in CFB). Cheap 8-byte signature read."""
-    try:
-        with open(path, "rb") as fh:
-            return fh.read(8) == _CFB_MAGIC
-    except OSError:
-        return False
+    """True when the file is an OLE/CFB container that is (or could be)
+    Excel's real encryption. A legacy BIFF .xls is ALSO a CFB container, and
+    the bare 8-byte magic check used to call every genuine 97-2003 workbook
+    "password-protected", refusing the one COM route (com_convert_format)
+    that can actually help its owner (geriatric round, H-1). The stream-name
+    sniff (core.hazard.ole_container_kind) tells the two apart; an OLE
+    container the sniff cannot place stays treated as possibly-encrypted,
+    because a password-less open of a real encrypted file hangs Excel on a
+    modal prompt and that risk wins."""
+    from ..core import hazard as _hazard
+    kind = _hazard.ole_container_kind(path)
+    return kind in (_hazard.OLE_KIND_ENCRYPTED, _hazard.OLE_KIND_UNKNOWN)
 
 
 #: Passed as the Open password when the caller supplied none. Unencrypted

@@ -66,6 +66,135 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
+# ------------------------------------------- legacy OLE containers (.xls)
+#
+# The geriatric round's H-1: a genuine .xls handed to any tool escaped the
+# envelope entirely (openpyxl's InvalidFileException is a bare Exception
+# subclass), or -- worse -- half-parsed. Modern Excel's .xls files embed a
+# zip FRAGMENT (the theme package), so Python's zipfile "successfully" opens
+# a BIFF file, finds [Content_Types].xml with no workbook part, and the
+# caller of a perfectly healthy 2003 workbook was told the file was corrupt.
+# Four different behaviors for one user situation, two out of envelope, and
+# the one leaked message recommended xlrd, a Python library an MCP caller
+# cannot invoke, instead of the server's own com_convert_format.
+#
+# The fix is an 8-byte signature sniff at every file entry point. An OLE
+# compound file (D0CF11E0A1B11AE1) is never a readable OOXML package, but it
+# IS one of two very different user situations, told apart by the container's
+# top-level stream names: a legacy BIFF workbook carries a "Workbook" (or
+# BIFF5 "Book") stream, while Excel's real encryption wraps an OOXML package
+# in streams named "EncryptionInfo"/"EncryptedPackage". Diagnosing an
+# encrypted heirloom as "an old .xls" (or vice versa) sends the owner down
+# the wrong remedy, so the sniff reads the first directory sector and names
+# the situation it actually found.
+
+_OLE_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+OLE_KIND_BIFF = "biff"            # legacy Excel 97-2003 (or older) workbook
+OLE_KIND_ENCRYPTED = "encrypted"  # Excel's real password encryption
+OLE_KIND_UNKNOWN = "ole"          # an OLE container this sniff cannot place
+
+
+def _ole_stream_names(fh, header: bytes) -> set[str]:
+    """Lower-cased top-level stream names from the FIRST directory sector.
+    The root entry and the main streams (Workbook / Book / EncryptionInfo /
+    EncryptedPackage / WordDocument) live there in every real file; a parse
+    failure returns what was read (the caller stays conservative)."""
+    import struct
+    names: set[str] = set()
+    try:
+        sector_shift = struct.unpack_from("<H", header, 30)[0]
+        if not 6 <= sector_shift <= 20:
+            return names
+        sector = 1 << sector_shift
+        first_dir = struct.unpack_from("<i", header, 48)[0]
+        if first_dir < 0:
+            return names
+        fh.seek((first_dir + 1) * sector)
+        data = fh.read(sector)
+    except (OSError, struct.error):
+        return names
+    for off in range(0, len(data) - 127, 128):
+        nlen = int.from_bytes(data[off + 64:off + 66], "little")
+        if not 2 <= nlen <= 64:
+            continue
+        try:
+            names.add(
+                data[off:off + nlen - 2].decode("utf-16-le").strip().lower())
+        except UnicodeDecodeError:
+            continue
+    return names
+
+
+def ole_container_kind(path: str) -> str | None:
+    """None when the file is not an OLE compound container; otherwise one of
+    OLE_KIND_BIFF / OLE_KIND_ENCRYPTED / OLE_KIND_UNKNOWN."""
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(512)
+            if header[:8] != _OLE_MAGIC:
+                return None
+            if len(header) < 512:
+                return OLE_KIND_UNKNOWN
+            names = _ole_stream_names(fh, header)
+    except OSError:
+        return None  # unreadable here: the normal open path diagnoses locks
+    if {"workbook", "book"} & names:
+        return OLE_KIND_BIFF
+    if {"encryptedpackage", "encryptioninfo"} & names:
+        return OLE_KIND_ENCRYPTED
+    return OLE_KIND_UNKNOWN
+
+
+def ole_refusal_text(kind: str, path: str) -> str:
+    """The one honest message per container kind, shared by every entry
+    point so a .xls meets the same words whatever tool it hits first."""
+    from pathlib import Path as _P
+    name = _P(path).name
+    if kind == OLE_KIND_BIFF:
+        return (
+            f"{name} is a legacy Excel 97-2003 workbook (BIFF format in an "
+            "OLE compound container), not an OOXML .xlsx/.xlsm package -- "
+            "whatever its extension says. The file-based tools cannot read "
+            "BIFF. Remedy: com_convert_format(path=..., output='...xlsx') "
+            "has Excel itself write a faithful .xlsx copy; then run this "
+            "tool on the converted file.")
+    if kind == OLE_KIND_ENCRYPTED:
+        return (
+            f"{name} is password-protected (Excel's real encryption wraps "
+            "the whole package in an OLE container); the file-based tools "
+            "cannot decrypt it. The com tools accept password=... "
+            "(com_validate_opens_clean verifies it opens; "
+            "com_save_with_password with password='' removes the "
+            "encryption so the file tier can work on it).")
+    return (
+        f"{name} is an OLE compound file, not an OOXML package: most likely "
+        "a legacy Office file (.xls/.doc/.ppt) or an encrypted workbook "
+        "this scan could not classify. If it is a legacy Excel workbook, "
+        "com_convert_format(path=..., output='...xlsx') converts it via "
+        "Excel; if it is password-protected, the com tools accept "
+        "password=... .")
+
+
+def refuse_ole_container(path: str) -> None:
+    """Raise the in-envelope refusal when `path` is an OLE container.
+    UNSUPPORTED_CONTENT for BIFF/unknown (UnsupportedStructure),
+    WorkbookProtected for the encrypted kind; both carry hint_tools so the
+    envelope names the com pack when it is disabled."""
+    kind = ole_container_kind(path)
+    if kind is None:
+        return
+    from .errors import UnsupportedStructure, WorkbookProtected
+    if kind == OLE_KIND_ENCRYPTED:
+        exc: Exception = WorkbookProtected(ole_refusal_text(kind, path))
+        exc.hint_tools = ("com_validate_opens_clean",
+                          "com_save_with_password")
+    else:
+        exc = UnsupportedStructure(ole_refusal_text(kind, path))
+        exc.hint_tools = ("com_convert_format",)
+    raise exc
+
+
 # ------------------------------------------------------------ routing verbs
 
 ROUTE_OPENPYXL = "openpyxl"       # clean workbook, model rewrite is safe
@@ -137,11 +266,20 @@ def _never(_name: str) -> bool:
 
 def _drawings_matcher(name: str) -> bool:
     """Match drawing parts under xl/drawings/, EXCEPT legacy-comment VML
-    anchors (commentsDrawing*.vml). openpyxl models legacy notes and
-    re-serializes their VML drawing byte-for-byte on the round-trip
-    (empirically confirmed), so a comment anchor is not shape loss and must
-    not trip the SEV_DROPS drawings hazard. Genuine legacy shapes and form
-    controls use a different basename (vmlDrawing*.vml) and stay flagged."""
+    anchors named commentsDrawing*.vml (openpyxl's own output naming).
+    openpyxl models legacy notes and regenerates their VML anchor on the
+    round-trip (empirically confirmed), so a comment anchor is not shape
+    loss and must not trip the SEV_DROPS drawings hazard.
+
+    EXCEL'S naming is different: real Excel writes comment anchors as
+    vmlDrawing*.vml -- the same basename form controls use -- so a NAME
+    cannot tell a sticky note from a checkbox (this docstring used to claim
+    the opposite, and every real old file with a comment refused plain edits
+    on it: geriatric round, M-1). vmlDrawing*.vml therefore stays matched
+    here, and _refine_comment_vml then READS each one: an anchor whose every
+    shape is a ClientData ObjectType=\"Note\" is demoted from the hazard
+    (content-verified comment-only), while anything carrying form controls
+    or drawn shapes -- or that cannot be read or parsed -- stays flagged."""
     low = name.lower()
     if not low.startswith("xl/drawings/"):
         return False
@@ -149,6 +287,98 @@ def _drawings_matcher(name: str) -> bool:
     if base.startswith("commentsdrawing") and base.endswith(".vml"):
         return False
     return True
+
+
+#: VML element local names that mean the part carries a DRAWN object of its
+#: own (not a comment note): any of these keeps the part flagged.
+_VML_DRAWN_LOCALS = frozenset({
+    "oval", "rect", "roundrect", "line", "polyline", "arc", "curve",
+    "image", "group",
+})
+
+
+def _vml_local(tag) -> str:
+    return tag.rsplit("}", 1)[-1].lower() if isinstance(tag, str) else ""
+
+
+def _vml_is_comment_only(data: bytes) -> bool | None:
+    """True when a VML part holds nothing but legacy-comment note anchors:
+    at least one shape, every shape carrying exactly one
+    x:ClientData ObjectType="Note", and no drawn VML object anywhere.
+    False for form controls (Checkbox/Button/Drop/... ClientData), drawn
+    shapes, or an empty part; None when the XML cannot be parsed (the
+    caller stays conservative and keeps the part flagged)."""
+    try:
+        from xml.etree.ElementTree import fromstring
+        root = fromstring(data)
+    except Exception:  # noqa: BLE001
+        return None
+    shapes = 0
+    for el in root.iter():
+        local = _vml_local(el.tag)
+        if local in _VML_DRAWN_LOCALS:
+            return False
+        if local != "shape":
+            continue
+        shapes += 1
+        client_data = [c for c in el.iter()
+                       if _vml_local(c.tag) == "clientdata"]
+        if len(client_data) != 1 or \
+                client_data[0].get("ObjectType") != "Note":
+            return False
+    return shapes > 0
+
+
+#: A legacy comments part, either spelling (Excel's xl/comments1.xml or
+#: openpyxl's xl/comments/comment1.xml). The comment-anchor demotion requires
+#: one: openpyxl regenerates a VML anchor only for notes it actually models,
+#: so an ORPHANED Note-anchor part (no comments anywhere) stays flagged.
+_COMMENTS_PART_RE = re.compile(
+    r"^xl/(comments\d+\.xml|comments/comment\d+\.xml)$")
+
+
+def _refine_comment_vml(
+    found: dict[str, "Hazard"],
+    nameset: set[str],
+    reader: Callable[[str], bytes] | None,
+) -> list[str]:
+    """Demote content-verified comment-only vmlDrawing*.vml anchors from the
+    SEV_DROPS drawings hazard, returning the demoted part names.
+
+    Excel names comment anchors vmlDrawing*.vml (see _drawings_matcher), so
+    the single most common geriatric scar -- a sticky note on an old business
+    file -- refused every plain edit while the note in fact round-trips
+    (openpyxl regenerates the anchor under its own commentsDrawing name,
+    text, author, and position intact; empirically confirmed on the
+    geriatric corpus). A namelist alone cannot make this call, because the
+    same basename carries form controls; the demotion happens ONLY after
+    reading the part and finding nothing but Note anchors. Without a reader
+    (scan_names namelist-only) everything stays flagged, the conservative
+    direction."""
+    hz = found.get("drawings")
+    if hz is None or reader is None:
+        return []
+    if not any(_COMMENTS_PART_RE.match(_normalized(n).lower())
+               for n in nameset):
+        return []  # no legacy comments to anchor: nothing to demote
+    demoted: list[str] = []
+    for part in hz.parts:
+        base = part.lower().rsplit("/", 1)[-1]
+        if not (base.startswith("vmldrawing") and base.endswith(".vml")):
+            continue
+        try:
+            data = reader(part)
+        except Exception:  # noqa: BLE001
+            continue
+        if _vml_is_comment_only(data) is True:
+            demoted.append(part)
+    if demoted:
+        kept = [p for p in hz.parts if p not in demoted]
+        if kept:
+            hz.parts = kept
+        else:
+            del found["drawings"]
+    return demoted
 
 
 # ------------------------------------------------- in-part extension blocks
@@ -408,6 +638,11 @@ class HazardReport:
     #: empty for scan_names). verify-after-write uses these to catch a fragile
     #: part REPLACED with empty content rather than dropped outright.
     sizes: dict[str, int] = field(default_factory=dict)
+    #: vmlDrawing*.vml parts the content classifier verified as comment-only
+    #: anchors and demoted from the drawings hazard (geriatric round, M-1).
+    #: openpyxl regenerates them under its own commentsDrawing naming on
+    #: save, so verify-after-write excuses exactly these names vanishing.
+    comment_anchor_vml: list[str] = field(default_factory=list)
     #: WHY the scan failed: "corrupt" | "missing" | "locked" | None. A
     #: byte-range-locked (but healthy) file makes zipfile raise BadZipFile
     #: when the lock covers the central directory, and telling the owner of
@@ -652,9 +887,11 @@ def scan_names(names: Iterable[str], path: str = "<names>", *,
                     found[spec.key] = h
                 h.parts.append(name)
     _refine_drawings(found, nameset, reader)
+    demoted_vml = _refine_comment_vml(found, nameset, reader)
     _detect_in_part_extensions(found, names, reader)
     ordered = [found[s.key] for s in HAZARD_SPECS if s.key in found]
-    return HazardReport(path=path, parts=names, hazards=ordered)
+    return HazardReport(path=path, parts=names, hazards=ordered,
+                        comment_anchor_vml=demoted_vml)
 
 
 def scan_path(path: str) -> HazardReport:
@@ -669,6 +906,15 @@ def scan_path(path: str) -> HazardReport:
     proportional to sheet size rather than the old flat milliseconds; the
     alternative is a data bar that vanishes without a word, so the read
     stays."""
+    kind = ole_container_kind(path)
+    if kind is not None:
+        # An OLE container (legacy .xls, or an encrypted package). Modern
+        # Excel's .xls files embed a zip fragment, so without this sniff the
+        # zip open below SUCCEEDS on a BIFF file and the scan mistakes the
+        # theme fragment for the workbook (geriatric round, H-1).
+        return HazardReport(path=path, parts=[], hazards=[],
+                            error=ole_refusal_text(kind, path),
+                            error_kind="ole")
     try:
         with zipfile.ZipFile(path) as zf:
             infos = zf.infolist()
@@ -808,6 +1054,8 @@ def _raw_safe(report: HazardReport) -> bool:
 __all__ = [
     "HazardReport", "Hazard", "HazardSpec", "HAZARD_SPECS",
     "EXT_DROP_LABELS", "IN_PART_EXT_KEY",
+    "ole_container_kind", "ole_refusal_text", "refuse_ole_container",
+    "OLE_KIND_BIFF", "OLE_KIND_ENCRYPTED", "OLE_KIND_UNKNOWN",
     "scan_path", "scan_names", "route",
     "ROUTE_OPENPYXL", "ROUTE_RAW_OOXML", "ROUTE_COM", "ROUTE_REFUSE",
     "SEV_DROPS", "SEV_DEGRADES", "SEV_CONDITIONAL",

@@ -33,6 +33,7 @@ import zipfile
 from typing import Any
 from xml.etree.ElementTree import fromstring
 
+from ..core import hazard as _hazard
 from ..core.errors import WorkbookCorrupt, WorkbookNotFound, XlMcpError
 from ..core.sandbox import check_path
 from . import gridio
@@ -47,6 +48,11 @@ def _open_zip(path: str) -> zipfile.ZipFile:
     p = check_path(path, "open workbook")
     if not os.path.exists(p):
         raise WorkbookNotFound(f"no such workbook: {p}")
+    # Modern .xls files embed a zip fragment, so the zip open below can
+    # SUCCEED on a BIFF file and misread the theme package as the workbook;
+    # the OLE sniff refuses first with the format and the remedy
+    # (geriatric round, H-1).
+    _hazard.refuse_ole_container(p)
     try:
         return zipfile.ZipFile(p)
     except zipfile.BadZipFile:

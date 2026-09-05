@@ -222,6 +222,20 @@ def _run_mutation(label: str, path: str,
     open in the pooled worker, run body(app, wb), save with retry, close,
     structural verify (restore the backup on failure)."""
     _refuse_encrypted_without_password(path, password)
+    if _hazard.ole_container_kind(path) == _hazard.OLE_KIND_BIFF:
+        # Excel would happily edit and re-save the BIFF file, but the
+        # post-save structural verify requires an OOXML package, so the
+        # mutation would be applied and then rolled back. Refuse up front
+        # with the actual remedy instead (geriatric round, H-1). Read-only
+        # COM ops (com_convert_format among them) take .xls fine.
+        from ..core.errors import UnsupportedStructure
+        exc = UnsupportedStructure(
+            f"{Path(path).name} is a legacy Excel 97-2003 (BIFF) workbook; "
+            "COM mutations on this server write and verify OOXML packages "
+            "only. Convert it first: com_convert_format(path=..., "
+            "output='...xlsx'), then edit the converted file.")
+        exc.hint_tools = ("com_convert_format",)
+        raise exc
     body = _guarded(body, f"running {_op_of(label)} in the workbook")
     warnings = _session.guard_target_closed(path)
     pre_report = None

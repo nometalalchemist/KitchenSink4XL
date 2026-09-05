@@ -22,6 +22,7 @@ from typing import Any
 from openpyxl.utils import get_column_letter
 
 from ..core import calc as _calc
+from ..core import hazard as _hazard
 from ..core import locate as _locate
 from ..core.errors import (
     RangeOutOfBounds,
@@ -50,6 +51,11 @@ def open_wb(path: str, *, data_only: bool = False):
         raise XlMcpError(
             f"{p} is a directory, not a workbook file; pass the path of an "
             ".xlsx/.xlsm file")
+    # A legacy .xls (or an encrypted package) is an OLE container; refuse it
+    # here with the honest format-and-remedy message rather than leak
+    # openpyxl's raw InvalidFileException, or half-parse the zip fragment
+    # modern .xls files embed (geriatric round, H-1).
+    _hazard.refuse_ole_container(p)
     import openpyxl
     import zipfile
     keep_vba = p.lower().endswith(".xlsm")

@@ -40,6 +40,9 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from openpyxl.utils.exceptions import (
     IllegalCharacterError as _IllegalCharacterError,
 )
+from openpyxl.utils.exceptions import (
+    InvalidFileException as _InvalidFileException,
+)
 
 from . import packs as _packs
 from .core import errors as _err
@@ -85,6 +88,13 @@ CODE_MAP: tuple[tuple[type[BaseException], str], ...] = (
     # round: get_workbook_metadata on a garbage .xlsx answered "Error calling
     # tool ...: File is not a zip file" with no envelope and no code.
     (zipfile.BadZipFile, "UNSUPPORTED_CONTENT"),
+    # openpyxl's own refusal for a file format it does not read (a bare
+    # Exception subclass, so nothing else catches it). The OLE sniff at the
+    # entry points refuses legacy .xls with a better message before openpyxl
+    # ever sees one; this is the backstop for any unsniffed path, so a
+    # genuine .xls can never escape the Section 7 envelope again as a raw
+    # Rich traceback recommending xlrd (geriatric round, H-1).
+    (_InvalidFileException, "UNSUPPORTED_CONTENT"),
     # PermissionError is the file-held-open signal on Windows (and what a
     # directory passed as a path raises); IsADirectoryError is its POSIX
     # spelling. Everything else OS-level lands as BAD_PARAMS rather than a

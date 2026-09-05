@@ -128,6 +128,11 @@ class WorkbookPackage:
             raise XlMcpError(
                 f"{p} is a directory, not a workbook file; pass the path of "
                 "an .xlsx/.xlsm file")
+        # A legacy .xls / encrypted OLE container must refuse HERE, honestly
+        # and in-envelope, before openpyxl's extension check leaks a raw
+        # InvalidFileException or the hazard scan half-parses the embedded
+        # theme fragment modern .xls files carry (geriatric round, H-1).
+        _hazard.refuse_ole_container(p)
         pkg = cls(p, com_manager=com_manager)
         rep = _hazard.scan_path(p)
         if rep.error is not None:
@@ -612,11 +617,20 @@ class WorkbookPackage:
         restore-from-backup branch entirely and leaves the broken file in
         place. An exception is therefore a verification FAILURE, reported as
         one."""
+        # Content-verified comment-only vmlDrawing*.vml anchors (geriatric
+        # M-1): openpyxl regenerates them under its own commentsDrawing
+        # naming, so exactly those original names legitimately vanish. The
+        # comment PARTS themselves stay guarded by the renumbered legacy-
+        # comment family, so a note that actually got lost still fails.
+        expected = set(self._expected_removals)
+        if self._hazard is not None:
+            expected.update(
+                p.lower() for p in self._hazard.comment_anchor_vml)
         try:
             return _verify.verify_after_write(
                 target, pre_parts=self._pre_parts, intended=self._intended,
                 allow_loss=allow_loss, pre_sizes=self._pre_sizes,
-                expected_removals=frozenset(self._expected_removals),
+                expected_removals=frozenset(expected),
                 loss_keys=self._warned_loss_keys or None)
         except Exception as exc:  # noqa: BLE001
             return _verify.VerifyResult(

@@ -76,6 +76,16 @@ def _com_opens_clean(path: str):
 
 def _check_structure(path: str) -> tuple[bool, dict]:
     issues: list[str] = []
+    kind = _hazard.ole_container_kind(check_path(path, "validate workbook"))
+    if kind is not None:
+        # An OLE container (legacy .xls or an encrypted package): the zip
+        # check below would either fail with the wrong word ("not a zip")
+        # or, for a modern-Excel .xls with its embedded theme fragment,
+        # "succeed" and report a missing workbook part (geriatric H-1/L-1).
+        return False, {
+            "opens_clean": False,
+            "opens_clean_source": "OLE compound-file signature",
+            "issues": [_hazard.ole_refusal_text(kind, path)]}
     try:
         with zipfile.ZipFile(check_path(path, "validate workbook")) as zf:
             names = set(zf.namelist())

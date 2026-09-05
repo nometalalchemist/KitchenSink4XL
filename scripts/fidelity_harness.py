@@ -93,8 +93,21 @@ def analyze(path: Path, tmp: Path) -> FidelityRow:
 
     fragile_dropped = sorted(p for p in dropped if _matches_any_spec(p))
     detected_parts = {p for h in rep.hazards for p in h.parts}
+    # A content-verified comment-only vmlDrawing*.vml (geriatric M-1) is
+    # demoted from the drawings hazard because openpyxl REGENERATES the
+    # anchor under its own commentsDrawing naming with the note intact
+    # (empirically confirmed). The name-identity diff sees that rename as a
+    # drop; it is not one, PROVIDED the regenerated anchor is actually in
+    # the produced package. Absent regeneration the demoted name counts as
+    # an undetected drop again, keeping the false-negative check honest.
+    regenerated = sum(
+        1 for p in after
+        if p.lower().startswith("xl/drawings/commentsdrawing")
+        and p.lower().endswith(".vml"))
+    excused_anchors = set(rep.comment_anchor_vml[:regenerated])
     fragile_undetected = sorted(p for p in fragile_dropped
-                                if p not in detected_parts)
+                                if p not in detected_parts
+                                and p not in excused_anchors)
     incidental = sorted(p for p in dropped if not _matches_any_spec(p))
 
     sig_dropped = None
