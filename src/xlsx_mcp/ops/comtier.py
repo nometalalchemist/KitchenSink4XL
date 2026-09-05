@@ -780,7 +780,15 @@ def com_convert_format(path: str, output: str, format: str | None = None,
     if fmt not in FILE_FORMATS:
         raise XlMcpError(
             f"format must be one of {sorted(FILE_FORMATS)}, got {fmt!r}")
-    if os.path.abspath(out) == os.path.abspath(p):
+    # canonical_key, not abspath: this is the ONE caller where outguard's
+    # rule 1 is load-bearing (workbook_target=True skips the workbook-
+    # extension rule that shadows it everywhere else), so its backstop has
+    # to be at least as strong as the rule it backs up. abspath normalizes
+    # neither case nor symlinks, so "BOOK.XLSX" or a junctioned spelling of
+    # the source used to walk straight past it and Excel's own SaveAs
+    # overwrote the workbook being converted (mutation round, E1).
+    from ..core.safesave import canonical_key as _canonical_key
+    if _canonical_key(out) == _canonical_key(p):
         raise XlMcpError("output must differ from the source path; "
                          "conversion never overwrites its own source")
 

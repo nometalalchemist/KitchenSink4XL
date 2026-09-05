@@ -32,19 +32,26 @@ _HIDE_STATES = {"hidden": "hidden", "very_hidden": "veryHidden",
 
 
 def _check_sheet_name(name: str) -> None:
-    """Excel's own sheet-name rules beyond openpyxl's charset check. A name
-    starting with an apostrophe produces a workbook Excel refuses to OPEN at
-    all ("Open method of Workbooks class failed") while verify-after-write
-    still passes, because openpyxl validates only length and []:*?/\\
-    (fresh-eyes round, M-1: bisected as the sole killer in a 7-candidate
-    battery). Excel's UI also forbids a trailing apostrophe."""
-    if len(name) > 31:
-        raise XlMcpError(f"sheet name {name!r} exceeds 31 characters")
-    if name.startswith("'") or name.endswith("'"):
-        raise XlMcpError(
-            f"sheet name {name!r} starts or ends with an apostrophe; Excel "
-            "refuses to open a workbook containing such a sheet name. "
-            "Remove the leading/trailing apostrophe.")
+    """Excel's sheet-name grammar, applied BEFORE openpyxl sees the title.
+
+    This is the single entry point for every sheet title the file tier
+    writes (create_workbook, and manage_worksheet add / rename / copy), and
+    it delegates to core.limits.check_sheet_title, which owns the measured
+    grammar: 1-31 characters, none of : \\ / ? * [ ], no apostrophe at
+    either end, and no character Excel cannot store.
+
+    The delegation is the mutation round's D1 finding (2026-09-06):
+    check_sheet_title was implemented, exported, docstringed and wired to
+    NOTHING, so every one of its mutants survived the full suite and sheet
+    naming rode on whatever openpyxl happened to enforce. openpyxl
+    validates only length and the banned charset, and it raises a bare
+    ValueError doing it; the apostrophe rule it has no notion of at all,
+    which is how a name starting with one used to produce a workbook Excel
+    refuses to OPEN while verify-after-write still passed (fresh-eyes
+    round, M-1). Refusing here means one message, one exception type, and
+    a refusal before any part of the package is touched."""
+    from ..core.limits import check_sheet_title
+    check_sheet_title(name)
 
 
 # ----------------------------------------------------------------- create/copy
