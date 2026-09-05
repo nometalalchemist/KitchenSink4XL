@@ -973,6 +973,214 @@ def _reapply_always_calc(xml: str, wanted: dict[str, tuple[str, str]]
     return _CELL_RE.sub(fix, xml), n
 
 
+# -------------------------- untouched full-precision numbers (1-ulp snap)
+
+#: The text of a cell's cached/stored <v> element.
+_V_TEXT_RE = re.compile(r"<v(?:\s[^>]*)?>(?P<text>.*?)</v>", re.S)
+#: The t= (cell type) attribute inside a <c> element's attribute run.
+_T_ATTR_RE = re.compile(r'\bt="([^"]*)"')
+#: Cheap prefilter for a part that could hold a 17-significant-digit number:
+#: such a number's stored text carries at least 17 digits, so at least 17
+#: consecutive [0-9.] characters. A part with no such run has nothing at
+#: risk and skips the cell walk entirely.
+_LONG_NUMBER_HINT = re.compile(r"[0-9.]{17,}")
+
+
+def _snap16(v: float) -> float:
+    """The double openpyxl's writer actually stores for v: float('%.16g').
+    openpyxl 3.x serializes every float with %.16g, and a double that needs
+    17 significant digits to round-trip comes back 1 ulp off."""
+    return float("%.16g" % v)
+
+
+def full_precision_loss(value) -> float | None:
+    """The value openpyxl's %.16g writer would store for a float that does
+    NOT survive it, else None. The refusal/repair trigger for the whole
+    1-ulp class (metamorphic round, F1/F2)."""
+    if not isinstance(value, float):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    snapped = _snap16(value)
+    return snapped if snapped != value else None
+
+
+def _at_risk_number_texts(zf, part: str) -> dict[str, tuple[str, float, float]]:
+    """addr -> (stored_text, value, snapped_value) for every PLAIN numeric
+    cell of one worksheet part whose stored text does not survive openpyxl's
+    %.16g float writer. Formula cells are excluded (their <v> is a cached
+    value with its own lifecycle: strip_empty_cached_values and
+    restore_always_calc_cache own it), and so is any cell with a non-numeric
+    t= type (a shared-string index must never be mistaken for a number)."""
+    try:
+        raw = zf.read(part)
+    except KeyError:
+        return {}
+    try:
+        xml = raw.decode(part_encoding(raw))
+    except UnicodeDecodeError:
+        return {}
+    if not _LONG_NUMBER_HINT.search(xml):
+        return {}
+    out: dict[str, tuple[str, float, float]] = {}
+    for m in _CELL_RE.finditer(xml):
+        body = m.group("body")
+        if body is None or "<f" in body:
+            continue
+        tm = _T_ATTR_RE.search(m.group("cattrs"))
+        if tm is not None and tm.group(1) != "n":
+            continue
+        vm = _V_TEXT_RE.search(body)
+        if vm is None:
+            continue
+        text = vm.group("text").strip()
+        try:
+            v = float(text)
+        except ValueError:
+            continue
+        if v != v or v in (float("inf"), float("-inf")):
+            continue
+        snapped = _snap16(v)
+        if snapped != v:
+            out[m.group(1)] = (text, v, snapped)
+    return out
+
+
+def preserve_untouched_number_text(
+        original: str, produced: str, *,
+        remap, skip) -> int:
+    """Put back the ORIGINAL stored text of full-precision numeric cells the
+    edit did not touch. Returns the number of cells restored.
+
+    WHY THIS EXISTS (metamorphic round, F2 -- the one silent wrong-number
+    channel of the round). openpyxl serializes floats with %.16g, and a
+    double that needs 17 significant digits to round-trip (Excel writes
+    these routinely: 0.1+0.2 is stored as 0.30000000000000004) is silently
+    rewritten 1 ulp off in every cell of every sheet on ANY save -- cells the
+    operation never went near. That snap can flip equality-gated logic
+    (=IF(A1=0.3,...) branches differently) in a file whose input cell was
+    'untouched'. Verify-after-write cannot see it: the intended map covers
+    only written cells. So the save spine repairs it the same way it repairs
+    the always-calculate cache: raw-XML surgery over the produced package,
+    restoring the original numeric text where the edit did not write.
+
+    CONSERVATIVE BY CONSTRUCTION, three ways:
+      - `remap(sheet_title, addr)` maps an original address through the
+        save's structural edits (or None when the cell was deleted / cannot
+        be tracked); an address that cannot be followed is left alone.
+      - `skip(sheet_title, produced_addr)` is True for every cell the
+        operation wrote or rewrote wholesale (the intended map plus any
+        registered written region); those cells are the operation's to
+        re-serialize and are never touched here.
+      - the produced cell must hold EXACTLY the %.16g snap of the original
+        value, as a plain numeric non-formula cell. If the operation wrote
+        anything else there -- a different number, a string, a formula --
+        nothing matches and nothing is restored.
+    A repair failure of any kind returns 0 and never fails the save."""
+    import os
+    import shutil
+    import tempfile
+    import zipfile
+    from pathlib import Path
+
+    src = Path(produced)
+    patches: dict[str, str] = {}
+    try:
+        with zipfile.ZipFile(original) as zin, zipfile.ZipFile(src) as zout:
+            src_parts = _sheet_parts(zin)
+            out_parts = _sheet_parts(zout)
+            if not src_parts or not out_parts:
+                return 0
+            for title, part in src_parts.items():
+                target = out_parts.get(title)
+                if target is None:
+                    continue
+                at_risk = _at_risk_number_texts(zin, part)
+                if not at_risk:
+                    continue
+                wanted: dict[str, tuple[str, float, float]] = {}
+                for addr, entry in at_risk.items():
+                    new_addr = remap(title, addr)
+                    if new_addr is None or skip(title, new_addr):
+                        continue
+                    wanted[new_addr] = entry
+                if not wanted:
+                    continue
+                raw = zout.read(target)
+                enc = part_encoding(raw)
+                try:
+                    xml = raw.decode(enc)
+                except UnicodeDecodeError:
+                    continue
+                new_xml, n = _restore_number_texts(xml, wanted)
+                if n:
+                    patches[target] = new_xml
+    except Exception:  # noqa: BLE001 - never fail a save over this repair
+        return 0
+    if not patches:
+        return 0
+
+    restored = 0
+    fd, tmp = tempfile.mkstemp(suffix=src.suffix, dir=str(src.parent))
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(src) as zin, \
+                zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zw:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename in patches:
+                    data = patches[item.filename].encode(part_encoding(data))
+                    restored += 1
+                zw.writestr(item, data)
+        shutil.move(tmp, src)
+    except Exception:  # noqa: BLE001
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return 0
+    return restored
+
+
+def _restore_number_texts(xml: str,
+                          wanted: dict[str, tuple[str, float, float]]
+                          ) -> tuple[str, int]:
+    n = 0
+
+    def fix(m: re.Match) -> str:
+        entry = wanted.get(m.group(1))
+        if entry is None:
+            return m.group(0)
+        body = m.group("body")
+        if body is None or "<f" in body:
+            return m.group(0)
+        tm = _T_ATTR_RE.search(m.group("cattrs"))
+        if tm is not None and tm.group(1) != "n":
+            return m.group(0)
+        vm = _V_TEXT_RE.search(body)
+        if vm is None:
+            return m.group(0)
+        text, orig_v, snapped = entry
+        got = vm.group("text").strip()
+        try:
+            got_v = float(got)
+        except ValueError:
+            return m.group(0)
+        # Only when the produced value is exactly the 1-ulp snap of the
+        # original: anything else means the operation (or another repair)
+        # legitimately changed this cell.
+        if got_v != snapped or got_v == orig_v:
+            return m.group(0)
+        nonlocal n
+        n += 1
+        new_body = (body[:vm.start()] + body[vm.start():vm.end()].replace(
+            vm.group("text"), text, 1) + body[vm.end():])
+        return (f'<c r="{m.group(1)}"{m.group("cattrs")}>'
+                f"{new_body}</c>")
+
+    return _CELL_RE.sub(fix, xml), n
+
+
 def _set_full_calc(workbook_xml: str) -> tuple[str, bool]:
     if 'fullCalcOnLoad="1"' in workbook_xml:
         return workbook_xml, False
@@ -1092,6 +1300,7 @@ __all__ = [
     "normalize_formula", "denormalize_formula", "label_cell",
     "is_formula_cell", "formula_text_of", "looks_like_formula_text",
     "inject_full_calc_on_load", "strip_empty_cached_values",
+    "preserve_untouched_number_text", "full_precision_loss",
     "recalc_via_com", "recalc_via_formulas", "literal_spans",
     "RecalcResult", "XLFN_FUNCS", "XLFN_XLWS_FUNCS",
     "LABEL_CACHED", "LABEL_COMPUTED", "LABEL_FORMULA", "LABEL_ABSENT",

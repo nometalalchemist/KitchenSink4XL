@@ -51,6 +51,7 @@ import zipfile
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from . import calc as _calc
 from . import hazard as _hazard
 
 #: Parts openpyxl legitimately drops or regenerates on a normal save; their
@@ -462,8 +463,18 @@ def content_readback(path: str, intended: dict) -> tuple[bool, list[dict]]:
                         (expected is None and got == ""):
                     continue
                 if got != expected:
-                    mismatches.append({"sheet": sheet, "cell": coord,
-                                       "expected": expected, "got": got})
+                    entry = {"sheet": sheet, "cell": coord,
+                             "expected": expected, "got": got}
+                    # The 1-ulp precision class (metamorphic round, F1): a
+                    # double that needs 17 significant digits does not
+                    # survive openpyxl's %.16g float writer, so the readback
+                    # is exactly the 16-digit snap of the intent. Name the
+                    # cause so the refusal reads as a stated limit of the
+                    # file tier, not a server bug.
+                    snapped = _calc.full_precision_loss(expected)
+                    if snapped is not None and got == snapped:
+                        entry["cause"] = "precision"
+                    mismatches.append(entry)
     finally:
         wb.close()
     return (not mismatches), mismatches
@@ -519,10 +530,42 @@ def verify_after_write(path: str, *, pre_parts, intended: dict | None = None,
         if not ok:
             result.ok = False
             result.mismatches = mism
-            result.reasons.append(
-                f"{len(mism)} written cell(s) did not read back as intended")
+            result.reasons.append(_readback_reason(mism))
 
     return result
+
+
+def _readback_reason(mismatches: list[dict]) -> str:
+    """The read-back failure line, naming the cells and -- for the 1-ulp
+    class -- the cause. The old text ('N written cell(s) did not read back as
+    intended') named neither, so a full-precision refusal read as a server
+    bug rather than a stated storage limit (metamorphic round, F1)."""
+    def _addr(m: dict) -> str:
+        s, c = m.get("sheet"), m.get("cell")
+        return f"{s}!{c}" if s and c else str(c or m.get("problem", "?"))
+
+    precision = [m for m in mismatches if m.get("cause") == "precision"]
+    other = [m for m in mismatches if m.get("cause") != "precision"]
+    parts: list[str] = []
+    if other:
+        shown = ", ".join(_addr(m) for m in other[:10])
+        more = f" (+{len(other) - 10} more)" if len(other) > 10 else ""
+        parts.append(
+            f"{len(other)} written cell(s) did not read back as intended: "
+            f"{shown}{more}")
+    if precision:
+        shown = ", ".join(
+            f"{_addr(m)} ({m.get('expected')!r})" for m in precision[:10])
+        more = f" (+{len(precision) - 10} more)" \
+            if len(precision) > 10 else ""
+        parts.append(
+            f"{len(precision)} written cell(s) hold double(s) that need 17 "
+            "significant digits, which the file tier's writer stores at 16 "
+            f"(a 1-ulp change): {shown}{more}. This is a storage limit, not "
+            "a data error: round the value (e.g. to 15 significant digits) "
+            "if the last digit is noise, or use the COM tier (com pack) to "
+            "have Excel write it at full precision")
+    return "; ".join(parts)
 
 
 __all__ = [

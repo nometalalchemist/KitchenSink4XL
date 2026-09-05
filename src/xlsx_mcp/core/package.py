@@ -102,6 +102,17 @@ class WorkbookPackage:
         #: Worksheet parts whose ca="1" always-calculate flags and cached
         #: values the save put back (core.calc.restore_always_calc_cache).
         self._restored_calc_cache = 0
+        #: Rectangles (sheet, min_row, min_col, max_row, max_col) whose cell
+        #: VALUES an op rewrites wholesale without a per-cell intent record
+        #: (copy/move destinations, sorted regions). The untouched-number
+        #: preservation pass (core.calc.preserve_untouched_number_text) must
+        #: never "restore" an original 17-digit double onto a cell such an op
+        #: legitimately re-populated, so these regions are excluded from the
+        #: repair alongside the intended map. See note_region_write().
+        self._written_regions: list[tuple[str, int, int, int, int]] = []
+        #: Cells whose original full-precision stored text the save restored
+        #: (core.calc.preserve_untouched_number_text, metamorphic F2).
+        self._preserved_number_texts = 0
 
     # ------------------------------------------------------------- open
 
@@ -272,6 +283,78 @@ class WorkbookPackage:
             {"kind": edit.kind, "sheet": edit.sheet, "index": edit.index,
              "count": edit.count, "rewrites": report.as_dict()})
         return report
+
+    def note_region_write(self, sheet: str, min_row: int, min_col: int,
+                          max_row: int, max_col: int) -> None:
+        """Register a rectangle whose cell values this op rewrites WITHOUT a
+        per-cell entry in the intended map (a copy/move destination, a sorted
+        region). Untouched-number preservation skips every cell inside it, so
+        a full-precision original can never be restored over a value the op
+        deliberately placed there. Scoped to the next successful save."""
+        self._written_regions.append(
+            (sheet, min_row, min_col, max_row, max_col))
+
+    def _number_preservation_maps(self):
+        """(remap, skip) for core.calc.preserve_untouched_number_text.
+
+        remap follows an original address through this save's recorded
+        structural edits (insert/delete rows/cols shift, a deleted cell or a
+        MOVE-covered cell returns None: untrackable is untouchable). skip is
+        True for every cell the op wrote: the intended map plus every
+        registered written region."""
+        from openpyxl.utils import get_column_letter
+        from openpyxl.utils.cell import coordinate_from_string
+        from openpyxl.utils.cell import column_index_from_string
+
+        edits = list(self._structural)
+        intended = {(s, c.upper()) for (s, c) in self._intended}
+        regions = list(self._written_regions)
+
+        def remap(sheet: str, addr: str) -> str | None:
+            try:
+                col_s, row = coordinate_from_string(addr)
+                col = column_index_from_string(col_s)
+            except Exception:  # noqa: BLE001
+                return None
+            for e in edits:
+                if e.sheet != sheet:
+                    continue
+                if e.kind == _refs.INSERT_ROWS:
+                    if row >= e.index:
+                        row += e.count
+                elif e.kind == _refs.DELETE_ROWS:
+                    if e.index <= row < e.index + e.count:
+                        return None
+                    if row >= e.index + e.count:
+                        row -= e.count
+                elif e.kind == _refs.INSERT_COLS:
+                    if col >= e.index:
+                        col += e.count
+                elif e.kind == _refs.DELETE_COLS:
+                    if e.index <= col < e.index + e.count:
+                        return None
+                    if col >= e.index + e.count:
+                        col -= e.count
+                else:
+                    # A MOVE (or any future kind) relocates content this map
+                    # does not model; conservative means hands off the sheet.
+                    return None
+            return f"{get_column_letter(col)}{row}"
+
+        def skip(sheet: str, addr: str) -> bool:
+            if (sheet, addr.upper()) in intended:
+                return True
+            try:
+                col_s, row = coordinate_from_string(addr)
+                col = column_index_from_string(col_s)
+            except Exception:  # noqa: BLE001
+                return True
+            for (s, r0, c0, r1, c1) in regions:
+                if s == sheet and r0 <= row <= r1 and c0 <= col <= c1:
+                    return True
+            return False
+
+        return remap, skip
 
     def expect_removal(self, *prefixes: str) -> None:
         """Register part-name prefixes an op DELIBERATELY removes at the model
@@ -501,6 +584,21 @@ class WorkbookPackage:
                 self.path, tmp)
         except Exception:  # noqa: BLE001
             self._restored_calc_cache = 0
+        # THE 1-ULP REPAIR (metamorphic round, F2): openpyxl's %.16g float
+        # writer silently rewrites every 17-significant-digit double in the
+        # file -- including cells this edit never touched -- 1 ulp off, which
+        # can flip equality-gated logic in an Excel-authored workbook. The
+        # original numeric TEXT of every untouched full-precision cell is
+        # restored by raw surgery; only cells the operation actually wrote
+        # (intended map + registered written regions, addresses followed
+        # through the structural edits) keep openpyxl's re-serialization.
+        try:
+            remap, skip = self._number_preservation_maps()
+            self._preserved_number_texts = \
+                _calc.preserve_untouched_number_text(
+                    self.path, tmp, remap=remap, skip=skip)
+        except Exception:  # noqa: BLE001
+            self._preserved_number_texts = 0
 
     def _run_verify(self, target: str, allow_loss: bool) -> _verify.VerifyResult:
         """Run the verify gate and NEVER let it raise.
@@ -664,6 +762,9 @@ class WorkbookPackage:
                 changed["cells"] = [
                     {"sheet": s, "cell": c, "kind": k}
                     for (s, c), (k, _v) in self._intended.items()]
+            if self._preserved_number_texts:
+                changed["full_precision_cells_preserved"] = \
+                    self._preserved_number_texts
             self._intended = {}
             self._formula_written = False
             self._structural = []
@@ -672,6 +773,7 @@ class WorkbookPackage:
             self._expected_preserved = set()
             self._warned_loss_keys = set()
             self._dropped_extensions = []
+            self._written_regions = []
             # The file we just wrote is now the baseline a second save on this
             # package must compare against.
             self._stamp = _file_stamp(path)

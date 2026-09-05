@@ -321,6 +321,10 @@ def copy_range(path: str, source: Any, dest: Any, what: str = "all",
         dob.close()
     if wrote_formula:
         pkg._formula_written = True
+    # The paste rectangle is written without per-cell intents; exclude it
+    # from the untouched-number preservation pass (core.package).
+    pkg.note_region_write(dst.sheet, dst_rect.min_row, dst_rect.min_col,
+                          dst_rect.max_row, dst_rect.max_col)
     result = pkg.save(allow_loss=allow_loss, backup=backup,
                       verify_com=verify_com)
     result["changed"]["copied"] = {
@@ -412,6 +416,13 @@ def move_range(path: str, source: Any, dest: Any, sheet: str | None = None,
     report = _refs.rewrite_workbook(pkg.workbook, edit)
     if wrote_formula or report.formulas:
         pkg._formula_written = True
+    # Both rectangles are rewritten without per-cell intents (the MOVE edit
+    # additionally disables address remapping for this sheet's preservation).
+    pkg.note_region_write(src.sheet, src.min_row, src.min_col,
+                          src.max_row, src.max_col)
+    pkg.note_region_write(src.sheet, dst.min_row, dst.min_col,
+                          dst.min_row + src.max_row - src.min_row,
+                          dst.min_col + src.max_col - src.min_col)
     result = pkg.save(allow_loss=allow_loss, backup=backup,
                       verify_com=verify_com)
     result["changed"]["moved"] = {

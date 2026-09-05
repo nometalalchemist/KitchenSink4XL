@@ -165,8 +165,12 @@ def manage_hyperlink(path: str, action: str, location: Any = None,
         cell.hyperlink = hl
         if display is not None:
             cell.value = display
+            pkg.note_region_write(ws.title, grid.min_row, grid.min_col,
+                                  grid.min_row, grid.min_col)
         elif cell.value is None:
             cell.value = target
+            pkg.note_region_write(ws.title, grid.min_row, grid.min_col,
+                                  grid.min_row, grid.min_col)
         pkg._changed["hyperlink"] = {"sheet": ws.title, "added": grid.a1,
                                      "target": target}
     else:  # remove

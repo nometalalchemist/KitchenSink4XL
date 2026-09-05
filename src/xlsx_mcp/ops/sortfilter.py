@@ -192,6 +192,10 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
             cell._style = _copy(style)
     if wrote_formula:
         pkg._formula_written = True
+    # The sort re-populates the whole data block without per-cell intents;
+    # the untouched-number preservation pass must keep its hands off it
+    # (a moved 17-digit double is a WRITTEN cell here, not an untouched one).
+    pkg.note_region_write(grid.sheet, data_top, min_col, max_row, max_col)
     pkg._changed["sorted"] = {
         "sheet": grid.sheet, "range": grid.a1,
         "rows_sorted": len(rows),
