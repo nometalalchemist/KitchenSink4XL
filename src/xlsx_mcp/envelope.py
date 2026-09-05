@@ -237,6 +237,18 @@ def _declared_code(exc: BaseException) -> str | None:
     return code if isinstance(code, str) and code in CLOSED_CODES else None
 
 
+#: The one plain sentence every corrupt-workbook refusal carries (destroyer
+#: round, M-4): a panicked non-developer facing "not a valid package" had to
+#: already KNOW manage_backups existed; no error or workflow pointed at it.
+RECOVERY_HINT = (
+    "If this workbook was working before, an automatic backup may hold a "
+    "good copy: manage_backups(action='list', path=...) shows the prev and "
+    "anchor slots, and manage_backups(action='restore', path=..., "
+    "source='prev') puts one back. get_workflows(task='recover-workbook') "
+    "walks through it."
+)
+
+
 def refusal(exc: BaseException) -> dict:
     """Build the {ok: false, error: {code, message, hint}} payload."""
     code = _declared_code(exc) or classify(exc)
@@ -257,6 +269,8 @@ def refusal(exc: BaseException) -> dict:
                 "vice versa)"
             )
     hint = HINTS.get(code, "")
+    if isinstance(exc, (_err.WorkbookCorrupt, zipfile.BadZipFile)):
+        hint = f"{hint} {RECOVERY_HINT}".strip()
     ph = pack_hint(exc)
     if ph:
         hint = f"{hint} {ph}".strip()

@@ -474,3 +474,54 @@ class TestAllowLossScope:
         from xlsx_mcp.core import hazard
         rep = hazard.scan_path(str(_CORPUS / "chart.xlsx"))
         assert "drawings" not in {h.key for h in rep.hazards}
+
+
+# ======================================================================
+# Destroyer M-4: recovery discoverability for a panicked non-developer
+# ======================================================================
+
+
+class TestRecoveryDiscoverability:
+    def test_corrupt_refusal_names_manage_backups(self):
+        from xlsx_mcp import envelope
+        payload = envelope.refusal(WorkbookCorrupt(
+            "b.xlsx: not a valid zip / OOXML package"))
+        hint = payload["error"]["hint"]
+        assert "manage_backups" in hint
+        assert "recover-workbook" in hint
+
+    def test_raw_badzipfile_refusal_names_manage_backups(self):
+        from xlsx_mcp import envelope
+        payload = envelope.refusal(zipfile.BadZipFile(
+            "File is not a zip file"))
+        assert "manage_backups" in payload["error"]["hint"]
+
+    def test_recover_workflow_exists_and_speaks_plainly(self):
+        from xlsx_mcp.ops import workflows
+        wf = workflows.get_workflows("recover-workbook")
+        tools = [s["tool"] for s in wf["steps"]]
+        assert tools[0] == "manage_backups"
+        text = str(wf)
+        assert "prev" in text and "anchor" in text
+        # the inherent limit is documented loudly
+        assert any("AFTER the last save" in n for n in wf["notes"])
+
+    def test_panicked_aliases_resolve(self):
+        from xlsx_mcp.ops import workflows
+        for word in ("recover", "undo", "disaster", "corrupt"):
+            wf = workflows.get_workflows(word)
+            assert wf["task"] == "recover-workbook"
+
+    def test_end_to_end_corrupt_read_points_at_recovery(self, tmp_path):
+        # the destroyer's drill: a trashed working file's refusal must
+        # carry the pointer, not just say "not a valid package"
+        from xlsx_mcp import envelope
+        from xlsx_mcp.core.package import WorkbookPackage
+        book = _make_book(tmp_path / "b.xlsx", [["x", 1]])
+        book.write_bytes(b"\x00" * 200)
+        try:
+            WorkbookPackage.open(str(book))
+            raise AssertionError("should have refused")
+        except Exception as exc:  # noqa: BLE001
+            payload = envelope.refusal(exc)
+        assert "manage_backups" in payload["error"]["hint"]

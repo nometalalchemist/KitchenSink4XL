@@ -16,7 +16,7 @@ from xlsx_mcp.core.errors import XlMcpError
 from xlsx_mcp.ops import workflows as _workflows
 
 EXPECTED_TASKS = {
-    "merge-workbooks", "report-build", "data-cleanup",
+    "recover-workbook", "merge-workbooks", "report-build", "data-cleanup",
     "formatting-audit-and-fix", "safe-edit-of-rich-workbook",
     "migrate-from-incumbent",
 }

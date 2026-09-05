@@ -23,6 +23,50 @@ FORTHCOMING_TOOLS: set[str] = set()
 # task -> {summary, steps: [{tool, pack, why, optional?, forthcoming?}],
 #          notes: [...]}
 WORKFLOWS: dict[str, dict] = {
+    "recover-workbook": {
+        "summary": (
+            "Your file will not open or an edit went wrong: get a good "
+            "copy back from the automatic backups. Written for the worst "
+            "moment, not for developers."
+        ),
+        "steps": [
+            {"tool": "manage_backups", "pack": "lite",
+             "why": "action='list' with path set to your file. Every edit "
+                    "this server made kept two automatic copies next to "
+                    "the file (in a hidden .ks4xl-backups folder): 'prev' "
+                    "is the file as it was just before the most recent "
+                    "change, 'anchor' is the file as it was when this "
+                    "work session started. This shows you both, with "
+                    "sizes and times"},
+            {"tool": "manage_backups", "pack": "lite",
+             "why": "action='restore', source='prev'. This puts the "
+                    "before-the-last-change copy back as your file. It is "
+                    "safe to try: restoring is itself undoable (the "
+                    "current state is saved to prev first), and a backup "
+                    "that is itself damaged is refused rather than "
+                    "installed"},
+            {"tool": "diagnose_workbook", "pack": "lite",
+             "why": "confirm the recovered file reads as healthy"},
+            {"tool": "manage_backups", "pack": "lite", "optional": True,
+             "why": "if prev was not good enough, action='restore', "
+                    "source='anchor' goes further back, to the state at "
+                    "the start of the session"},
+            {"tool": "manage_backups", "pack": "lite", "optional": True,
+             "why": "going forward: action='snapshot' makes a permanent, "
+                    "date-stamped copy the automatic rotation never "
+                    "touches. Take one before anything risky"},
+        ],
+        "notes": [
+            "What the backups can NOT hold: prev is the state before the "
+            "LAST change made through this server. If the file was "
+            "damaged by something else AFTER the last save (a crash, a "
+            "bad disk, another program), that final edit is not in any "
+            "slot; only a snapshot habit covers it.",
+            "Nothing here deletes anything: restore always saves the "
+            "current state to prev first, and snapshots are never "
+            "overwritten.",
+        ],
+    },
     "merge-workbooks": {
         "summary": (
             "Combine data from several workbooks into one target without "
@@ -249,6 +293,18 @@ WORKFLOWS: dict[str, dict] = {
 }
 
 
+#: A panicked user types "recover", "undo", or "disaster", not the exact
+#: task name; those words must land on the recipe (destroyer round, M-4).
+_TASK_ALIASES: dict[str, str] = {
+    "recover": "recover-workbook",
+    "recovery": "recover-workbook",
+    "restore": "recover-workbook",
+    "undo": "recover-workbook",
+    "disaster": "recover-workbook",
+    "corrupt": "recover-workbook",
+}
+
+
 def get_workflows(task: str | None = None) -> dict:
     """List available tasks, or return one task's recipe."""
     if task is None:
@@ -259,11 +315,12 @@ def get_workflows(task: str | None = None) -> dict:
                      "each step names its tool, why, and the pack to "
                      "enable (lite is always on)"),
         }
-    wf = WORKFLOWS.get(task)
+    key = _TASK_ALIASES.get(str(task).strip().lower(), task)
+    wf = WORKFLOWS.get(key)
     if wf is None:
         raise XlMcpError(
             f"unknown task {task!r}; tasks: " + ", ".join(WORKFLOWS))
-    return {"task": task, **wf}
+    return {"task": key, **wf}
 
 
 __all__ = ["get_workflows", "WORKFLOWS", "FORTHCOMING_TOOLS"]

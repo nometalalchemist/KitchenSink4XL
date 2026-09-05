@@ -1373,7 +1373,11 @@ def manage_backups(action: str, path: str | None = None,
     dry_run defaults to TRUE and only reports. action='snapshot': save a
     permanent DTG-stamped copy, YYYYMMDD_HHMM_<name>, optional label and
     dest_dir; snapshots are never rotated and no purge scope touches
-    them."""
+    them. LIMIT, stated loudly: prev holds the state before the LAST
+    mutation this server made, so damage that lands AFTER the last save
+    (crash, disk, another program) costs that final edit; only a snapshot
+    habit covers it. Lost or corrupt file? get_workflows
+    task='recover-workbook' is the walkthrough."""
     return _backups.manage_backups(
         action, path=path, directory=directory, source=source, scope=scope,
         dry_run=dry_run, label=label, dest_dir=dest_dir)
