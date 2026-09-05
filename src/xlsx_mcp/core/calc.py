@@ -766,11 +766,22 @@ def strip_empty_cached_values(path: str) -> int:
 
 # ------------------------------------ the always-calculate cache (ca="1")
 
-#: A formula cell as Excel stores it, with its optional attributes and its
-#: optional cached value. Used only by restore_always_calc_cache below.
+#: A cell as Excel stores it, with its optional attributes and its optional
+#: body. SELF-CLOSING CELLS ARE LOAD-BEARING (geriatric round, H-2): Excel
+#: writes a styled EMPTY cell as <c r="A66" s="1"/>, and the previous pattern
+#: (cattrs [^>]*, then '>', then a lazy body scan for '</c>') swallowed the
+#: '/' into cattrs, matched the '>', and sent the lazy body hunting for a
+#: closer that never comes -- to end-of-part, failing, and retrying at the
+#: next of 479,492 such cells in a real QuickBooks-export shape: O(cells x
+#: filesize), >28 CPU-minutes on a single set_cell save. The pattern now
+#: keeps '/' out of the unquoted attribute run (a '/' in an attribute VALUE
+#: is inside quotes and matched by the quoted alternative) so a self-closing
+#: cell matches the '/>' branch immediately with an empty body group, and
+#: every alternative is disjoint (a '"' can only start the quoted branch),
+#: which keeps the scan linear with no backtracking ambiguity.
 _CELL_RE = re.compile(
-    r'<c r="([A-Z]+[0-9]+)"(?P<cattrs>[^>]*)>'
-    r'(?P<body>.*?)</c>', re.S)
+    r'<c r="([A-Z]+[0-9]+)"(?P<cattrs>(?:[^>/"]|"[^"]*")*)'
+    r'(?:/>|>(?P<body>.*?)</c>)', re.S)
 _F_RE = re.compile(r"<f(?P<fattrs>[^>]*)>(?P<text>.*?)</f>", re.S)
 _V_RE = re.compile(r"<v[^>]*>.*?</v>|<v[^>]*/>", re.S)
 
@@ -831,9 +842,18 @@ def _always_calc_cells(zf, part: str) -> dict[str, tuple[str, str]]:
         xml = raw.decode(part_encoding(raw))
     except UnicodeDecodeError:
         return {}
+    # Cheap prefilter (geriatric round, H-2): a part with no ca="1" anywhere
+    # has nothing to restore, so the cell walk is skipped entirely. This is
+    # the common case -- most workbooks never use always-calculate -- and it
+    # is what keeps a plain set_cell save flat on the QuickBooks-export shape
+    # (hundreds of thousands of trailing styled empty cells, zero ca cells).
+    if 'ca="1"' not in xml:
+        return {}
     out: dict[str, tuple[str, str]] = {}
     for m in _CELL_RE.finditer(xml):
         body = m.group("body")
+        if body is None:
+            continue  # a self-closing cell has no formula
         fm = _F_RE.search(body)
         if fm is None or 'ca="1"' not in fm.group("fattrs"):
             continue
@@ -933,6 +953,8 @@ def _reapply_always_calc(xml: str, wanted: dict[str, tuple[str, str]]
             return m.group(0)
         text, cached = entry
         body = m.group("body")
+        if body is None:
+            return m.group(0)  # self-closing: no formula to re-flag
         fm = _F_RE.search(body)
         if fm is None or fm.group("text") != text:
             return m.group(0)          # the edit changed this formula
