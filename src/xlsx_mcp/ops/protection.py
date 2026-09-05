@@ -110,15 +110,22 @@ def set_protection(path: str, action: str, sheet: str | None = None,
     pkg = WorkbookPackage.open(path)
 
     if action == "sheet":
+        from openpyxl.worksheet.protection import SheetProtection
         ws = _require_sheet(pkg, sheet)
-        prot = ws.protection
-        prot.sheet = True
         opts = options or {}
         unknown = sorted(set(opts) - set(SHEET_OPTIONS))
         if unknown:
             raise XlMcpError(
                 f"unknown protection option(s) {unknown}; valid: "
                 f"{sorted(SHEET_OPTIONS)}")
+        # DECLARATIVE re-protect: start from a FRESH SheetProtection so options
+        # from a prior protect() do not survive. The reused object let a first
+        # call's sort/auto_filter leak past a second, narrower call -- the
+        # response said allowed:[format_cells] while status still allowed sort
+        # and auto_filter, contradicting this module's own "unlisted options
+        # keep Excel's defaults" contract (author field testing, io #21).
+        prot = SheetProtection(sheet=True)
+        ws.protection = prot
         for opt, allowed in opts.items():
             # file semantics: TRUE blocks; user semantics: TRUE allows
             setattr(prot, SHEET_OPTIONS[opt], not bool(allowed))
