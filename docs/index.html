@@ -8,14 +8,24 @@
   Before the first deploy: fill every {PLACEHOLDER}, unhide <section id="new">,
   re-run the numbers, and re-date the comparison survey line.
 
-  SHIPPED NUMBERS (staged 2026-09-04; re-derive before any deploy):
+  SHIPPED NUMBERS (re-measured 2026-09-06 for the 1.0.0 release):
+    129   distinct operations (.venv/Scripts/python.exe -X utf8 scripts/count_operations.py)
     69    registered tools (.venv/Scripts/python.exe -X utf8 scripts/measure_surface.py)
-    640   tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
-    40    lite core tools / ~10.8k tokens; full surface ~19.0k tokens (same script)
-    packs: lite 40 (10.8k) + design 9 (3.2k) + io 9 (2.4k) + com 11 (2.6k) = 69 (19.0k)
-  UNRESOLVED PLACEHOLDERS (see the report; both are on the page as visible braces):
-    {STRESS-CALLS}   adversarial calls across all rounds; BUILD_LOG round 1 records ~600
-    {CORRUPTIONS}    corruption count across the corpus; BUILD_LOG says zero
+    1041  tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
+    40    lite core tools / ~11.4k tokens; full surface ~19.8k tokens (same script)
+    packs: lite 40 (11.4k) + design 9 (3.4k) + io 9 (2.5k) + com 11 (2.6k) = 69 (19.8k)
+  UNRESOLVED PLACEHOLDERS (on the page as visible braces):
+    {STRESS-CALLS}      adversarial calls across all rounds. No script measures
+                        this: the committed integration/adversarial_log.md
+                        journals 882 calls, which does not include the live COM
+                        stress round's executor operations. Publishing figure
+                        pending an author ruling.
+    {MATURITY-HEADING}  DEPT. 06's maturity panel lost its old maturity-label
+                        title when the 1.0.0 release retired that label. Its
+                        body needs no change and stays as written in all seven
+                        languages; the heading needs a replacement in all
+                        seven. The guard in tests/unit/test_public_copy.py
+                        keeps the retired word out of this file.
   COMPARISON SURVEY: dated 2026-09-04. Star counts are exact stargazers_count values from
   api.github.com read that day (haris-musa 4,155; negokaz 1,021; sbroenne 655). Directory
   listings were found to be badly stale on the same day, so re-read the API, not Glama or
@@ -110,8 +120,6 @@ a:hover{text-decoration-style:wavy;text-decoration-thickness:1px;text-underline-
   letter-spacing:.18em;text-transform:uppercase;display:flex;justify-content:space-between;
   gap:12px;flex-wrap:wrap}
 .masthead b{letter-spacing:.02em}
-.masthead .beta{border:1.5px solid var(--stamp);color:var(--stamp);padding:1px 7px;
-  font-size:10px;letter-spacing:.24em;white-space:nowrap}
 .lang-toggle{display:inline-flex;gap:1px;align-items:baseline;flex-wrap:wrap;text-transform:none;letter-spacing:.05em}
 .lang-toggle button{font-family:'IBM Plex Mono',"Plex Mono Fallback",ui-monospace,monospace;font-size:11px;background:none;border:none;border-bottom:2px solid transparent;color:var(--ink-soft);cursor:pointer;padding:1px 5px;letter-spacing:.05em}
 .lang-toggle button:hover{color:var(--brass)}
@@ -432,7 +440,7 @@ footer a{color:var(--brass)}
 <div class="wrap masthead rev d1">
   <span data-i18n="m.left"><b>ELECTRICAL DEPARTMENT</b> &middot; FINE INSTRUMENTS FOR THE FULLY WIRED WORKBOOK</span>
   <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
-  <span><span data-i18n="m.catalog">CATALOG № 69</span> · <span class="beta" data-i18n="m.beta">BETA</span> · <a href="https://nometalalchemist.github.io/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/nometalalchemist/KitchenSink4XL">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4xl/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
+  <span><span data-i18n="m.catalog">CATALOG № 69</span> · <a href="https://nometalalchemist.github.io/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/nometalalchemist/KitchenSink4XL">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4xl/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
 </div>
 
 <div class="switchbar">
@@ -465,10 +473,11 @@ footer a{color:var(--brass)}
   <p class="tagline rev d3" data-i18n="hero.tagline">Everything <em>plus</em> the kitchen sink for Microsoft&nbsp;Excel: the .xlsx&nbsp;MCP&nbsp;server that never hands your AI a number it cannot back up.</p>
   <p class="idiom-note rev d3" data-i18n="hero.idiom"></p>
   <div class="specs-strip rev d4">
+    <div class="spec"><span class="n">129</span><span class="l" data-i18n="spec.ops">Operations</span></div>
     <div class="spec"><span class="n">69</span><span class="l" data-i18n="spec.tools">Tools</span></div>
-    <div class="spec"><span class="n">640</span><span class="l" data-i18n="spec.tests">Tests</span></div>
+    <div class="spec"><span class="n">1,041</span><span class="l" data-i18n="spec.tests">Tests</span></div>
     <div class="spec"><span class="n todo">{STRESS-CALLS}</span><span class="l" data-i18n="spec.stress">Stress calls</span></div>
-    <div class="spec"><span class="n todo">{CORRUPTIONS}</span><span class="l" data-i18n="spec.corr">Corruptions</span></div>
+    <div class="spec"><span class="n">0</span><span class="l" data-i18n="spec.corr">Corruptions</span></div>
   </div>
   <div class="rev d5" style="margin-top:36px">
     <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
@@ -576,7 +585,7 @@ footer a{color:var(--brass)}
 <section id="inventory">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.inv">The shelves, pack by pack</h2></div>
-    <p class="for-lead" data-i18n="inv.lead">The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 10.8k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.</p>
+    <p class="for-lead" data-i18n="inv.lead">The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 11.4k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.</p>
     <div class="depts">
       <div class="dept"><h3><span data-i18n="pk1.t">Lite Core</span> <span class="num" data-i18n="pk1.n">PACK 0 · ALWAYS ON</span></h3><p data-i18n="pk1.p">The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the enable_tools switchboard.</p><p class="ex" data-i18n="pk1.e">e.g. read a range and see which values are cached · insert a column and keep the totals pointing right · sort the way Excel sorts, blanks last</p><span class="count" data-i18n="pk1.c">40 TOOLS · ALWAYS ON</span></div>
       <div class="dept"><h3><span data-i18n="pk2.t">Design</span> <span class="num" data-i18n="pk2.n">THE FINISH WORK</span></h3><p data-i18n="pk2.p">Named cell styles, a format painter, a style-bloat audit, conditional formatting, data validation, images, charts, the full table lifecycle (columns, totals, resize, banding), and named ranges including LAMBDA definitions and a cleanup pass.</p><p class="ex" data-i18n="pk2.e">e.g. put a colour scale on the variance column · define a LAMBDA the file still opens with · clear out 400 unused styles</p><span class="count" data-i18n="pk2.c">9 TOOLS</span></div>
@@ -612,17 +621,17 @@ footer a{color:var(--brass)}
     <div class="ticked"><div class="tablewrap">
       <table class="bill">
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
-        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">40</td><td class="num">10.8k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
-        <tr><td data-i18n="bill.r2">Design pack</td><td class="num">9</td><td class="num">3.2k</td><td data-i18n="bill.w2">Only after enable_tools</td></tr>
-        <tr><td data-i18n="bill.r3">Layout plus inspection pack</td><td class="num">9</td><td class="num">2.4k</td><td data-i18n="bill.w3">Only after enable_tools</td></tr>
+        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">40</td><td class="num">11.4k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
+        <tr><td data-i18n="bill.r2">Design pack</td><td class="num">9</td><td class="num">3.4k</td><td data-i18n="bill.w2">Only after enable_tools</td></tr>
+        <tr><td data-i18n="bill.r3">Layout plus inspection pack</td><td class="num">9</td><td class="num">2.5k</td><td data-i18n="bill.w3">Only after enable_tools</td></tr>
         <tr><td data-i18n="bill.r4">COM pack</td><td class="num">11</td><td class="num">2.6k</td><td data-i18n="bill.w4">Only after enable_tools, and only on Windows with Excel</td></tr>
-        <tr class="sum"><td data-i18n="bill.sum">Everything switched on</td><td class="num">69</td><td class="num">19.0k</td><td data-i18n="bill.wsum">KS4XL_MODE=full, if you want it all up front</td></tr>
+        <tr class="sum"><td data-i18n="bill.sum">Everything switched on</td><td class="num">69</td><td class="num">19.8k</td><td data-i18n="bill.wsum">KS4XL_MODE=full, if you want it all up front</td></tr>
       </table>
     </div></div>
     <p class="foot-note" data-i18n="bill.note">No other Excel MCP server surveyed publishes what its own tool definitions cost to load. The figures above come from a measuring script that ships with the source, so you can check them yourself.</p>
     <div class="specs-strip" style="margin-top:26px">
       <div class="spec"><span class="n">40</span><span class="l" data-i18n="eff.s1">Tools in the lite core</span></div>
-      <div class="spec"><span class="n">10.8k</span><span class="l" data-i18n="eff.s2">Tokens, lite core up front</span></div>
+      <div class="spec"><span class="n">11.4k</span><span class="l" data-i18n="eff.s2">Tokens, lite core up front</span></div>
       <div class="spec"><span class="n">1</span><span class="l" data-i18n="eff.s3">Call to the whole sink</span></div>
     </div>
     <div class="term" style="margin-top:26px"><div><span class="c"># an agent in lite mode goes looking for a real recalculation</span>
@@ -670,7 +679,7 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no6">DEPT. 06</span><h2 data-i18n="h2.svc">Service department</h2></div>
     <div class="maturity">
-      <h3 data-i18n="mat.t">Beta, and wearing the label on purpose</h3>
+      <h3 data-i18n="mat.t">{MATURITY-HEADING}</h3>
       <p data-i18n="mat.p">Every gate this shop runs is green: adversarial rounds through the raw protocol, ground-truth checks against Excel's own recalculation, zero corruptions across the corpus. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the service counter and tell us what broke.</p>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD AND POWERPOINT SINKS</span>
@@ -741,6 +750,7 @@ footer a{color:var(--brass)}
     <span data-i18n="f.left">&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.</span>
     <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌</span>
   </div>
+  <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px">Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel are trademarks of Microsoft Corporation.</div>
   <div class="wrap" style="text-align:center;padding:10px 0"><img src="https://visitor-badge.laobi.icu/badge?page_id=nometalalchemist.KitchenSink4XL&left_color=%231e3550&right_color=%237d5c14&left_text=views" alt="views" height="18" style="vertical-align:middle"></div>
 <div class="wrap colophon">SET IN FRAUNCES &amp; IBM PLEX MONO · CATALOG № 69</div>
 </footer>
@@ -845,7 +855,6 @@ en: {
 "pageTitle": "KitchenSink4XL: Everything plus the kitchen sink for Microsoft Excel",
 "m.left": "<b>ELECTRICAL DEPARTMENT</b> &middot; FINE INSTRUMENTS FOR THE FULLY WIRED WORKBOOK",
 "m.catalog": "CATALOG № 69",
-"m.beta": "BETA",
 "m.family": "FAMILY",
 "m.service": "SERVICE",
 "sw.here": "(you are here)",
@@ -855,6 +864,7 @@ en: {
 "hero.catno": "Model Context Protocol · Server for Microsoft Excel",
 "hero.tagline": "Everything <em>plus</em> the kitchen sink for Microsoft&nbsp;Excel: the .xlsx&nbsp;MCP&nbsp;server that never hands your AI a number it cannot back up.",
 "hero.idiom": "",
+"spec.ops": "Operations",
 "spec.tools": "Tools",
 "spec.tests": "Tests",
 "spec.stress": "Stress calls",
@@ -893,7 +903,7 @@ en: {
 "tale.p2": "Most tools do the cheap version: move the cells, save the file, hope. The damage never shows up when the edit runs. It shows up three days later, in a meeting, in the one total that quietly stopped including its last row.",
 "tale.p3": "This server moves everything that should move, and checks the result against what Excel itself would have done. When an edit cannot be done safely, it says no out loud instead of guessing quietly. A refusal costs you a minute. A quiet guess costs you the deal.",
 "h2.inv": "The shelves, pack by pack",
-"inv.lead": "The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 10.8k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.",
+"inv.lead": "The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 11.4k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.",
 "pk1.t": "Lite Core", "pk1.n": "PACK 0 · ALWAYS ON",
 "pk1.p": "The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the enable_tools switchboard.",
 "pk1.e": "e.g. read a range and see which values are cached · insert a column and keep the totals pointing right · sort the way Excel sorts, blanks last",
@@ -967,7 +977,6 @@ en: {
 "inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. Full setup in the <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.",
 "h2.svc": "Service department",
-"mat.t": "Beta, and wearing the label on purpose",
 "mat.p": "Every gate this shop runs is green: adversarial rounds through the raw protocol, ground-truth checks against Excel's own recalculation, zero corruptions across the corpus. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the service counter and tell us what broke.",
 "svc.ticket": "NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD AND POWERPOINT SINKS",
 "svc1.t": "Found a dead circuit?",
@@ -999,7 +1008,6 @@ ko: {
 "pageTitle": "KitchenSink4XL: Microsoft Excel 도구라면 없는 게 없는 MCP 서버",
 "m.left": "<b>전기 부문</b> &middot; 배선까지 완비된 통합 문서를 위한 정밀 기구점",
 "m.catalog": "카탈로그 № 69",
-"m.beta": "베타",
 "m.family": "제품군",
 "m.service": "서비스",
 "sw.here": "(현재 페이지)",
@@ -1009,6 +1017,7 @@ ko: {
 "hero.catno": "Model Context Protocol · Microsoft Excel용 서버",
 "hero.tagline": "Microsoft&nbsp;Excel 도구라면 정말 <em>없는 게 없습니다</em>. 근거를 댈 수 없는 숫자는 AI에게 절대 건네지 않는 .xlsx&nbsp;MCP&nbsp;서버.",
 "hero.idiom": "영어 관용구 “everything but the kitchen sink”는 ‘생각할 수 있는 모든 것’이라는 뜻입니다. 이 카탈로그에는 그 싱크대까지 들어 있습니다.",
+"spec.ops": "작업",
 "spec.tools": "도구",
 "spec.tests": "테스트",
 "spec.stress": "스트레스 호출",
@@ -1047,7 +1056,7 @@ ko: {
 "tale.p2": "대부분의 도구는 싼 방법을 씁니다. 셀을 옮기고, 파일을 저장하고, 잘되기를 바랍니다. 피해는 편집하는 순간에는 결코 드러나지 않습니다. 사흘 뒤 회의에서, 마지막 행을 조용히 빼먹기 시작한 그 합계 하나로 드러납니다.",
 "tale.p3": "이 서버는 따라 움직여야 하는 것을 전부 움직이고, 그 결과를 Excel이라면 어떻게 했을지와 대조해 확인합니다. 안전하게 처리할 수 없는 편집이면 조용히 짐작하는 대신 큰 소리로 거절합니다. 거절은 1분을 씁니다. 조용한 짐작은 거래를 날립니다.",
 "h2.inv": "선반 둘러보기, 팩별로",
-"inv.lead": "좋은 가게가 어울리는 물건끼리 묶어 두듯, 재고는 기능 팩으로 정리되어 있습니다. 세션은 라이트 코어 도구 40종, 약 10.8k 토큰으로 시작하고, 필요한 팩은 호출 한 번으로 켭니다. 오늘 매장에 나와 있는 도구는 69종 전부입니다. 코어에 40종, 세 개의 팩에 29종입니다.",
+"inv.lead": "좋은 가게가 어울리는 물건끼리 묶어 두듯, 재고는 기능 팩으로 정리되어 있습니다. 세션은 라이트 코어 도구 40종, 약 11.4k 토큰으로 시작하고, 필요한 팩은 호출 한 번으로 켭니다. 오늘 매장에 나와 있는 도구는 69종 전부입니다. 코어에 40종, 세 개의 팩에 29종입니다.",
 "pk1.t": "라이트 코어", "pk1.n": "팩 0 · 상시 켜짐",
 "pk1.p": "매일 쓰는 작업대입니다. 앵커가 붙은 통합 문서 그리드 뷰, 라벨이 붙은 셀과 범위 읽기, 서버 측 쿼리와 집계, 수식 작성과 감사, 참조까지 함께 옮기는 행·열 구조 편집, Excel과 같은 순서의 정렬과 필터, 표, 서식, 가져오기와 내보내기, 백업, 진단, 그리고 enable_tools 배전반이 들어 있습니다.",
 "pk1.e": "예: 범위를 읽고 어떤 값이 캐시된 값인지 확인 · 열을 넣어도 합계가 제자리를 가리키게 유지 · Excel과 똑같이, 빈 칸은 맨 뒤로 정렬",
@@ -1121,7 +1130,6 @@ ko: {
 "inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. 전체 설정은 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>에 있습니다.",
 "inst.note": "이 서버의 대부분은 Excel 설치가 전혀 필요 없고 어느 컴퓨터에서나 돌아갑니다. Excel에게 직접 일을 시키는 부분만 Excel이 설치된 Windows를 요구하며, 그때도 자기만의 숨겨진 사본을 열기 때문에 화면에 띄워 둔 통합 문서는 건드리지 않습니다.",
 "h2.svc": "서비스 창구",
-"mat.t": "베타이고, 그 라벨을 일부러 달고 있습니다",
 "mat.p": "이 작업장이 돌리는 관문은 전부 초록불입니다. 원시 프로토콜을 통한 적대적 라운드, Excel 자신의 재계산과 대조한 실측 검증, 코퍼스 전체에서 손상 0건. 아직 없는 것은 낯선 이들의 통합 문서 속에서 보낸 긴 시간이고, 스프레드시트의 신뢰는 실험실이 아니라 현장에서 쌓입니다. Excel이 일터인 분이라면, 이 서버에 필요한 실험실이 바로 당신입니다. 가장 험한 통합 문서를 서비스 창구로 가져와 무엇이 깨졌는지 알려 주세요.",
 "svc.ticket": "지금 접수 중 · 번호표를 뽑으세요 · WORD와 POWERPOINT 싱크대와 같은 창구",
 "svc1.t": "회로가 끊겼나요?",
@@ -1153,7 +1161,6 @@ ja: {
 "pageTitle": "KitchenSink4XL: Microsoft Excel のためのなんでも入り MCP サーバー",
 "m.left": "<b>電気売り場</b> &middot; 配線まで行き届いたブックのための精密器具店",
 "m.catalog": "カタログ № 69",
-"m.beta": "ベータ",
 "m.family": "ファミリー",
 "m.service": "サービス",
 "sw.here": "(現在のページ)",
@@ -1163,6 +1170,7 @@ ja: {
 "hero.catno": "Model Context Protocol · Microsoft Excel 用サーバー",
 "hero.tagline": "Microsoft&nbsp;Excel のためのものなら、本当に<em>なんでも</em>入っています。根拠を示せない数字は AI に渡さない .xlsx&nbsp;MCP&nbsp;サーバー。",
 "hero.idiom": "英語の慣用句 “everything but the kitchen sink” は「考えつく限りのすべて」という意味。このカタログには、その流しまで入っています。",
+"spec.ops": "操作",
 "spec.tools": "ツール",
 "spec.tests": "テスト",
 "spec.stress": "負荷呼び出し",
@@ -1201,7 +1209,7 @@ ja: {
 "tale.p2": "たいていのツールは安いやり方で済ませます。セルを動かし、ファイルを保存し、あとは祈る。被害は編集した瞬間には決して出てきません。三日後の会議で、最終行をそっと外し始めていた合計ひとつになって出てきます。",
 "tale.p3": "このサーバーは動くべきものをすべて動かし、その結果を Excel ならどうしたはずかと突き合わせて確かめます。安全に処理できない編集は、黙って当て推量せず、はっきり断ります。断られて失うのは一分です。黙った当て推量で失うのは取引です。",
 "h2.inv": "棚めぐり、パック別",
-"inv.lead": "よい店が相性のよいものをまとめて置くように、在庫は機能パックに整理されています。セッションはライトコアの 40 ツール、約 10.8k トークンで始まり、仕事に必要なパックを呼び出し一回で入れます。今日そろっているのは 69 ツールすべて。コアに 40、三つのパックに 29 です。",
+"inv.lead": "よい店が相性のよいものをまとめて置くように、在庫は機能パックに整理されています。セッションはライトコアの 40 ツール、約 11.4k トークンで始まり、仕事に必要なパックを呼び出し一回で入れます。今日そろっているのは 69 ツールすべて。コアに 40、三つのパックに 29 です。",
 "pk1.t": "ライトコア", "pk1.n": "パック0 · 常時オン",
 "pk1.p": "毎日の作業台です。アンカー付きのブックのグリッドビュー、ラベル付きのセルと範囲の読み取り、サーバー側のクエリと集計、数式の書き込みと監査、参照ごと連れていく行と列の構造編集、Excel と同じ並び順の並べ替えとフィルター、テーブル、書式、取り込みと書き出し、バックアップ、診断、そして enable_tools の配電盤が入っています。",
 "pk1.e": "例: 範囲を読んでどの値がキャッシュか確かめる · 列を入れても合計が正しい先を指したままにする · Excel と同じく空白を最後にして並べ替える",
@@ -1275,7 +1283,6 @@ ja: {
 "inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。設定の全体は <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a> にあります。",
 "inst.note": "このサーバーの大半は Excel のインストールをまったく必要とせず、どのパソコンでも動きます。Excel に仕事をさせる部分だけが Excel の入った Windows を求め、そのときも自分専用の隠れた一つを開くので、画面に出したままのブックには触れません。",
 "h2.svc": "サービス窓口",
-"mat.t": "ベータ、それをわざと名乗っています",
 "mat.p": "この工房が回している関門はすべて青です。生のプロトコルを通した敵対的ラウンド、Excel 自身の再計算と突き合わせた実測検証、コーパス全体で破損ゼロ。まだ足りないのは、見知らぬ人のブックの中で過ごした長い時間です。表計算の信頼は実験室ではなく現場で育ちます。Excel が仕事場だという方こそ、このサーバーに必要な実験室です。いちばん厄介なブックを窓口へ持ってきて、何が壊れたか教えてください。",
 "svc.ticket": "ただいま受付中 · 番号札をどうぞ · WORD と POWERPOINT の流しと同じ窓口",
 "svc1.t": "回路が切れていましたか?",
@@ -1307,7 +1314,6 @@ zh: {
 "pageTitle": "KitchenSink4XL: 为 Microsoft Excel 备齐一切的 MCP 服务器",
 "m.left": "<b>电工部</b> &middot; 为布线齐全的工作簿准备的精密器具",
 "m.catalog": "目录 № 69",
-"m.beta": "测试版",
 "m.family": "家族",
 "m.service": "服务",
 "sw.here": "(当前页面)",
@@ -1317,6 +1323,7 @@ zh: {
 "hero.catno": "Model Context Protocol · Microsoft Excel 专用服务器",
 "hero.tagline": "为 Microsoft&nbsp;Excel 备齐一切,连水槽都在内: 这台 .xlsx&nbsp;MCP&nbsp;服务器绝不把说不清来路的数字交给你的 AI。",
 "hero.idiom": "英语习语 “everything but the kitchen sink” 意为“能想到的一切”。这份目录连那个水槽也一并收录。",
+"spec.ops": "操作",
 "spec.tools": "工具",
 "spec.tests": "测试",
 "spec.stress": "压力调用",
@@ -1355,7 +1362,7 @@ zh: {
 "tale.p2": "多数工具走便宜路子: 挪单元格,存文件,然后指望没事。损伤从来不在编辑当下出现。它出现在三天后的会上,出现在那一个悄悄不再把最后一行算进去的合计里。",
 "tale.p3": "这台服务器把该动的全都动了,再拿结果去对照 Excel 自己会怎么做。遇到不能安全完成的编辑,它会明说不行,而不是闷头猜。被拒绝,损失一分钟。闷头一猜,损失一单生意。",
 "h2.inv": "逐架看货,按包分",
-"inv.lead": "好铺子会把相配的东西摆在一起,这里的存货也按能力包归置。会话从精简内核起步,40 件工具、约 10.8k token,遇到需要的包一次调用就打开。今天全部 69 件都在架上: 内核 40 件,三个包里 29 件。",
+"inv.lead": "好铺子会把相配的东西摆在一起,这里的存货也按能力包归置。会话从精简内核起步,40 件工具、约 11.4k token,遇到需要的包一次调用就打开。今天全部 69 件都在架上: 内核 40 件,三个包里 29 件。",
 "pk1.t": "精简内核", "pk1.n": "包 0 · 常开",
 "pk1.p": "每天要用的工作台: 带锚点的工作簿网格视图、带标注的单元格与区域读取、服务端查询与聚合、公式写入与审查、连引用一起搬走的行列结构编辑、与 Excel 同序的排序与筛选、表格、格式、导入导出、备份、诊断,以及 enable_tools 这块配电盘。",
 "pk1.e": "例: 读一段区域,看清哪些值是缓存的 · 插一列,合计仍指向该指的地方 · 按 Excel 的规矩排序,空白排最后",
@@ -1429,7 +1436,6 @@ zh: {
 "inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。完整设置见 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>。",
 "inst.note": "这台服务器的大部分完全不需要装 Excel,在任何电脑上都能跑。只有请 Excel 亲自干活的那部分需要装有 Excel 的 Windows,而且它会另开一个自己的隐藏副本,你屏幕上开着的那个工作簿不会被碰。",
 "h2.svc": "服务柜台",
-"mat.t": "测试版,而且这个标签是特意挂上的",
 "mat.p": "这家铺子跑的每一道关都是绿灯: 直接走原始协议的对抗轮次、对照 Excel 自己重算结果的实测校验、整个语料库零损坏。还缺的是在陌生人的工作簿里过上一段长日子,而表格的信任是在现场攒的,不是在实验室里攒的。如果 Excel 就是你过日子的地方,那你正是这台服务器需要的实验室: 把你最难看的工作簿带到服务柜台,告诉我们哪里坏了。",
 "svc.ticket": "正在叫号 · 请取号 · 与 WORD 和 POWERPOINT 水槽同一服务台",
 "svc1.t": "遇到断路了?",
@@ -1461,7 +1467,6 @@ de: {
 "pageTitle": "KitchenSink4XL: Alles und die Spüle dazu für Microsoft Excel",
 "m.left": "<b>ELEKTROABTEILUNG</b> &middot; FEINE INSTRUMENTE FÜR DIE VOLL VERKABELTE ARBEITSMAPPE",
 "m.catalog": "KATALOG № 69",
-"m.beta": "BETA",
 "m.family": "FAMILIE",
 "m.service": "SERVICE",
 "sw.here": "(Sie sind hier)",
@@ -1471,6 +1476,7 @@ de: {
 "hero.catno": "Model Context Protocol · Server für Microsoft Excel",
 "hero.tagline": "Alles <em>und</em> die Spüle dazu für Microsoft&nbsp;Excel: der .xlsx&nbsp;MCP&nbsp;Server, der Ihrer KI nie eine Zahl reicht, für die er nicht geradestehen kann.",
 "hero.idiom": "Die englische Redewendung “everything but the kitchen sink” bedeutet: wirklich alles. Dieser Katalog liefert die Spüle gleich mit.",
+"spec.ops": "Operationen",
 "spec.tools": "Werkzeuge",
 "spec.tests": "Tests",
 "spec.stress": "Stress-Aufrufe",
@@ -1583,7 +1589,6 @@ de: {
 "inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Die vollständige Einrichtung steht in der <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Das meiste an diesem Server braucht überhaupt kein installiertes Excel und läuft auf jedem Rechner. Nur die Teile, die Excel selbst arbeiten lassen, wollen Windows mit Excel darauf, und sie öffnen dafür eine eigene, verborgene Ausgabe, sodass die Arbeitsmappe auf Ihrem Bildschirm unangetastet bleibt.",
 "h2.svc": "Serviceabteilung",
-"mat.t": "Beta, und trägt das Etikett mit Absicht",
 "mat.p": "Jede Prüfung, die diese Werkstatt fährt, steht auf Grün: adversariale Runden durch das rohe Protokoll, Abgleiche gegen Excels eigene Neuberechnung, null Beschädigungen über den gesamten Bestand. Was noch fehlt, ist ein langes Leben in fremden Arbeitsmappen, und Tabellen verdienen sich Vertrauen im Feld, nicht im Labor. Wenn Excel Ihr Zuhause ist, sind Sie das Labor, das dieser Server braucht: bringen Sie Ihre hässlichste Arbeitsmappe an den Servicetresen und sagen Sie uns, was kaputtging.",
 "svc.ticket": "JETZT BEDIENUNG · NUMMER ZIEHEN · GLEICHER SCHALTER WIE DIE WORD- UND POWERPOINT-SPÜLEN",
 "svc1.t": "Toter Stromkreis?",
@@ -1615,7 +1620,6 @@ fr: {
 "pageTitle": "KitchenSink4XL : tout et l'évier avec, pour Microsoft Excel",
 "m.left": "<b>RAYON ÉLECTRICITÉ</b> &middot; INSTRUMENTS DE PRÉCISION POUR LE CLASSEUR ENTIÈREMENT CÂBLÉ",
 "m.catalog": "CATALOGUE № 69",
-"m.beta": "BÊTA",
 "m.family": "FAMILLE",
 "m.service": "SERVICE",
 "sw.here": "(vous êtes ici)",
@@ -1625,6 +1629,7 @@ fr: {
 "hero.catno": "Model Context Protocol · Serveur pour Microsoft Excel",
 "hero.tagline": "Tout <em>et</em> l'évier avec, pour Microsoft&nbsp;Excel : le serveur&nbsp;MCP&nbsp;.xlsx qui ne donne jamais à votre IA un chiffre qu'il ne peut pas justifier.",
 "hero.idiom": "L'expression anglaise “everything but the kitchen sink” signifie « absolument tout ». Ce catalogue livre l'évier avec.",
+"spec.ops": "Opérations",
 "spec.tools": "Outils",
 "spec.tests": "Tests",
 "spec.stress": "Appels d'endurance",
@@ -1737,7 +1742,6 @@ fr: {
 "inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Installation complète dans le <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "L'essentiel de ce serveur n'a besoin d'aucun Excel installé et tourne sur n'importe quel ordinateur. Seules les parties qui font travailler Excel réclament Windows avec Excel dessus, et elles ouvrent leur propre exemplaire masqué, si bien que le classeur affiché à votre écran n'est jamais touché.",
 "h2.svc": "Service après-vente",
-"mat.t": "Bêta, et l'étiquette est assumée",
 "mat.p": "Chaque contrôle que tient cet atelier est au vert : rondes adverses à travers le protocole brut, vérifications de référence contre le recalcul d'Excel lui-même, zéro corruption sur tout le corpus. Ce qui manque encore, c'est une longue vie dans les classeurs d'inconnus, et un tableur gagne la confiance sur le terrain, pas au laboratoire. Si Excel est l'endroit où vous vivez, vous êtes le laboratoire dont ce serveur a besoin : apportez votre classeur le plus affreux au comptoir de service et dites-nous ce qui a cassé.",
 "svc.ticket": "ON VOUS SERT · PRENEZ UN NUMÉRO · MÊME COMPTOIR QUE LES ÉVIERS WORD ET POWERPOINT",
 "svc1.t": "Un circuit mort ?",
@@ -1769,7 +1773,6 @@ es: {
 "pageTitle": "KitchenSink4XL: todo y el fregadero incluido, para Microsoft Excel",
 "m.left": "<b>DEPARTAMENTO DE ELECTRICIDAD</b> &middot; INSTRUMENTOS DE PRECISIÓN PARA EL LIBRO TOTALMENTE CABLEADO",
 "m.catalog": "CATÁLOGO № 69",
-"m.beta": "BETA",
 "m.family": "FAMILIA",
 "m.service": "SERVICIO",
 "sw.here": "(está aquí)",
@@ -1779,6 +1782,7 @@ es: {
 "hero.catno": "Model Context Protocol · Servidor para Microsoft Excel",
 "hero.tagline": "Todo <em>y</em> el fregadero incluido, para Microsoft&nbsp;Excel: el servidor&nbsp;MCP&nbsp;.xlsx que nunca le pasa a su IA un número que no pueda respaldar.",
 "hero.idiom": "La expresión inglesa “everything but the kitchen sink” significa «absolutamente todo». Este catálogo incluye hasta el fregadero.",
+"spec.ops": "Operaciones",
 "spec.tools": "Herramientas",
 "spec.tests": "Pruebas",
 "spec.stress": "Llamadas de estrés",
@@ -1891,7 +1895,6 @@ es: {
 "inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. La instalación completa está en el <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "La mayor parte de este servidor no necesita Excel instalado y funciona en cualquier ordenador. Solo las partes que le piden trabajo a Excel quieren Windows con Excel encima, y abren su propia copia oculta, así que el libro que tiene en pantalla no se toca nunca.",
 "h2.svc": "Departamento de servicio",
-"mat.t": "Beta, y lleva la etiqueta a propósito",
 "mat.p": "Todos los controles que pasa este taller están en verde: rondas adversarias a través del protocolo en crudo, comprobaciones contra el recálculo del propio Excel, cero corrupciones en todo el corpus. Lo que aún no ha tenido es una vida larga dentro de libros ajenos, y las hojas de cálculo se ganan la confianza en el campo, no en el laboratorio. Si Excel es donde usted vive, usted es el laboratorio que este servidor necesita: traiga su libro más feo al mostrador de servicio y cuéntenos qué se rompió.",
 "svc.ticket": "AHORA ATENDIENDO · TOME UN NÚMERO · EL MISMO MOSTRADOR QUE LOS FREGADEROS DE WORD Y POWERPOINT",
 "svc1.t": "¿Un circuito muerto?",

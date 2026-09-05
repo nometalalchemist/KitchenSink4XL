@@ -96,8 +96,23 @@ def test_published_numbers_match_scripts():
     for path in _public_files():
         text = path.read_text(encoding="utf-8")
         assert str(n_ops) in text, f"{path.name} is missing the operations count"
-        assert str(workbook_tools) in text, (
-            f"{path.name} is missing the workbook tool count"
+
+    # Which tool total a file states is a per-file doctrine, and the guard
+    # follows it rather than overriding it. README and llms.txt spell out the
+    # relationship ("129 operations across 67 tools, plus two pack toggles"),
+    # so they carry the workbook figure. index.html states 69 and only 69, by
+    # a doctrine written into its own header comment: a reader who does the
+    # arithmetic on the pack table must not arrive at a second answer. Both
+    # figures are the measured ones either way.
+    for name, expected in (("README.md", workbook_tools),
+                           ("llms.txt", workbook_tools),
+                           ("index.html", full)):
+        matches = [p for p in _public_files() if p.name == name]
+        if not matches:
+            continue
+        text = matches[0].read_text(encoding="utf-8")
+        assert str(expected) in text, (
+            f"{name} is missing its tool total ({expected})"
         )
 
 
