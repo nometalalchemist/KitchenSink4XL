@@ -18,8 +18,11 @@ the real gates land in Phase 1 (the instance-manager proof) and Phase 5.
 
 Classification per gate:
 - FAIL: nonzero exit code (or the subprocess timed out / crashed).
-- SKIP: exit 0 with a SKIPPED marker in the output.
-- PASS: exit 0 without a SKIPPED marker.
+- SKIP: exit 0 with a wholesale "SKIPPED:" marker, meaning the gate declined
+  to run at all (a foreign EXCEL.EXE was present, for instance).
+- PASS: exit 0 with no wholesale marker. A passing gate may still carry
+  SKIP_CHECK lines, one per individual check it could not exercise; those are
+  counted and reported separately so a pass is never read as "everything ran".
 
 Run:  .venv/Scripts/python.exe -X utf8 tests/com_gates/run_all.py
 """
@@ -44,8 +47,8 @@ def discover() -> list[Path]:
     )
 
 
-def run_gate(script: Path) -> tuple[str, float, str]:
-    """Execute one gate; return (verdict, seconds, tail_of_output)."""
+def run_gate(script: Path) -> tuple[str, float, str, int]:
+    """Execute one gate; return (verdict, seconds, output, skipped_checks)."""
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
@@ -57,14 +60,21 @@ def run_gate(script: Path) -> tuple[str, float, str]:
             cwd=str(HERE.parents[1]),  # repo root
         )
     except subprocess.TimeoutExpired:
-        return "FAIL", time.monotonic() - t0, "timed out"
+        return "FAIL", time.monotonic() - t0, "timed out", 0
     seconds = time.monotonic() - t0
     out = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    lines = out.splitlines()
+    skipped_checks = sum(1 for ln in lines if ln.startswith("SKIP_CHECK"))
     if proc.returncode != 0:
-        return "FAIL", seconds, out
-    if "SKIPPED" in out:
-        return "SKIP", seconds, out
-    return "PASS", seconds, out
+        return "FAIL", seconds, out, skipped_checks
+    # A gate that declined to run AT ALL prints the wholesale marker
+    # "SKIPPED:" as its first act. A gate that ran and left one check
+    # unexercised prints SKIP_CHECK lines instead and still counts as a pass,
+    # with the skipped count carried through to the summary so the headline
+    # never reads as if every check had been exercised.
+    if any(ln.startswith("SKIPPED:") for ln in lines):
+        return "SKIP", seconds, out, skipped_checks
+    return "PASS", seconds, out, skipped_checks
 
 
 def main() -> int:
@@ -72,25 +82,31 @@ def main() -> int:
     if not gates:
         print("no *_gate.py scripts found in", HERE)
         return 1
-    results: list[tuple[str, str, float]] = []
+    results: list[tuple[str, str, float, int]] = []
     for script in gates:
         print(f"=== {script.name} ===", flush=True)
-        verdict, seconds, out = run_gate(script)
+        verdict, seconds, out, skipped_checks = run_gate(script)
         for ln in out.splitlines():
-            if ln.startswith(("PASS", "FAIL", "SKIPPED", "VERDICT")):
+            if ln.startswith(("PASS", "FAIL", "SKIPPED", "SKIP_CHECK",
+                              "VERDICT")):
                 print("   ", ln)
         print(f"--- {script.name}: {verdict} ({seconds:.1f}s)\n", flush=True)
-        results.append((script.name, verdict, seconds))
+        results.append((script.name, verdict, seconds, skipped_checks))
 
     counts = {"PASS": 0, "FAIL": 0, "SKIP": 0}
-    for _name, verdict, _s in results:
+    for _name, verdict, _s, _sc in results:
         counts[verdict] += 1
+    total_skipped_checks = sum(sc for _n, _v, _s, sc in results)
     print("=" * 60)
-    for name, verdict, seconds in results:
-        print(f"{verdict:<5} {name} ({seconds:.1f}s)")
+    for name, verdict, seconds, skipped_checks in results:
+        note = (f" [{skipped_checks} check(s) skipped]"
+                if skipped_checks else "")
+        print(f"{verdict:<5} {name} ({seconds:.1f}s){note}")
+    tail = (f", {total_skipped_checks} individual check(s) skipped"
+            if total_skipped_checks else "")
     print(
         f"TOTAL: {counts['PASS']} passed, {counts['FAIL']} failed, "
-        f"{counts['SKIP']} skipped"
+        f"{counts['SKIP']} skipped{tail}"
     )
     return 1 if counts["FAIL"] else 0
 

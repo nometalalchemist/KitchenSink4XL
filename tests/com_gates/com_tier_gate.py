@@ -53,6 +53,7 @@ from xlsx_mcp.core.package import WorkbookPackage  # noqa: E402
 from xlsx_mcp.ops import comtier  # noqa: E402
 
 FAILS: list[str] = []
+SKIPPED_CHECKS: list[str] = []
 
 
 def check(cond: bool, label: str) -> None:
@@ -61,6 +62,41 @@ def check(cond: bool, label: str) -> None:
     else:
         print(f"FAIL {label}")
         FAILS.append(label)
+
+
+def skip_check(label: str, cause: str) -> None:
+    """Record one check as not run, with the cause named in the output.
+
+    A skipped check is never a pass. It prints its own marker so run_all can
+    count it separately, and the cause travels with it so nobody reads the
+    gate summary as if the check had been exercised.
+    """
+    print(f"SKIP_CHECK {label} -- {cause}")
+    SKIPPED_CHECKS.append(label)
+
+
+def clipboard_available() -> bool:
+    """True when this Windows session lets any process open the clipboard.
+
+    Excel offers exactly one route from a range to a bitmap, Range.CopyPicture,
+    and CopyPicture goes through the Windows clipboard. When the session's
+    clipboard is closed to every process, the render call cannot succeed no
+    matter how Excel or this server behaves. The probe runs entirely outside
+    Excel so its answer is about the environment, never about the server.
+    """
+    try:
+        import win32clipboard
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        win32clipboard.OpenClipboard()
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        win32clipboard.CloseClipboard()
+    except Exception:  # noqa: BLE001
+        pass
+    return True
 
 
 def _data_only(path, sheet, coord):
@@ -245,9 +281,17 @@ def main() -> int:  # noqa: PLR0915
         check(r["ok"] and pdf2.read_bytes()[:4] == b"%PDF",
               "4 export_pdf: range scope produced a real PDF")
         png = scratch / "render.png"
-        r = comtier.com_render_sheet(str(p_calc), str(png), sheet="Data")
-        check(r["ok"] and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n",
-              "4 render_sheet: produced a real PNG of the used range")
+        if clipboard_available():
+            r = comtier.com_render_sheet(str(p_calc), str(png), sheet="Data")
+            check(r["ok"] and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n",
+                  "4 render_sheet: produced a real PNG of the used range")
+        else:
+            skip_check(
+                "4 render_sheet: produced a real PNG of the used range",
+                "the Windows clipboard is unavailable to every process in "
+                "this session, so Range.CopyPicture (Excel's only route to a "
+                "range bitmap) cannot run here; PowerShell Set-Clipboard and "
+                "Get-Clipboard refuse identically outside Excel")
         xlsb = scratch / "conv.xlsb"
         r = comtier.com_convert_format(str(p_calc), str(xlsb))
         check(r["ok"] and r["format"] == "xlsb",
@@ -448,8 +492,10 @@ def main() -> int:  # noqa: PLR0915
     if FAILS:
         print(f"VERDICT com_tier_gate FAIL: {FAILS}")
         return 1
+    skipped = (f", {len(SKIPPED_CHECKS)} check(s) SKIPPED: {SKIPPED_CHECKS}"
+               if SKIPPED_CHECKS else "")
     print(f"VERDICT com_tier_gate PASS ({len(owned)} PIDs journaled, "
-          "0 orphans by owned PID, 0 foreign touched)")
+          f"0 orphans by owned PID, 0 foreign touched{skipped})")
     return 0
 
 
