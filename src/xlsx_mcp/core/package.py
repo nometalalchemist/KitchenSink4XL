@@ -207,8 +207,19 @@ class WorkbookPackage:
     def set_cell(self, sheet: str | None, coord: str, value: Any) -> None:
         """Write one cell. A string starting with '=' is treated as a formula
         (normalized through the _xlfn shim); anything else is a literal."""
-        if isinstance(value, str) and value.startswith("="):
+        if isinstance(value, str) and value.startswith("=") and value != "=":
             self.set_formula(sheet, coord, value)
+            return
+        if value == "=":
+            # A bare "=" is not a formula; the file stores it as an inline
+            # string either way, but the response used to REPORT it as
+            # kind:"formula" (fresh-eyes round, L-1). Store and report it
+            # honestly as text.
+            ws = self._ws(sheet)
+            cell = ws[coord]
+            cell.value = value
+            cell.data_type = "s"
+            self._intended[(ws.title, coord.upper())] = ("value", value)
             return
         # Control characters, lone surrogates, and text past Excel's cell
         # ceiling: refuse in-envelope here rather than let openpyxl's

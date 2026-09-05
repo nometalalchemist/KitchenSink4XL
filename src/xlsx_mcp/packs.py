@@ -153,8 +153,29 @@ def surface_report() -> dict:
     }
 
 
+_POLICIES = ("auto", "locked")
+
+
+def pack_policy() -> str:
+    """The validated KS4XL_PACK_POLICY value. A typo used to FAIL OPEN:
+    KS4XL_PACK_POLICY=lockedd served with packs unlockable, while its
+    sibling KS4XL_MODE=fulll refused to serve -- the one env var whose
+    whole purpose is a security pin was the one that shrugged off a
+    misspelling (fresh-eyes round, M-4). Unknown values now refuse loudly,
+    at startup (apply_startup_mode) and at every policy consultation."""
+    raw = os.environ.get("KS4XL_PACK_POLICY", "auto").strip().lower()
+    if not raw:
+        return "auto"
+    if raw not in _POLICIES:
+        raise XlMcpError(
+            f"KS4XL_PACK_POLICY={raw!r} is not a recognized policy; use "
+            f"one of {_POLICIES}. Refusing rather than letting a typo "
+            "silently drop the host's lock.")
+    return raw
+
+
 def _policy_locked() -> bool:
-    return os.environ.get("KS4XL_PACK_POLICY", "auto").strip().lower() == "locked"
+    return pack_policy() == "locked"
 
 
 def _validate(packs: list[str]) -> list[str]:
@@ -262,6 +283,7 @@ def apply_startup_mode() -> str:
     connected yet, so the visibility hook runs without a session and the
     server-side wiring must use global transforms, not session state).
     Returns the mode applied, for logging."""
+    pack_policy()  # a misspelled policy pin refuses to serve, like a mode typo
     mode = os.environ.get("KS4XL_MODE", "lite").strip().lower()
     if not mode or mode == "lite":
         return "lite"

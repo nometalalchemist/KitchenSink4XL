@@ -636,3 +636,85 @@ class TestAggregateExcelSemantics:
         aggs = r["groups"][0]["aggregates"]
         assert aggs["sum_X"] == 6 and aggs["avg_X"] == 2
         assert "warning" not in r
+
+
+# ======================================================================
+# Fresh-eyes M-4: KS4XL_PACK_POLICY typo must fail loudly, not open
+# ======================================================================
+
+
+class TestPackPolicyFailsClosed:
+    def test_typo_refuses(self, monkeypatch):
+        from xlsx_mcp import packs
+        monkeypatch.setenv("KS4XL_PACK_POLICY", "lockedd")
+        with pytest.raises(XlMcpError):
+            packs.pack_policy()
+        with pytest.raises(XlMcpError):
+            packs.apply_startup_mode()
+        with pytest.raises(XlMcpError):
+            packs.enable(["io"])
+
+    def test_valid_values_still_work(self, monkeypatch):
+        from xlsx_mcp import packs
+        monkeypatch.setenv("KS4XL_PACK_POLICY", "auto")
+        assert packs.pack_policy() == "auto"
+        monkeypatch.setenv("KS4XL_PACK_POLICY", "LOCKED")
+        assert packs.pack_policy() == "locked"
+        monkeypatch.delenv("KS4XL_PACK_POLICY")
+        assert packs.pack_policy() == "auto"
+
+
+# ======================================================================
+# Fresh-eyes L-1: a bare "=" is text, and is REPORTED as text
+# ======================================================================
+
+
+class TestBareEqualsMetadata:
+    def test_bare_equals_reported_as_value(self, victim):
+        r = cells_ops.set_cell(str(victim), {"cell": "D1"}, "=")
+        cells = r["changed"]["cells"]
+        assert cells == [{"sheet": "S", "cell": "D1", "kind": "value"}]
+        wb = openpyxl.load_workbook(victim)
+        d1 = wb["S"]["D1"]
+        assert d1.value == "=" and d1.data_type == "s"
+        wb.close()
+
+    def test_real_formula_still_formula(self, victim):
+        r = cells_ops.set_cell(str(victim), {"cell": "D2"}, "=1+1")
+        assert r["changed"]["cells"][0]["kind"] == "formula"
+
+
+# ======================================================================
+# Destroyer L-1: set_filter refuses unknown criterion keys
+# ======================================================================
+
+
+class TestSetFilterUnknownKeys:
+    def test_natural_llm_shape_refuses(self, tmp_path):
+        # exact repro: {"column": "Category", "equals": "Freight"} used to
+        # parse as op=eq value=None and hide ALL data rows with ok:true
+        book = _make_book(tmp_path / "f.xlsx", _FILTER_DATA)
+        with pytest.raises(XlMcpError) as ei:
+            sortfilter.set_filter(
+                str(book), {"range": "A1:C6"},
+                criteria=[{"column": "Region", "equals": "East"}])
+        assert "equals" in str(ei.value)
+        wb = openpyxl.load_workbook(book)
+        hidden = [r_ for r_ in range(2, 7)
+                  if wb["S"].row_dimensions[r_].hidden]
+        assert hidden == []  # nothing was hidden by the refusal
+        wb.close()
+
+    def test_binary_op_without_value_refuses(self, tmp_path):
+        book = _make_book(tmp_path / "f2.xlsx", _FILTER_DATA)
+        with pytest.raises(XlMcpError):
+            sortfilter.set_filter(
+                str(book), {"range": "A1:C6"},
+                criteria=[{"column": "Region", "op": "eq"}])
+
+    def test_unary_op_needs_no_value(self, tmp_path):
+        book = _make_book(tmp_path / "f3.xlsx", _FILTER_DATA)
+        r = sortfilter.set_filter(
+            str(book), {"range": "A1:C6"},
+            criteria=[{"column": "Region", "op": "not_blank"}])
+        assert r["changed"]["filter"]["rows_hidden"] == 0

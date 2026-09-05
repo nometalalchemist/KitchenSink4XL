@@ -250,9 +250,24 @@ def set_filter(path: str, location: Any, criteria: list | None = None,
         if not isinstance(cr, dict) or "column" not in cr:
             raise XlMcpError(
                 "each criterion is {column, op, value}; op defaults to eq")
+        # Unknown keys used to be IGNORED: the natural LLM shape
+        # {"column": "Category", "equals": "Freight"} parsed as op=eq
+        # value=None and hid every data row with ok:true (destroyer
+        # round, L-1). A stray key or a value-less binary op refuses like
+        # a wrong op does.
+        unknown = set(cr) - {"column", "op", "value"}
+        if unknown:
+            raise XlMcpError(
+                f"unknown criterion key(s) {sorted(unknown)}; each "
+                "criterion is {column, op, value} (op defaults to eq; "
+                "for equality put the wanted value under 'value')")
         op = cr.get("op", "eq")
         if op not in (_cells._OPS_BINARY | _cells._OPS_SET | _cells._OPS_UNARY):
             raise XlMcpError(f"unknown filter op {op!r}")
+        if op not in _cells._OPS_UNARY and "value" not in cr:
+            raise XlMcpError(
+                f"criterion for column {cr['column']!r} has op {op!r} but "
+                "no value; only is_blank/not_blank need none")
         offset = _column_index(cr["column"], header_names, min_col)
         preds.append((offset, op, cr.get("value")))
 
