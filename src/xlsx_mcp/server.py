@@ -400,21 +400,21 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     row names the columns (referenced by name; otherwise by A1 letter). where is
     a list of {column, op, value} predicates joined by match ('all' or 'any');
     ops: eq, ne, gt, ge, lt, le, contains, startswith, endswith, regex, in,
-    not_in, is_blank, not_blank. columns projects a subset; order_by sorts (on
-    any source column, projected or not); offset and limit page; distinct
-    dedupes. aggregate is a list of {column, func} (count, count_nonblank,
-    count_distinct, sum, avg, min, max, first, last), optionally per group_by,
-    returning group summaries instead of rows. Rows come back as compact
-    arrays, or objects when records=true, with matched, returned, and scanned
-    counts.
+    not_in, is_blank, not_blank. columns projects a subset; order_by is a list
+    of {column, dir} specs (dir 'asc'|'desc', also 'order'/'direction'; an
+    unknown direction refuses); offset and limit page; distinct dedupes.
+    aggregate is a list of {column, func} (count, count_nonblank,
+    count_distinct, sum, avg, min, max, first, last), optionally per group_by
+    (name or list; JSON-string tolerated), returning group summaries instead of
+    rows. Rows come back as compact arrays, or objects when records=true, with
+    matched, returned, and scanned counts.
 
-    Semantics worth knowing: predicates evaluate CACHED and literal values, so
-    a formula cell that was never calculated reads as blank here (run a recalc
-    or open in Excel first for exact results); gt/ge/lt/le compare numerically
-    when both sides coerce, as case-folded text otherwise, and a blank cell
-    never satisfies an ordered comparison; regex is an unanchored search
-    (anchor with ^ and $), guarded by a timeout; contains/startswith/endswith
-    are case-insensitive. Read-only; nothing is written."""
+    Semantics: predicates evaluate CACHED and literal values, so an
+    uncalculated formula cell reads as blank (recalc or open in Excel for exact
+    results); gt/ge/lt/le compare numerically when both sides coerce, else
+    case-folded text, and a blank never satisfies an ordered comparison; regex
+    is unanchored (anchor with ^ and $), timeout-guarded; contains/startswith/
+    endswith are case-insensitive. Read-only."""
     return _cells.query_range(
         path, location=location, sheet=sheet, header=header, columns=columns,
         where=where, match=match, order_by=order_by, aggregate=aggregate,

@@ -504,8 +504,10 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     aggregate/group_by); otherwise columns are the A1 letters. where is a list
     of {column, op, value} predicates combined by match ('all'|'any'); ops:
     eq ne gt ge lt le contains startswith endswith regex in not_in is_blank
-    not_blank. aggregate is a list of {column, func} (count count_nonblank
-    count_distinct sum avg min max first last), optionally per group_by. Returns
+    not_blank. order_by specs take dir 'asc'|'desc' (also 'order'/'direction';
+    an unknown direction refuses). aggregate is a list of {column, func} (count
+    count_nonblank count_distinct sum avg min max first last), optionally per
+    group_by (a column name or list; a JSON-string form is tolerated). Returns
     a compact projection (arrays by default, records=true for objects) with the
     matched / returned / scanned counts. Read-only; nothing is written.
     """

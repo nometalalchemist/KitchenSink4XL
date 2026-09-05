@@ -29,7 +29,7 @@ from openpyxl.utils import get_column_letter
 from ..core import arrays as _arrays
 from ..core import calc as _calc
 from ..core import refs as _refs
-from ..core.errors import UnsupportedStructure, XlMcpError
+from ..core.errors import TargetNotFound, UnsupportedStructure, XlMcpError
 from ..core.package import WorkbookPackage
 from . import cells as _cells
 from . import gridio
@@ -284,7 +284,10 @@ def clear_filter(path: str, location: Any = None, sheet: str | None = None,
         ws = wb[grid.sheet]
         ref = ws.auto_filter.ref or grid.a1
     if not ref:
-        raise XlMcpError(
+        # NOT_FOUND, matching the documented contract (the tool description
+        # says "refuses (NOT_FOUND)"); a bare XlMcpError mapped to BAD_PARAMS
+        # and contradicted the docs (author field testing, lite finding #26).
+        raise TargetNotFound(
             f"no autofilter on sheet {ws.title!r} to clear")
     from openpyxl.utils import range_boundaries
     _c0, r0, _c1, r1 = range_boundaries(str(ref))
