@@ -82,15 +82,21 @@ def _norm_path(path: str, label: str) -> str:
     return p
 
 
-def _out_path(path: str, label: str, *, overwrite: bool) -> str:
-    p = check_path(path, label)
-    if os.path.exists(p) and not overwrite:
-        raise FileExistsError(
-            f"{p} already exists; pass overwrite:true to replace it")
+def _out_path(path: str, label: str, *, overwrite: bool,
+              source: str | None = None,
+              workbook_target: bool = False) -> tuple[str, dict]:
+    """Output-target guard for the COM export/render/convert family: the
+    same non-mutating-writer covenant as the file-tier exports
+    (core.outguard): never the source workbook, never inside the backup
+    store, an existing target refuses without overwrite:true, and
+    overwrite first keeps a timestamped .bak of what it replaces."""
+    from ..core.outguard import guard_out_file
+    p, info = guard_out_file(path, source=source, overwrite=overwrite,
+                             what=label, workbook_target=workbook_target)
     parent = os.path.dirname(os.path.abspath(p))
     if parent and not os.path.isdir(parent):
         raise TargetNotFound(f"output directory does not exist: {parent}")
-    return p
+    return p, info
 
 
 def _ws(wb, sheet: str | None):
@@ -645,7 +651,8 @@ def com_export_pdf(path: str, output: str, scope: str = "workbook",
                    timeout_seconds: float | None = None) -> dict:
     """Export the workbook, one sheet, or a range to PDF via Excel."""
     p = _norm_path(path, "com_export_pdf")
-    out = _out_path(output, "com_export_pdf output", overwrite=overwrite)
+    out, out_info = _out_path(output, "com_export_pdf output",
+                              overwrite=overwrite, source=p)
     scope = str(scope).strip().lower()
     if scope not in _PDF_SCOPES:
         raise XlMcpError(f"scope must be one of {_PDF_SCOPES}, got {scope!r}")
@@ -676,6 +683,7 @@ def com_export_pdf(path: str, output: str, scope: str = "workbook",
     if not os.path.exists(out) or os.path.getsize(out) == 0:
         raise ValidationFailed(
             "Excel reported success but the PDF is missing or empty")
+    result.update(out_info)
     result["ok"] = True
     result["file"] = p
     return result
@@ -687,7 +695,8 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
     """Render a sheet's used range (or a given range) to a PNG image for
     visual verification, via CopyPicture into a temporary chart canvas."""
     p = _norm_path(path, "com_render_sheet")
-    out = _out_path(output, "com_render_sheet output", overwrite=overwrite)
+    out, out_info = _out_path(output, "com_render_sheet output",
+                              overwrite=overwrite, source=p)
     if not out.lower().endswith(".png"):
         raise XlMcpError("output must be a .png path")
 
@@ -720,6 +729,7 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
     if not os.path.exists(out) or os.path.getsize(out) == 0:
         raise ValidationFailed(
             "Excel reported success but the PNG is missing or empty")
+    result.update(out_info)
     result["ok"] = True
     result["file"] = p
     return result
@@ -730,7 +740,9 @@ def com_convert_format(path: str, output: str, format: str | None = None,
                        timeout_seconds: float | None = None) -> dict:
     """Convert between workbook formats via Excel's own SaveAs."""
     p = _norm_path(path, "com_convert_format")
-    out = _out_path(output, "com_convert_format output", overwrite=overwrite)
+    out, out_info = _out_path(output, "com_convert_format output",
+                              overwrite=overwrite, source=p,
+                              workbook_target=True)
     fmt = (format or Path(out).suffix.lstrip(".")).strip().lower()
     if fmt not in FILE_FORMATS:
         raise XlMcpError(
@@ -767,6 +779,7 @@ def com_convert_format(path: str, output: str, format: str | None = None,
         raise ValidationFailed(
             "Excel reported success but the converted file is missing or "
             "empty")
+    result.update(out_info)
     result["ok"] = True
     result["file"] = p
     return result

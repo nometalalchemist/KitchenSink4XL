@@ -204,11 +204,13 @@ def get_server_info() -> dict:
 def create_workbook(path: str, sheets: list[str] | None = None,
                     overwrite: bool = False) -> dict:
     """Create a new .xlsx workbook at path with the given sheet names (default a
-    single 'Sheet1'). Sheet names must be unique and at most 31 characters; the
-    parent directory must already exist. An existing file at path is left
-    untouched unless overwrite is true, in which case it is replaced. Returns
-    the file path and the sheets created. This writes a brand-new file, so
-    there is no prior content to back up."""
+    single 'Sheet1'). Sheet names must be unique, at most 31 characters, and
+    may not start or end with an apostrophe (Excel refuses to open such a
+    file); the parent directory must already exist. An existing file at path
+    is left untouched unless overwrite is true, in which case it is FIRST
+    rotated into its .ks4xl-backups prev slot and then replaced (restore
+    source='prev' brings it back). Returns the file path and the sheets
+    created."""
     return _lifecycle.create_workbook(path, sheets=sheets, overwrite=overwrite)
 
 
@@ -217,10 +219,10 @@ def copy_workbook(src: str, dst: str, overwrite: bool = False) -> dict:
     """Copy a workbook file byte-for-byte from src to dst, so nothing in the
     original is re-serialized or degraded (charts, shapes, macros, and queries
     all carry over intact). An existing dst is left untouched unless overwrite
-    is true; note overwrite replaces dst directly, with no backup slot and no
-    verify, so the destination's prior content is unrecoverable. Returns the
-    destination path. Use this to branch a working copy before a risky batch
-    of edits."""
+    is true, in which case dst is FIRST rotated into its .ks4xl-backups prev
+    slot and then replaced (restore source='prev' brings it back). Returns
+    the destination path. Use this to branch a working copy before a risky
+    batch of edits."""
     return _lifecycle.copy_workbook(src, dst, overwrite=overwrite)
 
 
@@ -322,12 +324,14 @@ def write_range(path: str, location: Any, data: list[list[Any]],
                 backup: bool = True,
                 verify_com: bool | None = None) -> dict:
     """Write a 2D block of values and formulas anchored at the location's
-    top-left cell. data is a list of row lists; a short row writes only its
-    own cells (existing content beyond it is kept, never blanked); formula
-    strings ('=...') are normalized and flag recalculation. The block must
-    stay within the grid limits and the 200,000-cell write ceiling. A
-    hazardous workbook refuses unless allow_loss is true. Auto-backup to
-    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
+    top-left cell. data is a list of row lists and must be RECTANGULAR:
+    rows of unequal length refuse rather than writing a ragged block (pad
+    short rows with null, which clears those cells; existing content
+    outside the block is never touched). Formula strings ('=...') are
+    normalized and flag recalculation. The block must stay within the grid
+    limits and the 200,000-cell write ceiling. A hazardous workbook refuses
+    unless allow_loss is true. Auto-backup to .ks4xl-backups; atomic
+    verified save. Refuses while open in Excel."""
     return _cells.write_range(path, location, data, sheet=sheet,
                               allow_loss=allow_loss, backup=backup,
                                   verify_com=verify_com)
@@ -818,18 +822,23 @@ def import_data(path: str, source: str | None = None,
 @_tool("lite")
 def export_range(path: str, location: Any = None, sheet: str | None = None,
                  fmt: str = "csv", header: bool = True, values: str = "cached",
-                 records: bool = False, out_file: str | None = None) -> dict:
+                 records: bool = False, out_file: str | None = None,
+                 overwrite: bool = False) -> dict:
     """Export a range, table, or sheet to CSV, TSV, or JSON. location defaults
     to the sheet's true used range; a {table} selector exports a table.
     values is cached | formula | both, and the result states the mode used
     so a formula with no cached value is never passed off as blank.
-    out_file writes the text to a sandboxed path, replacing any existing
-    file there; otherwise the text returns inline. Whole-workbook
-    multi-sheet export is export_file (io pack). Read-only; nothing in the
-    workbook is changed."""
+    out_file writes the text to a file (KS4XL_ALLOWED_ROOTS restricts
+    where, when the host sets it); otherwise the text returns inline. The
+    target is guarded: never the source workbook, never a workbook
+    extension, never inside .ks4xl-backups, and an existing file refuses
+    unless overwrite is true, which first keeps a timestamped .bak of what
+    it replaces. Whole-workbook multi-sheet export is export_file (io
+    pack). Read-only; nothing in the workbook is changed."""
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
-        values=values, records=records, out_file=out_file)
+        values=values, records=records, out_file=out_file,
+        overwrite=overwrite)
 
 
 # ============================================================ PHASE 3c TOOLS
@@ -1248,18 +1257,21 @@ def get_connections(path: str) -> dict:
 def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 out_dir: str | None = None, out_file: str | None = None,
                 header: bool = True, values: str = "cached",
-                records: bool = False) -> dict:
+                records: bool = False, overwrite: bool = False) -> dict:
     """Export whole sheets to a CSV/TSV file set or one JSON bundle, the
     multi-sheet complement to export_range. sheets picks a subset (default
     every sheet). csv and tsv write one file per sheet into out_dir, or
     return per-sheet text inline; json builds one bundle keyed by sheet
     name, written to out_file or returned inline (records=true emits row
-    objects). values picks the calc story (cached, formula, both) and the
-    result states the mode used. Read-only; nothing in the workbook
-    changes."""
+    objects). Every output target is guarded: never the source workbook,
+    never a workbook extension, never inside .ks4xl-backups, and existing
+    files refuse unless overwrite is true, which first keeps a timestamped
+    .bak of each file it replaces. values picks the calc story (cached,
+    formula, both) and the result states the mode used. Read-only; nothing
+    in the workbook changes."""
     return _dataio.export_file(
         path, fmt=fmt, sheets=sheets, out_dir=out_dir, out_file=out_file,
-        header=header, values=values, records=records)
+        header=header, values=values, records=records, overwrite=overwrite)
 
 
 # ============================================================ PHASE 3e TOOLS

@@ -30,6 +30,7 @@ from openpyxl.utils import get_column_letter
 
 from ..core import limits as _limits
 from ..core.errors import RangeOutOfBounds, XlMcpError
+from ..core.outguard import guard_out_dir, guard_out_file
 from ..core.package import WorkbookPackage
 from ..core.sandbox import check_path
 from . import gridio
@@ -157,12 +158,17 @@ def import_data(path: str, source: str | None = None,
 
 def export_range(path: str, location: Any = None, sheet: str | None = None,
                  fmt: str = "csv", header: bool = True, values: str = "cached",
-                 records: bool = False, out_file: str | None = None) -> dict:
-    """Export a range / table / sheet to CSV / TSV / JSON. Read-only.
+                 records: bool = False, out_file: str | None = None,
+                 overwrite: bool = False) -> dict:
+    """Export a range / table / sheet to CSV / TSV / JSON. Read-only of the
+    WORKBOOK; out_file is guarded by core.outguard (never the source
+    workbook, never a workbook extension, never inside the backup store,
+    and an existing file refuses unless overwrite=true, which first keeps a
+    timestamped .bak of what it replaces).
 
     location defaults to the sheet's true used range. values is cached |
     formula | both. out_file, when given, writes the serialized text to a
-    sandboxed path; otherwise the text is returned inline."""
+    file; otherwise the text is returned inline."""
     if fmt not in _EXPORT_FORMATS:
         raise XlMcpError(f"fmt must be one of {_EXPORT_FORMATS}")
     if values not in gridio.VALUE_MODES:
@@ -218,10 +224,13 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
                 for i, row in enumerate(labels)
                 for j, lab in enumerate(row) if lab == "absent"][:100]
         if out_file:
-            op = check_path(out_file, "write export file")
+            op, ginfo = guard_out_file(
+                out_file, source=path, overwrite=overwrite,
+                what="export file")
             with open(op, "w", encoding="utf-8", newline="") as fh:
                 fh.write(content)
             out["written_to"] = op
+            out.update(ginfo)
         else:
             out["content"] = content
         return out
@@ -260,9 +269,13 @@ def _serialize_matrix(vals, fmt: str, header: bool, records: bool,
 def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 out_dir: str | None = None, out_file: str | None = None,
                 header: bool = True, values: str = "cached",
-                records: bool = False) -> dict:
+                records: bool = False, overwrite: bool = False) -> dict:
     """Export whole sheets (or the whole workbook) to a CSV/TSV set or one
-    JSON bundle. Read-only.
+    JSON bundle. Read-only of the WORKBOOK; every output target is guarded
+    by core.outguard (never the source workbook, never a workbook
+    extension, never inside the backup store, and an existing file refuses
+    unless overwrite=true, which first keeps a timestamped .bak of what it
+    replaces).
 
     csv/tsv: one file per sheet into out_dir (named <stem>_<sheet>.csv), or
     inline per-sheet text when out_dir is omitted. json: a single bundle
@@ -324,28 +337,60 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
             content = _json.dumps(bundle, ensure_ascii=False, default=str,
                                   indent=2)
             if out_file:
-                op = check_path(out_file, "write export file")
+                op, ginfo = guard_out_file(
+                    out_file, source=path, overwrite=overwrite,
+                    what="export file")
                 with open(op, "w", encoding="utf-8", newline="") as fh:
                     fh.write(content)
                 out["written_to"] = op
+                out.update(ginfo)
             else:
                 out["content"] = content
         else:
             if out_dir:
-                od = check_path(out_dir, "write export files")
+                od = guard_out_dir(out_dir, what="export files")
                 if not os.path.isdir(od):
                     raise XlMcpError(
                         f"out_dir is not an existing directory: {od}")
                 stem = os.path.splitext(os.path.basename(path))[0]
-                written = []
+                dests = []
                 for name, text in per_sheet.items():
                     safe = _UNSAFE_NAME.sub("_", name)
-                    dest = os.path.join(od, f"{stem}_{safe}.{fmt}")
-                    with open(dest, "w", encoding="utf-8",
+                    dests.append(
+                        (os.path.join(od, f"{stem}_{safe}.{fmt}"), text))
+                lows = [os.path.normcase(d) for d, _t in dests]
+                if len(set(lows)) < len(lows):
+                    raise XlMcpError(
+                        "two sheet names sanitize to the same output file "
+                        "name; export them separately (export_range with "
+                        "distinct out_file paths)")
+                # Refuse-before-write: no partial file set on a collision.
+                clashes = [d for d, _t in dests if os.path.exists(d)]
+                if clashes and not overwrite:
+                    exc = XlMcpError(
+                        "refusing to overwrite existing file(s): "
+                        + ", ".join(clashes)
+                        + ". Pass overwrite:true to replace them (each "
+                        "replaced file is first copied to a timestamped "
+                        ".bak beside it).")
+                    exc.code = "CONFLICT"
+                    raise exc
+                written = []
+                replaced = []
+                for dest, text in dests:
+                    op, ginfo = guard_out_file(
+                        dest, source=path, overwrite=overwrite,
+                        what="export file")
+                    with open(op, "w", encoding="utf-8",
                               newline="") as fh:
                         fh.write(text)
-                    written.append(dest)
+                    written.append(op)
+                    if ginfo.get("backup_of_replaced"):
+                        replaced.append(ginfo["backup_of_replaced"])
                 out["written_to"] = written
+                if replaced:
+                    out["overwrote"] = True
+                    out["backups_of_replaced"] = replaced
             else:
                 out["content"] = per_sheet
         return out

@@ -31,17 +31,88 @@ _HIDE_STATES = {"hidden": "hidden", "very_hidden": "veryHidden",
                 "veryhidden": "veryHidden"}
 
 
+def _check_sheet_name(name: str) -> None:
+    """Excel's own sheet-name rules beyond openpyxl's charset check. A name
+    starting with an apostrophe produces a workbook Excel refuses to OPEN at
+    all ("Open method of Workbooks class failed") while verify-after-write
+    still passes, because openpyxl validates only length and []:*?/\\
+    (fresh-eyes round, M-1: bisected as the sole killer in a 7-candidate
+    battery). Excel's UI also forbids a trailing apostrophe."""
+    if len(name) > 31:
+        raise XlMcpError(f"sheet name {name!r} exceeds 31 characters")
+    if name.startswith("'") or name.endswith("'"):
+        raise XlMcpError(
+            f"sheet name {name!r} starts or ends with an apostrophe; Excel "
+            "refuses to open a workbook containing such a sheet name. "
+            "Remove the leading/trailing apostrophe.")
+
+
 # ----------------------------------------------------------------- create/copy
+
+
+def _refuse_backup_store_target(p: str, what: str) -> None:
+    """A workbook written INTO a .ks4xl-backups store overwrites somebody's
+    undo; no creation tool may target it (destroyer/fresh-eyes H-1 class)."""
+    from pathlib import Path as _Path
+    from ..core.safesave import BACKUP_DIR_NAME
+    if any(part.lower() == BACKUP_DIR_NAME
+           for part in _Path(os.path.abspath(p)).parts):
+        raise XlMcpError(
+            f"refusing to {what} inside a {BACKUP_DIR_NAME} backup store: "
+            "overwriting a backup slot destroys the undo it holds. Choose "
+            "a path outside the backup store.")
+
+
+def _write_atomic(p: str, writer) -> None:
+    """Write via a sibling temp file + os.replace. This matters beyond crash
+    atomicity: the backup slots are HARDLINKS of the pre-overwrite file, so
+    an in-place wb.save/copy2 onto the same inode would rewrite the backup
+    it just took. os.replace points the path at a NEW inode and the slot
+    keeps the old bytes."""
+    import uuid
+    tmp = os.path.join(
+        os.path.dirname(os.path.abspath(p)) or ".",
+        f".ks4xl-write-{uuid.uuid4().hex}{os.path.splitext(p)[1]}")
+    try:
+        writer(tmp)
+        from ..core.safesave import replace_with_retry
+        replace_with_retry(tmp, p)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _rotate_before_clobber(p: str) -> dict:
+    """Backup-before-mutation for the overwrite=true paths: the workbook
+    about to be replaced rotates into its prev/anchor slots FIRST, so one
+    habitual overwrite:true is no longer unrecoverable ruin (destroyer
+    H-2). Returns the extra result fields."""
+    from ..core import safesave as _safesave
+    _safesave.rotate_slots(p)
+    return {
+        "backup": "prev",
+        "replaced_existing": True,
+        "note": ("the replaced workbook was backed up first: "
+                 "manage_backups(action='restore', path=..., source='prev') "
+                 "brings it back"),
+    }
 
 
 def create_workbook(path: str, sheets: list[str] | None = None,
                     overwrite: bool = False) -> dict:
     """Create a new .xlsx at `path` with the named sheets (default one sheet
-    'Sheet1'). Refuses an existing path unless overwrite=True."""
+    'Sheet1'). Refuses an existing path unless overwrite=True; overwrite
+    rotates the existing workbook into its backup slots before replacing
+    it (backup-before-mutation covers this last bypass too)."""
     p = check_path(path, "create workbook")
+    _refuse_backup_store_target(p, "create a workbook")
     if os.path.exists(p) and not overwrite:
         raise FileExistsError(
-            f"{p} already exists; pass overwrite=true to replace it")
+            f"{p} already exists; pass overwrite=true to replace it (the "
+            "existing file is backed up to its prev slot first)")
     names = [str(s) for s in (sheets or ["Sheet1"]) if str(s).strip()]
     if not names:
         names = ["Sheet1"]
@@ -51,31 +122,44 @@ def create_workbook(path: str, sheets: list[str] | None = None,
         if low in seen:
             raise XlMcpError(f"duplicate sheet name {n!r}")
         seen.add(low)
-        if len(n) > 31:
-            raise XlMcpError(f"sheet name {n!r} exceeds 31 characters")
+        _check_sheet_name(n)
+    extra: dict = {}
+    if os.path.exists(p) and overwrite:
+        extra = _rotate_before_clobber(p)
     import openpyxl
     wb = openpyxl.Workbook()
     wb.active.title = names[0]
     for n in names[1:]:
         wb.create_sheet(title=n)
-    wb.save(p)
-    return {"file": p, "created": True, "sheets": names, "saved": True}
+    _write_atomic(p, wb.save)
+    return {"file": p, "created": True, "sheets": names, "saved": True,
+            **extra}
 
 
 def copy_workbook(src: str, dst: str, overwrite: bool = False) -> dict:
     """Copy a workbook file byte-for-byte to a new path (no round-trip through
     openpyxl, so nothing is degraded). Refuses an existing dst unless
-    overwrite=True."""
+    overwrite=True; overwrite rotates the existing dst into its backup
+    slots before replacing it."""
     import shutil
     s = check_path(src, "read source workbook")
     d = check_path(dst, "write copy")
     if not os.path.exists(s):
         raise TargetNotFound(f"no such workbook: {s}")
+    _refuse_backup_store_target(d, "copy a workbook")
+    from ..core.safesave import canonical_key as _ck
+    if os.path.exists(d) and _ck(s) == _ck(d):
+        raise XlMcpError(
+            "src and dst are the same file; nothing to copy")
     if os.path.exists(d) and not overwrite:
         raise FileExistsError(
-            f"{d} already exists; pass overwrite=true to replace it")
-    shutil.copy2(s, d)
-    return {"file": d, "copied_from": s, "saved": True}
+            f"{d} already exists; pass overwrite=true to replace it (the "
+            "existing file is backed up to its prev slot first)")
+    extra: dict = {}
+    if os.path.exists(d) and overwrite:
+        extra = _rotate_before_clobber(d)
+    _write_atomic(d, lambda tmp: shutil.copy2(s, tmp))
+    return {"file": d, "copied_from": s, "saved": True, **extra}
 
 
 # -------------------------------------------------------------- read metadata
@@ -215,8 +299,7 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
                 "add needs new_name (the title for the new sheet)")
         if name in wb.sheetnames:
             raise XlMcpError(f"a sheet named {name!r} already exists")
-        if len(name) > 31:
-            raise XlMcpError(f"sheet name {name!r} exceeds 31 characters")
+        _check_sheet_name(name)
         pos = index if index is not None else len(wb.sheetnames)
         ws = wb.create_sheet(title=name, index=pos)
         detail.update(sheet=name, index=wb.sheetnames.index(ws.title))
@@ -246,8 +329,7 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
         name = _need(sheet, "the sheet to rename")
         if not new_name:
             raise XlMcpError("rename needs new_name")
-        if len(new_name) > 31:
-            raise XlMcpError(f"sheet name {new_name!r} exceeds 31 characters")
+        _check_sheet_name(new_name)
         if new_name in wb.sheetnames and new_name != name:
             raise XlMcpError(f"a sheet named {new_name!r} already exists")
         wb[name].title = new_name
@@ -257,9 +339,7 @@ def manage_worksheet(path: str, action: str, sheet: str | None = None,
         src = wb[name]
         dup = wb.copy_worksheet(src)
         if new_name:
-            if len(new_name) > 31:
-                raise XlMcpError(
-                    f"sheet name {new_name!r} exceeds 31 characters")
+            _check_sheet_name(new_name)
             dup.title = new_name
         detail.update(sheet=name, new_name=dup.title)
     elif action == "reorder":
