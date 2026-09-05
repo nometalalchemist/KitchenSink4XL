@@ -367,14 +367,12 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 # Refuse-before-write: no partial file set on a collision.
                 clashes = [d for d, _t in dests if os.path.exists(d)]
                 if clashes and not overwrite:
-                    exc = XlMcpError(
+                    raise FileExistsError(
                         "refusing to overwrite existing file(s): "
                         + ", ".join(clashes)
                         + ". Pass overwrite:true to replace them (each "
                         "replaced file is first copied to a timestamped "
                         ".bak beside it).")
-                    exc.code = "CONFLICT"
-                    raise exc
                 written = []
                 replaced = []
                 for dest, text in dests:

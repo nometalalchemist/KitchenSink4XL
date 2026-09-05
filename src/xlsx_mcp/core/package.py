@@ -375,6 +375,8 @@ class WorkbookPackage:
         drop_keys = list(rep.lossy_keys)  # SEV_DROPS
         degradable = [h.label for h in rep.hazards
                       if h.severity == _hazard.SEV_DEGRADES]
+        degrade_keys = [h.key for h in rep.hazards
+                        if h.severity == _hazard.SEV_DEGRADES]
         conditional = [h for h in rep.hazards
                        if h.severity == _hazard.SEV_CONDITIONAL]
 
@@ -416,11 +418,21 @@ class WorkbookPackage:
                           "routes": ["enable COM (com pack)",
                                      "allow_loss:true with backup"]}
             raise exc
-        if drop_keys and allow_loss:
+        if allow_loss and (drop_keys or degrade_keys):
             # Record exactly which hazard families the caller was told they
             # were sacrificing; verify-after-write excuses those and only
-            # those (see verify.part_loss_check loss_keys).
-            self._warned_loss_keys = set(drop_keys)
+            # those (see verify.part_loss_check loss_keys). DEGRADE-warned
+            # families are included: "may degrade" concretely means chart
+            # styling sub-parts (colors1.xml, style1.xml) and anchors can
+            # vanish, and scoping the amnesty to DROP families alone made
+            # the refusal's advertised remedy a dead end on any file that
+            # held both classes, while a file with ONLY degrade families
+            # fell through to the blanket-None amnesty: same loss, opposite
+            # outcomes depending on unrelated content (destroyer round,
+            # M-3). One consistent rule now: allow_loss excuses exactly the
+            # families the gate warned about, of either class.
+            self._warned_loss_keys = set(drop_keys) | set(degrade_keys)
+        if drop_keys and allow_loss:
             labels = [next(h.label for h in rep.hazards if h.key == k)
                       for k in drop_keys]
             warnings.append(
@@ -439,7 +451,10 @@ class WorkbookPackage:
         if degradable:
             warnings.append(
                 ", ".join(degradable) + " are re-serialized through openpyxl's "
-                "model; sub-features the model does not know may degrade")
+                "model; sub-features the model does not know may degrade"
+                + (" (with allow_loss, sub-parts these families lose on the "
+                   "round-trip, such as Excel-authored chart styling parts, "
+                   "count as accepted losses)" if allow_loss else ""))
         if conditional:
             warnings.append(
                 "VBA project preserved via keep_vba; note that form and "

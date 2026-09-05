@@ -43,12 +43,6 @@ WORKBOOK_EXTS = frozenset({
 })
 
 
-def _conflict(message: str) -> XlMcpError:
-    exc = XlMcpError(message)
-    exc.code = "CONFLICT"
-    return exc
-
-
 def _in_backup_store(p: Path) -> bool:
     return any(part.lower() == BACKUP_DIR_NAME for part in p.parts)
 
@@ -117,7 +111,9 @@ def guard_out_file(target: str, *, source: str | None = None,
             raise XlMcpError(
                 f"out target {op} is a directory; pass a file path")
         if not overwrite:
-            raise _conflict(
+            # FileExistsError: the envelope maps it to CONFLICT, and it is
+            # the same type the COM writers always raised here.
+            raise FileExistsError(
                 f"{op} already exists; refusing to overwrite it. Pass "
                 "overwrite:true to replace it (the replaced file is first "
                 "copied to a timestamped .bak beside it).")

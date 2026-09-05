@@ -577,20 +577,27 @@ def _refine_drawings(
     ]
     if not drawing_xmls:
         return
-    shape_drawings = [
+    chart_only = {
         d for d in drawing_xmls
-        if _drawing_is_chart_only(d, nameset, rels_reader) is not True
-    ]
-    if not shape_drawings:
-        del found["drawings"]  # every drawing is a pure chart anchor
-        return
-    keep: set[str] = set()
-    for d in shape_drawings:
-        keep.add(d)
+        if _drawing_is_chart_only(d, nameset, rels_reader) is True
+    }
+    exclude = set(chart_only)
+    for d in chart_only:
         rels = _drawing_rels_for(d)
         if rels in nameset:
-            keep.add(rels)
-    hz.parts = [p for p in hz.parts if p in keep]
+            exclude.add(rels)
+    # Subtract ONLY the demoted chart anchors (and their rels). The old
+    # code rebuilt the part list from the surviving .xml drawings, which
+    # silently dropped every NON-xml member -- an Excel-authored
+    # vmlDrawing*.vml sharing the hazard with a chart anchor vanished from
+    # the report, was therefore never warned, and its loss at verify time
+    # was unexcusable even under allow_loss: the advertised remedy could
+    # never succeed on such a file (destroyer round, M-3).
+    kept = [p for p in hz.parts if p not in exclude]
+    if not kept:
+        del found["drawings"]  # every drawing is a pure chart anchor
+        return
+    hz.parts = kept
 
 
 def _normalized(name: str) -> str:

@@ -99,9 +99,8 @@ class TestExportOutTargetGuard:
             self, victim, tmp_path):
         out = tmp_path / "out.csv"
         out.write_text("precious old data", encoding="utf-8")
-        with pytest.raises(XlMcpError) as ei:
+        with pytest.raises(FileExistsError):  # envelope: CONFLICT
             dataio.export_range(str(victim), out_file=str(out))
-        assert getattr(ei.value, "code", None) == "CONFLICT"
         assert out.read_text(encoding="utf-8") == "precious old data"
 
     def test_export_overwrite_keeps_timestamped_bak(self, victim, tmp_path):
@@ -121,7 +120,7 @@ class TestExportOutTargetGuard:
         outdir.mkdir()
         clash = outdir / "victim_S.csv"
         clash.write_text("old", encoding="utf-8")
-        with pytest.raises(XlMcpError):
+        with pytest.raises(FileExistsError):
             dataio.export_file(str(victim), fmt="csv", out_dir=str(outdir))
         assert clash.read_text(encoding="utf-8") == "old"
         r = dataio.export_file(str(victim), fmt="csv", out_dir=str(outdir),
@@ -380,3 +379,98 @@ class TestDiskFullHonesty:
         cells_ops.set_cell(str(book), {"cell": "A1"}, "y")
         assert not aged.exists()
         assert fresh.exists()
+
+
+# ======================================================================
+# Destroyer M-3: allow_loss dead-end and inconsistent loss scope
+# ======================================================================
+
+_CORPUS = Path(__file__).resolve().parent.parent / "fixtures" / "corpus"
+
+
+def _inject(src: Path, dst: Path, extra: dict[str, bytes]) -> Path:
+    with zipfile.ZipFile(src) as zin, \
+            zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            zout.writestr(item, zin.read(item.filename))
+        for name, data in extra.items():
+            zout.writestr(name, data)
+    return dst
+
+
+_CHART_EXTRAS = {
+    "xl/charts/colors1.xml": b'<?xml version="1.0"?><cs:colorStyle '
+                             b'xmlns:cs="http://x"/>',
+    "xl/charts/style1.xml": b'<?xml version="1.0"?><cs:chartStyle '
+                            b'xmlns:cs="http://x"/>',
+}
+
+
+def _threaded_parts() -> dict[str, bytes]:
+    out = {}
+    with zipfile.ZipFile(_CORPUS / "threaded_comments.xlsx") as z:
+        for name in ("xl/threadedComments/threadedComment1.xml",
+                     "xl/persons/person.xml",
+                     "xl/drawings/vmlDrawing1.vml"):
+            out[name] = z.read(name)
+    return out
+
+
+class TestAllowLossScope:
+    def test_mixed_file_allow_loss_remedy_now_works(self, tmp_path):
+        # the heirloom shape: drop-class content (threaded comments, a VML
+        # anchor) PLUS degrade-class chart sub-parts. The gate refuses
+        # without allow_loss; WITH allow_loss the advertised remedy must
+        # actually succeed instead of dead-ending in VALIDATION_FAILED on
+        # the chart sub-parts and the VML anchor.
+        from xlsx_mcp.core.errors import HazardRefused
+        book = _inject(_CORPUS / "chart.xlsx", tmp_path / "mixed.xlsx",
+                       {**_CHART_EXTRAS, **_threaded_parts()})
+        before = book.read_bytes()
+        with pytest.raises(HazardRefused):
+            cells_ops.set_cell(str(book), {"cell": "A1"}, "edit")
+        assert book.read_bytes() == before  # refusal left it untouched
+        r = cells_ops.set_cell(str(book), {"cell": "A1"}, "edit",
+                               allow_loss=True)
+        assert r["ok"] and r["verified"]
+        assert any("allow_loss" in w for w in r["warnings"])
+        wb = openpyxl.load_workbook(book)
+        assert wb.active["A1"].value == "edit"
+        wb.close()
+        # the backup holds the pre-loss original
+        slot = safesave.slot_dir(book) / safesave.PREV_SLOT
+        assert slot.read_bytes() == before
+
+    def test_degrade_only_loss_is_scoped_not_blanket(self, tmp_path):
+        # the H4 shape: chart sub-parts, NO drop-class content. Without
+        # allow_loss the verify gate still refuses the sub-part loss
+        # (fail-safe); with allow_loss it proceeds under the SAME scoped
+        # amnesty as the mixed file (no more blanket-None inconsistency).
+        book = _inject(_CORPUS / "chart.xlsx", tmp_path / "h4.xlsx",
+                       _CHART_EXTRAS)
+        before = book.read_bytes()
+        with pytest.raises(ValidationFailed):
+            cells_ops.set_cell(str(book), {"cell": "A1"}, "edit")
+        assert book.read_bytes() == before
+        r = cells_ops.set_cell(str(book), {"cell": "A1"}, "edit",
+                               allow_loss=True)
+        assert r["ok"]
+
+    def test_vml_anchor_survives_chart_demotion_in_scan(self, tmp_path):
+        # _refine_drawings used to DELETE the whole drawings hazard when
+        # every drawing .xml was a chart anchor, silently dropping the VML
+        # member from the report; it must stay flagged.
+        from xlsx_mcp.core import hazard
+        book = _inject(
+            _CORPUS / "chart.xlsx", tmp_path / "cv.xlsx",
+            {"xl/drawings/vmlDrawing9.vml": b"<xml><v:shape/></xml>"})
+        rep = hazard.scan_path(str(book))
+        keys = {h.key: h for h in rep.hazards}
+        assert "drawings" in keys
+        assert any("vmldrawing9" in p.lower()
+                   for p in keys["drawings"].parts)
+
+    def test_pure_chart_workbook_still_demotes_cleanly(self):
+        from xlsx_mcp.core import hazard
+        rep = hazard.scan_path(str(_CORPUS / "chart.xlsx"))
+        assert "drawings" not in {h.key for h in rep.hazards}
