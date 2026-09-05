@@ -1,0 +1,15 @@
+{
+  "stress_calls": 882,
+  "wave_headings": 43,
+  "outcomes": {
+    "OK": 209,
+    "REFUSED": 673
+  },
+  "source": "integration/adversarial_log.md",
+  "excludes": [
+    "live COM stress round executor operations",
+    "mutation, metamorphic, geriatric and three-oracle rounds",
+    "the file-tier test suite",
+    "the COM gate batteries"
+  ]
+}

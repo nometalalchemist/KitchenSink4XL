@@ -35,12 +35,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "scripts" / "operations_snapshot.json"
+STRESS_SNAPSHOT = ROOT / "scripts" / "stress_calls_snapshot.json"
 
 #: The figures the public copy currently claims. Change these only together
 #: with the copy itself.
 PUBLISHED_OPERATIONS = 129
 PUBLISHED_TOOLS_TOTAL = 69      # 67 workbook tools + enable_tools/disable_tools
 PUBLISHED_TOOLS_LITE = 40
+PUBLISHED_STRESS_CALLS = 882    # journaled adversarial calls; a floor, not a total
 
 
 def _public_files() -> list[Path]:
@@ -81,6 +83,25 @@ def test_operations_snapshot_matches_source():
         "figures and PUBLISHED_OPERATIONS in this file.\n" + out
     )
     assert stored["total_operations"] == PUBLISHED_OPERATIONS
+
+
+def test_stress_call_figure_is_the_journal_figure():
+    """The site's stress-call headline is the one the journal counts.
+
+    The journal itself (integration/adversarial_log.md) carries real machine
+    paths and is gitignored, so the count travels as a committed snapshot and
+    this guard checks the published copy against that. On the build machine,
+    where the journal does exist, count_stress_calls.py --check re-derives it
+    and this test catches a snapshot that drifted from the log.
+    """
+    stored = json.loads(STRESS_SNAPSHOT.read_text(encoding="utf-8"))
+    assert stored["stress_calls"] == PUBLISHED_STRESS_CALLS
+    out = _run("count_stress_calls.py", "--check")
+    assert "MATCHES" in out or "journal absent" in out, out
+    page = ROOT / "docs" / "index.html"
+    if page.exists():
+        assert str(PUBLISHED_STRESS_CALLS) in page.read_text(
+            encoding="utf-8"), "index.html is missing the stress-call figure"
 
 
 def test_published_numbers_match_scripts():

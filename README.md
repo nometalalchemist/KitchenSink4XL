@@ -274,7 +274,7 @@ before any file is opened.
 
 ## Testing
 
-1,042 tests in `tests/unit`, plus a separate local COM gate battery that drives a
+1,043 tests in `tests/unit`, plus a separate local COM gate battery that drives a
 real Excel. On top of the suite, this release went through the family's
 gauntlet:
 
