@@ -444,7 +444,13 @@ class TestLongWorkbookNames:
 
     def test_a_long_unicode_name_round_trips_through_the_breadcrumb(
             self, tmp_path):
-        name = "매우" * 45 + "장부.xlsx"      # 95 chars, well past 80
+        # Past the 80-char truncation threshold while staying inside the
+        # 255-BYTE filename limit that ext4 and friends enforce, with room
+        # for the leading dot and the ".writing" suffix the save path adds.
+        # Windows counts characters, Linux counts bytes, and Korean is three
+        # bytes a character: the original 95-char name was 281 bytes and
+        # could not be written at all on the Linux runner.
+        name = "매우" * 38 + "장부.xlsx"      # 83 chars / 239 bytes
         assert len(name) > safesave._MAX_FOLDER_NAME
         p = _plain(tmp_path / name, b"x")
         folder = safesave.slot_dir(p, create=True)

@@ -59,6 +59,13 @@ com = ["pywin32; sys_platform == 'win32'"]
 dev = [
     "pytest",
     "pytest-timeout",
+    # Pillow backs the image tools and psutil backs COM process identity.
+    # Neither is a runtime requirement: without them the image tools refuse
+    # honestly and a PID's creation time reads as unknown. The TESTS for both
+    # behaviors need the real library present, so they belong here, and CI
+    # discovered their absence the hard way on the first public run.
+    "pillow",
+    "psutil",
 ]
 
 [project.urls]

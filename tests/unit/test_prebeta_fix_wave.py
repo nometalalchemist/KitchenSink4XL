@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import zipfile
 from pathlib import Path
 
@@ -307,6 +308,8 @@ class TestPromoteFailureKeepsPrev:
 
 
 class TestLockedNotCorrupt:
+    @pytest.mark.skipif(sys.platform != "win32",
+                        reason="msvcrt byte-range locking is Windows-only")
     def test_region_lock_diagnosed_as_locked(self, tmp_path):
         import msvcrt
         from xlsx_mcp.core.package import WorkbookPackage
