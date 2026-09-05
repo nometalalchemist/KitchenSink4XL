@@ -118,6 +118,23 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         key_specs.append((_column_index(col, header_names, min_col),
                           order in ("desc", "descending")))
 
+    # Hidden rows, Excel's way (COM ground truth 2026-09-05): sorting a
+    # range with an ACTIVE AUTOFILTER sorts only the visible rows and
+    # leaves filter-hidden rows pinned in place with their data; a sort
+    # over MANUALLY hidden rows (no filter) moves every row while the
+    # hidden flags stay with the row POSITIONS. The old code always did
+    # the latter, so a sort after set_filter left the filter hiding the
+    # WRONG rows with zero warnings (fresh-eyes round, M-2).
+    hidden_rows = [r for r in range(data_top, max_row + 1)
+                   if ws.row_dimensions[r].hidden]
+    pin_hidden = bool(hidden_rows) and bool(ws.auto_filter.ref)
+    if pin_hidden:
+        hidden_set = set(hidden_rows)
+        sortable_rows = [r for r in range(data_top, max_row + 1)
+                         if r not in hidden_set]
+    else:
+        sortable_rows = list(range(data_top, max_row + 1))
+
     key_offsets = {o for o, _rev in key_specs}
     uncached_keys = 0
     #: Formula cells in the sorted block that DID have a cached value. The
@@ -128,7 +145,7 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
     #: numbers (insane round, M-5).
     dropped_cache = 0
     rows = []
-    for r in range(data_top, max_row + 1):
+    for r in sortable_rows:
         vals, styles, sortvals, texts = [], [], [], []
         for c in range(min_col, max_col + 1):
             cell = ws.cell(r, c)
@@ -156,7 +173,7 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
 
     wrote_formula = False
     for i, row in enumerate(rows):
-        dest_r = data_top + i
+        dest_r = sortable_rows[i]
         dr = dest_r - row["src"]
         for j, (val, style, is_text) in enumerate(
                 zip(row["vals"], row["styles"], row["text"])):
@@ -177,12 +194,26 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
         pkg._formula_written = True
     pkg._changed["sorted"] = {
         "sheet": grid.sheet, "range": grid.a1,
-        "rows_sorted": len(rows), "keys": [
+        "rows_sorted": len(rows),
+        **({"rows_pinned_hidden": len(hidden_rows)} if pin_hidden else {}),
+        "keys": [
             {"column": header_names[o] if o < len(header_names) else o,
              "order": "desc" if rev else "asc"} for o, rev in key_specs]}
     result = pkg.save(allow_loss=allow_loss, backup=backup,
                       verify_com=verify_com)
     notes: list[str] = []
+    if pin_hidden:
+        notes.append(
+            f"{len(hidden_rows)} filter-hidden row(s) were left in place "
+            "and excluded from the sort, matching Excel's semantics for "
+            "sorting a filtered range; clear_filter first to sort every "
+            "row.")
+    elif hidden_rows:
+        notes.append(
+            f"{len(hidden_rows)} manually hidden row(s) were sorted along "
+            "with the visible rows (Excel's own behavior without a "
+            "filter); hidden flags stay with the row POSITIONS, so "
+            "different rows may be hidden now.")
     if uncached_keys:
         notes.append(
             f"{uncached_keys} sort-key cell(s) hold a formula with no cached "

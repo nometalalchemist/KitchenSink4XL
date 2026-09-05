@@ -655,9 +655,28 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
                 "group_by": gbs, "groups": out_groups,
                 "matched": matched, "scanned": scanned,
             }
+            # Honesty about the Excel-semantics exclusion: numeric-looking
+            # TEXT in a summed/averaged column is ignored exactly as Excel
+            # ignores it, but silently ignoring it hides dirty data.
+            num_cols = {col_i(a["column"]) for a in aggregate
+                        if a["func"] in _NUMERIC_AGGS and "column" in a}
+            excluded_text = sum(
+                1 for row in matched_rows for ci in num_cols
+                if ci < len(row) and isinstance(row[ci], str)
+                and row[ci] != "" and _num(row[ci]) is not None)
+            warns = []
+            if excluded_text:
+                warns.append(
+                    f"{excluded_text} cell(s) in aggregated column(s) hold "
+                    "TEXT that merely looks numeric ('007'-style); they "
+                    "were excluded from sum/avg/min/max, matching Excel's "
+                    "SUM/AVERAGE semantics. Convert them to real numbers "
+                    "if they should count.")
             if stale_note:
-                agg_out["warning"] = stale_note
+                warns.append(stale_note)
                 agg_out["uncalculated_cells"] = stale_cells[:100]
+            if warns:
+                agg_out["warning"] = " ".join(warns)
             return agg_out
 
         # sort BEFORE projection, so order_by works on any source column,
@@ -736,6 +755,19 @@ def _agg_label(a: dict) -> str:
                            else a["func"])
 
 
+#: Aggregates that consume only NUMERIC cells, Excel's way.
+_NUMERIC_AGGS = frozenset({"sum", "avg", "mean", "min", "max"})
+
+
+def _agg_numeric(v) -> bool:
+    """A value Excel's SUM/AVERAGE/MIN/MAX would consume: a real number.
+    Text is ignored even when it LOOKS numeric ('007'), and so are
+    booleans -- COM ground truth 2026-09-05: SUM over a mixed column
+    matched exactly this rule while the old float() coercion pulled text
+    in and disagreed with Excel's own cell by 7 (fresh-eyes round, M-3)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def _apply_agg(func: str, vals: list):
     nonblank = [v for v in vals if v is not None and v != ""]
     if func == "count":
@@ -748,7 +780,7 @@ def _apply_agg(func: str, vals: list):
         return nonblank[0] if nonblank else None
     if func == "last":
         return nonblank[-1] if nonblank else None
-    nums = [n for n in (_num(v) for v in nonblank) if n is not None]
+    nums = [v for v in nonblank if _agg_numeric(v)]
     if func in ("sum", "avg", "mean") and not nums:
         return 0 if func == "sum" else None
     if func == "sum":
@@ -756,7 +788,10 @@ def _apply_agg(func: str, vals: list):
     if func in ("avg", "mean"):
         return _round(sum(nums) / len(nums)) if nums else None
     if func in ("min", "max"):
-        pool = nums if nums else nonblank
+        # Lexical fallback ONLY when the column holds no numbers at all
+        # (Excel returns 0 there, which answers nothing; the docstring
+        # declares this divergence).
+        pool = nums if nums else [str(v) for v in nonblank]
         if not pool:
             return None
         return min(pool) if func == "min" else max(pool)

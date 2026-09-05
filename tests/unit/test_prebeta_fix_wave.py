@@ -525,3 +525,114 @@ class TestRecoveryDiscoverability:
         except Exception as exc:  # noqa: BLE001
             payload = envelope.refusal(exc)
         assert "manage_backups" in payload["error"]["hint"]
+
+
+# ======================================================================
+# Fresh-eyes M-2: sort must respect filter-hidden rows (COM ground truth)
+# ======================================================================
+
+
+_FILTER_DATA = [["Name", "Region", "Amount"],
+                ["Alice", "East", 10],
+                ["Bob", "West", 50],
+                ["Carol", "East", 30],
+                ["Dana", "West", 20],
+                ["Eve", "West", 40]]
+
+
+class TestSortVsHiddenRows:
+    def test_filter_hidden_rows_stay_pinned(self, tmp_path):
+        # exact repro: filter Region=eq=East (hides Bob/Dana/Eve), then
+        # sort by Amount desc. Excel (COM ground truth 2026-09-05): only
+        # the visible rows sort (Carol 30 above Alice 10); hidden rows
+        # keep their data and their positions.
+        book = _make_book(tmp_path / "f.xlsx", _FILTER_DATA)
+        sortfilter.set_filter(
+            str(book), {"range": "A1:C6"},
+            criteria=[{"column": "Region", "op": "eq", "value": "East"}])
+        r = sortfilter.sort_range(
+            str(book), {"range": "A1:C6"},
+            keys=[{"column": "Amount", "order": "desc"}])
+        assert any("filter-hidden" in w for w in r.get("warnings", []))
+        wb = openpyxl.load_workbook(book)
+        ws = wb["S"]
+        got = [(ws.cell(r_, 1).value, ws.cell(r_, 3).value,
+                bool(ws.row_dimensions[r_].hidden))
+               for r_ in range(2, 7)]
+        assert got == [("Carol", 30, False),   # visible, sorted desc
+                       ("Bob", 50, True),      # pinned, still hidden
+                       ("Alice", 10, False),
+                       ("Dana", 20, True),
+                       ("Eve", 40, True)]
+        wb.close()
+
+    def test_manual_hidden_rows_sort_like_excel_with_warning(self,
+                                                             tmp_path):
+        # no filter: Excel sorts manually hidden rows along with the rest
+        # (flags stay positional); we mirror it but SAY so
+        book = _make_book(tmp_path / "m.xlsx", _FILTER_DATA)
+        wb = openpyxl.load_workbook(book)
+        wb["S"].row_dimensions[4].hidden = True  # Carol
+        wb.save(book)
+        r = sortfilter.sort_range(
+            str(book), {"range": "A1:C6"},
+            keys=[{"column": "Amount", "order": "desc"}])
+        assert any("manually hidden" in w for w in r.get("warnings", []))
+        wb = openpyxl.load_workbook(book)
+        ws = wb["S"]
+        amounts = [ws.cell(r_, 3).value for r_ in range(2, 7)]
+        assert amounts == [50, 40, 30, 20, 10]  # full sort, like Excel
+        wb.close()
+
+
+# ======================================================================
+# Fresh-eyes M-3: aggregates follow Excel (text/booleans ignored)
+# ======================================================================
+
+
+class TestAggregateExcelSemantics:
+    @pytest.fixture()
+    def oracle(self, tmp_path):
+        # the report's oracle column (minus the uncached formula)
+        p = tmp_path / "agg.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "S"
+        ws["A1"] = "V"
+        vals = [0.1, 0.2, "007", True, None, "text", -5,
+                "2024-01-15", 1e15]
+        for i, v in enumerate(vals, start=2):
+            ws.cell(i, 1, v)
+        wb.save(p)
+        return p
+
+    def test_sum_avg_count_min_max_match_excel(self, oracle):
+        r = cells_ops.query_range(
+            str(oracle), aggregate=[
+                {"column": "V", "func": "sum"},
+                {"column": "V", "func": "avg"},
+                {"column": "V", "func": "count"},
+                {"column": "V", "func": "min"},
+                {"column": "V", "func": "max"}])
+        aggs = r["groups"][0]["aggregates"]
+        # Excel ground truth (COM, 2026-09-05): SUM ignores "007", TRUE,
+        # "text", "2024-01-15"; = 0.1+0.2-5+1e15
+        assert aggs["sum_V"] == pytest.approx(999999999999995.3)
+        assert aggs["avg_V"] == pytest.approx(999999999999995.3 / 4)
+        assert aggs["min_V"] == -5
+        assert aggs["max_V"] == pytest.approx(1e15)
+        # count stays the documented RAW row count (not Excel COUNT)
+        assert aggs["count_V"] == 9
+        # the excluded numeric-looking text is reported, not silent
+        assert "007" in r.get("warning", "") or \
+            "look" in r.get("warning", "")
+
+    def test_pure_numeric_column_unchanged(self, tmp_path):
+        book = _make_book(tmp_path / "n.xlsx",
+                          [["X"], [1], [2], [3]])
+        r = cells_ops.query_range(
+            str(book), aggregate=[{"column": "X", "func": "sum"},
+                                  {"column": "X", "func": "avg"}])
+        aggs = r["groups"][0]["aggregates"]
+        assert aggs["sum_X"] == 6 and aggs["avg_X"] == 2
+        assert "warning" not in r

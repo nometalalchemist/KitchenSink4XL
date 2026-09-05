@@ -404,20 +404,20 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     a list of {column, op, value} predicates joined by match ('all' or 'any');
     ops: eq, ne, gt, ge, lt, le, contains, startswith, endswith, regex, in,
     not_in, is_blank, not_blank. columns projects a subset; order_by is a list
-    of {column, dir} specs (dir 'asc'|'desc', also 'order'/'direction'; an
-    unknown direction refuses); offset and limit page; distinct dedupes.
-    aggregate is a list of {column, func} (count, count_nonblank,
-    count_distinct, sum, avg, min, max, first, last), optionally per group_by
-    (name or list; JSON-string tolerated), returning group summaries instead of
-    rows. Rows come back as compact arrays, or objects when records=true, with
-    matched, returned, and scanned counts.
+    of {column, dir} specs (unknown directions refuse); offset and limit page;
+    distinct dedupes. aggregate is a list of {column, func} (count,
+    count_nonblank, count_distinct, sum, avg, min, max, first, last),
+    optionally per group_by, returning group summaries (records=true
+    emits objects).
 
-    Semantics: predicates evaluate CACHED and literal values, so an
-    uncalculated formula cell reads as blank (recalc or open in Excel for exact
-    results); gt/ge/lt/le compare numerically when both sides coerce, else
-    case-folded text, and a blank never satisfies an ordered comparison; regex
-    is unanchored (anchor with ^ and $), timeout-guarded; contains/startswith/
-    endswith are case-insensitive. Read-only."""
+    Semantics: predicates read CACHED and literal values (uncalculated
+    formulas read as blank; recalc for exact results); gt/ge/lt/le compare
+    numerically when both sides coerce, else case-folded text; blanks
+    never satisfy ordered comparisons; regex is timeout-guarded.
+    Aggregates follow Excel: sum/avg/min/max consume NUMERIC cells only
+    (text and booleans ignored even when text looks numeric; exclusions
+    are reported); count is the RAW row count, unlike Excel COUNT; min/max
+    fall back to text when no numbers exist. Read-only."""
     return _cells.query_range(
         path, location=location, sheet=sheet, header=header, columns=columns,
         where=where, match=match, order_by=order_by, aggregate=aggregate,
@@ -699,13 +699,13 @@ def sort_range(path: str, location: Any, keys: list, has_header: bool = True,
                backup: bool = True,
                verify_com: bool | None = None) -> dict:
     """Sort a range or table body by one or more keys, writing the rows back
-    reordered. keys is a list of {column, order}: a header name, letter, or
-    1-based index; asc or desc; later keys break ties. has_header true keeps
-    the first row put. Moved formulas shift relative refs by their row
-    displacement (Excel semantics); keys compare cached values, warning on
-    uncalculated formulas. Hazardous workbooks refuse unless allow_loss is
-    true. Auto-backup (prev slot is the undo); atomic verified save. Refuses
-    while open in Excel."""
+    reordered. keys is a list of {column, order}: header name, letter, or
+    1-based index; asc or desc; later keys break ties. has_header keeps
+    the first row put. Moved formulas shift relative refs (Excel
+    semantics); keys compare cached values, warning when uncalculated.
+    Filter-hidden rows stay pinned and unsorted, as in Excel. Hazardous
+    workbooks need allow_loss. Auto-backup (prev is the undo); atomic
+    verified save. Refuses while open in Excel."""
     return _sortfilter.sort_range(
         path, location, keys, has_header=has_header, sheet=sheet,
         allow_loss=allow_loss, backup=backup, verify_com=verify_com)
