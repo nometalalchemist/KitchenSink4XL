@@ -30,17 +30,35 @@ PLAN.md
 DESIGN.md
 KICKOFF.md
 BUILD_LOG.md
+*_KICKOFF.md
+*_PLAN.md
+*_DESIGN.md
+*_QUEUE.md
+*_SHIP_RUNBOOK.md
 research/
+docs/internal/
+
+# Private feedback, in and out of the repo (defensive, mirroring the Word
+# repo: these files carry named people and unredacted workbook paths).
+Developer Feedback/
+Brand Feedback/
+*-feedback.md
+*-Community-Feedback.md
+kitchensink4xl-feedback.md
 
 # Build artifacts
 dist/
 build/
 
-# Packed bundles ship as release assets, not commits
+# Packed bundles ship as release assets, not commits. The bundle SOURCE
+# (manifest.json, icon.png, make_icon.py, smoke_test.py, README-bundle.md)
+# IS committed, exactly as in the Word repo: it is how the one-click Desktop
+# install gets rebuilt each release. The old blanket `bundle/` rule here
+# would have hidden all of that.
 bundle/*.mcpb
-bundle/
 
-# Staging / integration snippets (never shipped)
+# Staging / integration snippets (never shipped). The adversarial and COM
+# stress journals land here, and they carry real machine paths.
 integration/
 
 # Temp
