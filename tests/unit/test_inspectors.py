@@ -16,6 +16,7 @@ import hashlib
 import os
 import shutil
 import struct
+from pathlib import Path
 import zipfile
 
 import pytest
@@ -394,3 +395,69 @@ def test_get_connections_absent(tmp_path):
     assert out["count"] == 0
     assert out["power_query"]["present"] is False
     assert out["sensitive"] is False
+
+
+# ======================================================================
+# The VBA module-name code page (first public CI run, Linux)
+#
+# MS-OVBA stores module names in the code page the PROJECTCODEPAGE record
+# names. The parser used to decode them with `mbcs`, the host's Windows ANSI
+# code page: wrong whenever a project's page differs from the reader's, and
+# on Linux not a registered codec at all, so `inspect_vba` degraded to
+# "module names could not be extracted" for EVERY real VBA project on any
+# non-Windows host. These pin the fix.
+# ======================================================================
+
+
+def _dir_stream_with_codepage(codepage, name_bytes):
+    """A dir stream declaring `codepage` and carrying one module name."""
+    out = b""
+    out += _tlv(0x0001, struct.pack("<I", 0x409))
+    if codepage is not None:
+        out += _tlv(0x0003, struct.pack("<H", codepage))
+    out += struct.pack("<HI", 0x0009, 4) + struct.pack("<IH", 3, 1)
+    out += _tlv(0x000F, struct.pack("<H", 1))
+    out += _tlv(0x0019, name_bytes)
+    out += _tlv(0x001A, name_bytes)
+    out += _tlv(0x0021, b"")
+    out += _tlv(0x0010, b"")
+    return out
+
+
+def test_module_names_use_the_projects_declared_code_page():
+    """A name is decoded with the code page the FILE declares, not the
+    reader's. 0xE9 is 'é' in cp1252 and 'й' in cp1251; the record decides."""
+    latin = _inspectors._parse_dir_stream(
+        _dir_stream_with_codepage(1252, b"caf\xe9"))
+    assert [m["name"] for m in latin] == ["café"]
+
+    cyrillic = _inspectors._parse_dir_stream(
+        _dir_stream_with_codepage(1251, b"caf\xe9"))
+    assert [m["name"] for m in cyrillic] == ["cafй"]
+
+
+def test_an_unknown_code_page_falls_back_instead_of_losing_the_modules():
+    """A project declaring a code page this interpreter has no codec for
+    still yields its modules. Losing every module name because one codec is
+    missing is the failure this whole fix is about."""
+    mods = _inspectors._parse_dir_stream(
+        _dir_stream_with_codepage(64999, b"Module1"))
+    assert [m["name"] for m in mods] == ["Module1"]
+    mods = _inspectors._parse_dir_stream(
+        _dir_stream_with_codepage(None, b"Module1"))
+    assert [m["name"] for m in mods] == ["Module1"]
+
+
+def test_the_parser_never_asks_for_the_mbcs_codec():
+    """mbcs exists only on Windows. Asking for it by name is what made this
+    inspector Windows-only, so nothing here may name it again."""
+    src = Path(_inspectors.__file__).read_text(encoding="utf-8")
+    for literal in ('.decode("mbcs"', ".decode('mbcs'",
+                    'codecs.lookup("mbcs"', "codecs.lookup('mbcs'"):
+        assert literal not in src, (
+            f"inspectors.py still calls {literal!r}; that codec does not "
+            "exist off Windows"
+        )
+    assert _inspectors._ovba_codec(None) == "cp1252"
+    assert _inspectors._ovba_codec(1251) == "cp1251"
+    assert _inspectors._ovba_codec(64999) == "cp1252"

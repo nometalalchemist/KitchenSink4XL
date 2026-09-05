@@ -27,6 +27,7 @@ for reading and reports.
 
 from __future__ import annotations
 
+import codecs
 import os
 import struct
 import zipfile
@@ -304,13 +305,42 @@ def _ovba_decompress(data: bytes) -> bytes:
     return bytes(out)
 
 
+#: Fallback for MODULENAME bytes when the project declares no code page, or
+#: declares one this interpreter has no codec for. Windows-1252 is the
+#: overwhelmingly common case and decodes every byte, so a name is never lost
+#: to a decode error; a wrong-but-present name still beats no modules at all.
+_OVBA_FALLBACK_CODEPAGE = "cp1252"
+
+
+def _ovba_codec(codepage: int | None) -> str:
+    """The codec for MODULENAME bytes, from the project's own declaration.
+
+    MS-OVBA stores module names in the code page the PROJECTCODEPAGE record
+    (0x0003) names, NOT in the code page of whatever machine happens to be
+    reading the file. This used to decode with `mbcs`, which is an alias for
+    the host's Windows ANSI code page: wrong whenever the two differ, and on
+    Linux not a codec at all, so every real VBA project degraded to "could
+    not be extracted" on any non-Windows host.
+    """
+    if codepage:
+        candidate = f"cp{int(codepage)}"
+        try:
+            codecs.lookup(candidate)
+        except LookupError:
+            pass
+        else:
+            return candidate
+    return _OVBA_FALLBACK_CODEPAGE
+
+
 def _parse_dir_stream(data: bytes) -> list[dict]:
     """Extract module records from a decompressed dir stream (MS-OVBA
-    2.3.4.2): a TLV walk collecting MODULENAME (0x0019), MODULESTREAMNAME
-    (0x001A), and the module type ids, honoring the PROJECTVERSION (0x0009)
-    fixed-size quirk."""
+    2.3.4.2): a TLV walk collecting PROJECTCODEPAGE (0x0003), MODULENAME
+    (0x0019), MODULESTREAMNAME (0x001A), and the module type ids, honoring
+    the PROJECTVERSION (0x0009) fixed-size quirk."""
     modules: list[dict] = []
     current: dict | None = None
+    codec = _OVBA_FALLBACK_CODEPAGE
     pos = 0
     while pos + 6 <= len(data):
         (rec_id, size) = struct.unpack_from("<HI", data, pos)
@@ -319,11 +349,16 @@ def _parse_dir_stream(data: bytes) -> list[dict]:
             size = 6
         payload = data[pos:pos + size]
         pos += size
-        if rec_id == 0x0019:  # MODULENAME
-            current = {"name": payload.decode("mbcs", "replace")}
+        if rec_id == 0x0003 and len(payload) >= 2:  # PROJECTCODEPAGE
+            # Declared before any module record, so one forward pass is
+            # enough and every name below is decoded with the right codec.
+            (declared,) = struct.unpack_from("<H", payload, 0)
+            codec = _ovba_codec(declared)
+        elif rec_id == 0x0019:  # MODULENAME
+            current = {"name": payload.decode(codec, "replace")}
             modules.append(current)
         elif rec_id == 0x001A and current is not None:  # MODULESTREAMNAME
-            current["stream"] = payload.decode("mbcs", "replace")
+            current["stream"] = payload.decode(codec, "replace")
         elif rec_id == 0x0021 and current is not None:
             current["type"] = "procedural"
         elif rec_id == 0x0022 and current is not None:
