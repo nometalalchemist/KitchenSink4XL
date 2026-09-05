@@ -120,6 +120,10 @@ class WorkbookPackage:
         pkg = cls(p, com_manager=com_manager)
         rep = _hazard.scan_path(p)
         if rep.error is not None:
+            # A lock is not corruption: the wrong word sends a panicked
+            # owner toward a destructive "repair" (destroyer round, M-2).
+            if rep.error_kind == "locked":
+                raise WorkbookLocked(f"{p}: {rep.error}")
             raise WorkbookCorrupt(f"{p}: {rep.error}")
         pkg._hazard = rep
         pkg._pre_parts = list(rep.parts)
@@ -161,13 +165,26 @@ class WorkbookPackage:
         """The openpyxl workbook, loaded on first access. keep_vba is set for
         .xlsm so the VBA project survives the round-trip (Phase 1 finding 4)."""
         if self._workbook is None:
+            import zipfile as _zipfile
             import openpyxl
             import warnings as _warnings
-            with _warnings.catch_warnings(record=True) as caught:
-                _warnings.simplefilter("always")
-                self._workbook = openpyxl.load_workbook(
-                    self.path, keep_vba=self._keep_vba, data_only=False,
-                    rich_text=False)
+            try:
+                with _warnings.catch_warnings(record=True) as caught:
+                    _warnings.simplefilter("always")
+                    self._workbook = openpyxl.load_workbook(
+                        self.path, keep_vba=self._keep_vba, data_only=False,
+                        rich_text=False)
+            except _zipfile.BadZipFile:
+                # The promised conversion: a mutation-path load must refuse
+                # as WorkbookCorrupt, never a raw BadZipFile (destroyer
+                # round, L-4) -- unless a byte-range lock is the real cause.
+                if _hazard.file_read_blocked(self.path):
+                    raise WorkbookLocked(
+                        f"{self.path}: {_hazard._LOCKED_ERROR}") from None
+                raise WorkbookCorrupt(
+                    f"{self.path} is not a valid .xlsx/.xlsm package (the "
+                    "zip structure is damaged); the file was NOT modified"
+                ) from None
             self._dropped_extensions = _extension_drops(caught)
         return self._workbook
 
@@ -527,6 +544,7 @@ class WorkbookPackage:
                     "session likely crashed. Proceeding; the ~$ file can "
                     "be deleted safely")
 
+            _sweep_stale_write_tmps(os.path.dirname(os.path.abspath(path)))
             tmp = os.path.join(
                 os.path.dirname(os.path.abspath(path)) or ".",
                 f".ks4xl-write-{uuid.uuid4().hex}{Path(path).suffix}")
@@ -537,6 +555,15 @@ class WorkbookPackage:
                 raise WorkbookLocked(
                     f"{Path(path).name}: cannot write (it may be open in "
                     f"Excel). {exc}")
+            except OSError as exc:
+                # Disk-full and friends: the refusal is environmental, not
+                # the caller's parameters, and the half-written temp must
+                # not linger (destroyer round, L-2).
+                _silent_remove(tmp)
+                raise _os_write_error(Path(path).name, exc)
+            except BaseException:
+                _silent_remove(tmp)
+                raise
 
             pre = self._run_verify(tmp, allow_loss)
             if not pre.ok:
@@ -563,6 +590,11 @@ class WorkbookPackage:
                 raise WorkbookLocked(
                     f"{Path(path).name}: cannot replace the file (it may be "
                     f"open in Excel). {exc}")
+            except OSError as exc:
+                if ticket is not None:
+                    ticket.abort()
+                _silent_remove(tmp)
+                raise _os_write_error(Path(path).name, exc)
             except BaseException:
                 if ticket is not None:
                     ticket.abort()
@@ -729,6 +761,54 @@ def _extension_drops(caught) -> list[str]:
 def _silent_remove(path: str) -> None:
     try:
         os.remove(path)
+    except OSError:
+        pass
+
+
+def _os_write_error(name: str, exc: OSError) -> XlMcpError:
+    """An honest refusal for OS-level write failures. Disk-full used to map
+    to BAD_PARAMS ("the caller's mistake") with the raw errno text
+    (destroyer round, L-2); it is the environment's state, so it carries
+    CONFLICT and says so in plain words. The original file is intact in
+    every case: the failure happened on the temp or at the promote, never
+    mid-way through the workbook's own bytes."""
+    err = XlMcpError(
+        (f"{name}: the disk is full (no space left to write the new "
+         "version). The original file is intact and was NOT modified; free "
+         "some disk space and retry.")
+        if getattr(exc, "errno", None) == 28 else
+        (f"{name}: the operating system refused the write "
+         f"({type(exc).__name__}: {exc}). The original file is intact and "
+         "was NOT modified."))
+    err.code = "CONFLICT"
+    return err
+
+
+#: A .ks4xl-write-* temp older than this is an orphan from a killed process
+#: (no mutation legitimately runs this long; the write lock's stale window
+#: is 10 minutes) and is swept on the next save in the same folder. Kill
+#: storms left these forever; the write.lock self-heals, the temps did not
+#: (destroyer round, L-2).
+_STALE_TMP_SECONDS = 60 * 60
+
+
+def _sweep_stale_write_tmps(directory: str) -> None:
+    """Best-effort janitor for aged .ks4xl-write-* temp files. Runs under
+    the write lock on the save path; a FRESH temp (a concurrent writer's
+    live work) is never touched."""
+    try:
+        now = __import__("time").time()
+        with os.scandir(directory or ".") as it:
+            for entry in it:
+                if not entry.name.startswith(".ks4xl-write-"):
+                    continue
+                try:
+                    if not entry.is_file():
+                        continue
+                    if now - entry.stat().st_mtime > _STALE_TMP_SECONDS:
+                        os.remove(entry.path)
+                except OSError:
+                    continue
     except OSError:
         pass
 

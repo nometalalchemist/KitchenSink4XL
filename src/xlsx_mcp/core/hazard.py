@@ -408,6 +408,12 @@ class HazardReport:
     #: empty for scan_names). verify-after-write uses these to catch a fragile
     #: part REPLACED with empty content rather than dropped outright.
     sizes: dict[str, int] = field(default_factory=dict)
+    #: WHY the scan failed: "corrupt" | "missing" | "locked" | None. A
+    #: byte-range-locked (but healthy) file makes zipfile raise BadZipFile
+    #: when the lock covers the central directory, and telling the owner of
+    #: a 1-of-1 heirloom the file is CORRUPT when an indexer/AV merely holds
+    #: a region lock invites a destructive "repair" (destroyer round, M-2).
+    error_kind: str | None = None
 
     @property
     def clean(self) -> bool:
@@ -678,11 +684,51 @@ def scan_path(path: str) -> HazardReport:
             rep.sizes = sizes
             return rep
     except zipfile.BadZipFile:
+        # zipfile answers "not a zip" for a file it could not fully READ
+        # too: a byte-range lock over the central directory surfaces as
+        # BadZipFile. Probe before diagnosing corruption; the wrong word
+        # here sends a panicked owner to a destructive "repair".
+        if file_read_blocked(path):
+            return HazardReport(
+                path=path, parts=[], hazards=[], error=_LOCKED_ERROR,
+                error_kind="locked")
         return HazardReport(path=path, parts=[], hazards=[],
-                            error="not a valid zip / OOXML package")
+                            error="not a valid zip / OOXML package",
+                            error_kind="corrupt")
     except FileNotFoundError:
         return HazardReport(path=path, parts=[], hazards=[],
-                            error="file not found")
+                            error="file not found", error_kind="missing")
+    except PermissionError:
+        return HazardReport(
+            path=path, parts=[], hazards=[], error=_LOCKED_ERROR,
+            error_kind="locked")
+    except OSError as exc:
+        return HazardReport(
+            path=path, parts=[], hazards=[],
+            error=f"cannot read the file ({type(exc).__name__}: {exc})",
+            error_kind="os")
+
+
+_LOCKED_ERROR = (
+    "another process holds a lock on part of this file (an antivirus "
+    "scanner, indexer, or app with a byte-range lock); the file itself may "
+    "be perfectly intact. Wait for the other process to release it, or "
+    "close whatever holds it open, then retry")
+
+
+def file_read_blocked(path: str) -> bool:
+    """True when reading the file end to end fails with an access error,
+    i.e. some process holds a byte-range or exclusive lock. Only consulted
+    on failure paths, so the full read is paid rarely."""
+    try:
+        with open(path, "rb") as fh:
+            while fh.read(1 << 20):
+                pass
+        return False
+    except PermissionError:
+        return True
+    except OSError as exc:
+        return getattr(exc, "errno", None) == 13
 
 
 def route(

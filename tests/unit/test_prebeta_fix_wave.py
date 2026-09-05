@@ -300,3 +300,83 @@ class TestPromoteFailureKeepsPrev:
         # no staged .slot-*.tmp litter left behind
         litter = list(slot.parent.glob(".slot-*.tmp"))
         assert litter == []
+
+
+# ======================================================================
+# Destroyer M-2: a byte-range-locked healthy file is NOT "corrupt"
+# ======================================================================
+
+
+class TestLockedNotCorrupt:
+    def test_region_lock_diagnosed_as_locked(self, tmp_path):
+        import msvcrt
+        from xlsx_mcp.core.package import WorkbookPackage
+        book = _make_book(tmp_path / "b.xlsx", [["x", 1]])
+        size = os.path.getsize(book)
+        fh = open(book, "r+b")
+        try:
+            # lock the tail (covers the central directory -> BadZipFile)
+            start, n = max(0, size - 1000), 1000
+            fh.seek(start)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, n)
+            with pytest.raises(WorkbookLocked) as ei:
+                WorkbookPackage.open(str(book))
+            assert "lock" in str(ei.value).lower()
+            assert "corrupt" not in str(ei.value).lower() or \
+                "may be perfectly intact" in str(ei.value)
+        finally:
+            fh.seek(start)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, n)
+            fh.close()
+        # released: the file is intact and works again
+        openpyxl.load_workbook(book).close()
+
+    def test_head_trashed_mutation_says_workbook_corrupt(self, tmp_path):
+        # destroyer L-4: the mutation path promised WorkbookCorrupt, not a
+        # raw BadZipFile
+        from xlsx_mcp.core.package import WorkbookPackage
+        book = _make_book(tmp_path / "b.xlsx", [["x", 1]])
+        book.write_bytes(_head_trashed(book.read_bytes()))
+        with pytest.raises(WorkbookCorrupt):
+            pkg = WorkbookPackage.open(str(book))
+            _ = pkg.workbook
+
+
+# ======================================================================
+# Destroyer L-2: disk-full is not the caller's mistake, and temps clean up
+# ======================================================================
+
+
+class TestDiskFullHonesty:
+    def test_enospc_labeled_and_no_litter(self, tmp_path):
+        from xlsx_mcp.core.package import WorkbookPackage
+        book = _make_book(tmp_path / "b.xlsx", [["x", 1]])
+        before = book.read_bytes()
+        pkg = WorkbookPackage.open(str(book))
+        pkg.set_cell("S", "A1", "y")
+
+        def full_disk(tmp):
+            with open(tmp, "wb") as fh:
+                fh.write(b"partial")
+            raise OSError(28, "No space left on device")
+
+        with pytest.raises(XlMcpError) as ei:
+            pkg.save(saver=full_disk)
+        assert getattr(ei.value, "code", None) == "CONFLICT"
+        assert "disk is full" in str(ei.value)
+        assert "NOT modified" in str(ei.value)
+        assert book.read_bytes() == before
+        assert list(tmp_path.glob(".ks4xl-write-*")) == []
+
+    def test_janitor_sweeps_aged_tmps_not_fresh(self, tmp_path):
+        import time
+        book = _make_book(tmp_path / "b.xlsx", [["x", 1]])
+        aged = tmp_path / ".ks4xl-write-deadbeef.xlsx"
+        aged.write_bytes(b"orphan")
+        old = time.time() - 2 * 60 * 60
+        os.utime(aged, (old, old))
+        fresh = tmp_path / ".ks4xl-write-cafebabe.xlsx"
+        fresh.write_bytes(b"live")
+        cells_ops.set_cell(str(book), {"cell": "A1"}, "y")
+        assert not aged.exists()
+        assert fresh.exists()
