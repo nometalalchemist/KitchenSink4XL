@@ -206,3 +206,97 @@ class TestSheetNameApostrophe:
         r = lifecycle.manage_worksheet(str(victim), "add",
                                        new_name="It's fine")
         assert r["ok"]  # apostrophe INSIDE a name is legal
+
+
+# ======================================================================
+# Destroyer H-3: restore must validate like the verify gate
+# ======================================================================
+
+
+def _head_trashed(payload: bytes) -> bytes:
+    """The destroyer's exact corruption shape: intact central directory,
+    zeroed local headers (torn write / bad sector)."""
+    return b"\x00" * 4096 + payload[4096:]
+
+
+class TestRestoreValidation:
+    def _prep(self, tmp_path):
+        book = _make_book(tmp_path / "b.xlsx",
+                          [["v", 1], ["w", 2]])
+        good = book.read_bytes()
+        cells_ops.set_cell(str(book), {"cell": "A1"}, "mutated")
+        return book, good
+
+    def test_head_trashed_slot_refuses_restore(self, tmp_path):
+        book, good = self._prep(tmp_path)
+        slot = safesave.slot_dir(book) / safesave.PREV_SLOT
+        assert slot.exists()
+        # namelist still works on the trashed payload (central dir intact)
+        trashed = _head_trashed(slot.read_bytes())
+        slot.write_bytes(trashed)
+        import io as _io
+        assert zipfile.ZipFile(_io.BytesIO(trashed)).namelist()
+        after_mutation = book.read_bytes()
+        with pytest.raises(ValidationFailed):
+            backups_ops.restore_backup(str(book), "prev")
+        # the workbook was never touched and no corruption was installed
+        assert book.read_bytes() == after_mutation
+        openpyxl.load_workbook(book).close()
+
+    def test_second_restore_never_reinstalls_corruption(self, tmp_path):
+        # the worst-day drill: working file corrupt, restore prev recovers,
+        # a second careless restore must refuse rather than put the corrupt
+        # bytes back with a success message
+        book, good = self._prep(tmp_path)
+        corrupt = _head_trashed(book.read_bytes())
+        book.write_bytes(corrupt)
+        r = backups_ops.restore_backup(str(book), "prev")
+        assert r["prev_rotated"]
+        openpyxl.load_workbook(book).close()  # recovered
+        # prev now holds the corrupt pre-restore state; restoring it again
+        # must refuse, not reinstall the corruption
+        with pytest.raises(ValidationFailed):
+            backups_ops.restore_backup(str(book), "prev")
+        openpyxl.load_workbook(book).close()  # still good
+
+    def test_valid_restore_still_works(self, tmp_path):
+        book, good = self._prep(tmp_path)
+        r = backups_ops.restore_backup(str(book), "prev")
+        assert r["restored"]
+        assert book.read_bytes() == good
+
+
+# ======================================================================
+# Destroyer M-1: a failed promote must not burn the prev undo slot
+# ======================================================================
+
+
+class TestPromoteFailureKeepsPrev:
+    def test_prev_survives_failed_promote(self, tmp_path, monkeypatch):
+        book = _make_book(tmp_path / "b.xlsx", [["A", 1]])
+        cells_ops.set_cell(str(book), {"cell": "A1"}, "B")
+        slot = safesave.slot_dir(book) / safesave.PREV_SLOT
+        prev_before = slot.read_bytes()  # state before the B mutation
+
+        real_replace = safesave.replace_with_retry
+        target = os.path.normcase(os.path.abspath(str(book)))
+
+        def failing_replace(src, dst):
+            if os.path.normcase(os.path.abspath(os.fspath(dst))) == target:
+                raise PermissionError("simulated: file grabbed at promote")
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(safesave, "replace_with_retry", failing_replace)
+        with pytest.raises(WorkbookLocked):
+            cells_ops.set_cell(str(book), {"cell": "A1"}, "C")
+        monkeypatch.setattr(safesave, "replace_with_retry", real_replace)
+
+        # the refusal is honest AND the undo slot still holds the pre-B
+        # state; before the fix it held a copy of the CURRENT content
+        assert slot.read_bytes() == prev_before
+        wb = openpyxl.load_workbook(book)
+        assert wb.active["A1"].value == "B"  # file untouched by the failure
+        wb.close()
+        # no staged .slot-*.tmp litter left behind
+        litter = list(slot.parent.glob(".slot-*.tmp"))
+        assert litter == []

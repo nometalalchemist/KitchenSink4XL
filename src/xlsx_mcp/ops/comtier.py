@@ -229,10 +229,14 @@ def _run_mutation(label: str, path: str,
         pre_report = _hazard.scan_path(path)
     except Exception:
         pre_report = None
+    # Two-phase rotation (destroyer M-1, same covenant as the file tier):
+    # stage the pre-mutation content now, commit onto the slots only after
+    # Excel's save came back. A COM op that fails before or during save
+    # leaves the slots exactly as they were instead of burning prev.
     backup_slot = None
+    ticket = None
     if backup:
-        _safesave.rotate_slots(path)
-        backup_slot = "prev"
+        ticket = _safesave.prepare_rotation(path)
 
     def job(manager) -> dict:
         w = manager.acquire()
@@ -271,13 +275,28 @@ def _run_mutation(label: str, path: str,
             _session._restore_hygiene(w.app, *prior)
             manager.release_to_pool(w)
 
-    out = _session.run_com(label, job, timeout=timeout)
+    try:
+        out = _session.run_com(label, job, timeout=timeout)
+    except BaseException:
+        if ticket is not None:
+            ticket.abort()  # nothing promoted; the slots stay as they were
+        raise
+    if ticket is not None:
+        try:
+            ticket.commit()
+            backup_slot = "prev"
+        except OSError as exc:
+            ticket.abort()
+            warnings.append(
+                "the save succeeded but the backup slot rotation failed "
+                f"({type(exc).__name__}: {exc}); the prev slot still holds "
+                "the state before the PREVIOUS mutation, not this one")
 
     verified = False
     if save and password is None:
         ok, reasons = _verify.structural_check(path)
         if not ok:
-            restored = _restore_backup(path) if backup else False
+            restored = _restore_backup(path) if backup_slot else False
             raise ValidationFailed(
                 "the Excel-saved file failed the structural verify"
                 + (" and was restored from the backup" if restored else "")
@@ -805,9 +824,9 @@ def com_save_with_password(path: str, password: str,
         p, current_password if current_password else None)
     warnings = _session.guard_target_closed(p)
     backup_slot = None
+    ticket = None
     if backup:
-        _safesave.rotate_slots(p)
-        backup_slot = "prev"
+        ticket = _safesave.prepare_rotation(p)
 
     def job(manager) -> dict:
         w = manager.acquire()
@@ -840,8 +859,23 @@ def com_save_with_password(path: str, password: str,
             _session._restore_hygiene(w.app, *prior)
             manager.release_to_pool(w)
 
-    out = _session.run_com(f"encrypt({Path(p).name})", job,
-                           timeout=timeout_seconds)
+    try:
+        out = _session.run_com(f"encrypt({Path(p).name})", job,
+                               timeout=timeout_seconds)
+    except BaseException:
+        if ticket is not None:
+            ticket.abort()
+        raise
+    if ticket is not None:
+        try:
+            ticket.commit()
+            backup_slot = "prev"
+        except OSError as exc:
+            ticket.abort()
+            warnings.append(
+                "the save succeeded but the backup slot rotation failed "
+                f"({type(exc).__name__}: {exc}); the prev slot still holds "
+                "the state before the PREVIOUS mutation, not this one")
     encrypted = password != ""
     if encrypted:
         # An encrypted package is a CFB container; a plain zip open failing
@@ -859,7 +893,7 @@ def com_save_with_password(path: str, password: str,
     else:
         ok, reasons = _verify.structural_check(p)
         if not ok:
-            restored = _restore_backup(p) if backup else False
+            restored = _restore_backup(p) if backup_slot else False
             raise ValidationFailed(
                 "the decrypted save failed the structural verify"
                 + (" and was restored from the backup" if restored else "")

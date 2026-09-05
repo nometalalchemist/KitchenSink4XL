@@ -17,12 +17,10 @@ absent from its own path.
 from __future__ import annotations
 
 import datetime as _dt
-import io
 import os
 import re
 import shutil
 import uuid
-import zipfile
 from pathlib import Path
 
 from ..core import safesave
@@ -63,21 +61,26 @@ def _refuse_if_excel_locked(path: Path) -> list[str]:
     return []
 
 
-def _validate_payload(payload: bytes) -> None:
-    """The backup must be a readable OOXML workbook before it may replace
-    anything: a zip holding [Content_Types].xml and xl/workbook.xml."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(payload)) as zf:
-            names = set(zf.namelist())
-    except zipfile.BadZipFile:
+def _validate_payload_file(p: Path) -> None:
+    """The backup must be a READABLE OOXML workbook before it may replace
+    anything, judged by the same structural_check the verify gate runs:
+    zipfile.testzip over every member, well-formed worksheet/workbook XML,
+    the required parts, an openpyxl parse, and a visible sheet.
+
+    The old check read only the central directory plus two member names, so
+    a torn-write/bad-sector payload (intact central directory, trashed
+    local headers) passed and restore reported ok:true while placing a file
+    nothing can open; a second panicked restore could then reinstall the
+    corruption over the recovered good copy (destroyer round, H-3)."""
+    from ..core import verify as _verify
+    ok, reasons = _verify.structural_check(str(p))
+    if not ok:
         raise ValidationFailed(
-            "the backup payload is not a valid zip package; refusing to "
-            "restore it over the workbook") from None
-    for required in ("[Content_Types].xml", "xl/workbook.xml"):
-        if required not in names:
-            raise ValidationFailed(
-                f"the backup payload is missing {required}; refusing to "
-                "restore it over the workbook")
+            "the backup payload is not a valid workbook package ("
+            + "; ".join(reasons)
+            + "); refusing to restore it over the workbook. The other slot "
+            "(prev/anchor) or a snapshot may still hold a good copy: "
+            "manage_backups action='list' shows what exists.")
 
 
 def _stat_entry(p: Path) -> dict:
@@ -184,17 +187,20 @@ def restore_backup(path: str, source: str) -> dict:
         if target_existed:
             lock_warnings = _refuse_if_excel_locked(doc)
 
-        # Validate the backup payload BEFORE touching anything.
-        payload = src.read_bytes()
-        _validate_payload(payload)
-
         # Copy (not hardlink) the source to a temp beside the target first:
         # rotating prev below may clobber the very slot being restored
-        # from, and the restored target must own its bytes outright.
+        # from, and the restored target must own its bytes outright. The
+        # payload is validated ON THE TEMP COPY (the exact bytes about to
+        # be promoted) before anything is touched.
         d = safesave.slot_dir(doc, create=True)
-        tmp = d / f".restore-{uuid.uuid4().hex}.tmp"
+        # The temp carries .xlsx so the structural validation (an openpyxl
+        # parse among its checks) can read it; restore copies bytes, so the
+        # spelling is cosmetic exactly as it is for the slots themselves.
+        tmp = d / f".restore-{uuid.uuid4().hex}.tmp.xlsx"
         try:
             shutil.copy2(src, tmp)
+            payload_bytes = tmp.stat().st_size
+            _validate_payload_file(tmp)
             rotated_prev = False
             if target_existed:
                 safesave._place_onto_slot(doc, d / PREV_SLOT)
@@ -210,7 +216,7 @@ def restore_backup(path: str, source: str) -> dict:
     result = {
         "restored": str(doc),
         "from": source,
-        "bytes": len(payload),
+        "bytes": payload_bytes,
         "prev_rotated": rotated_prev,
     }
     if lock_warnings:

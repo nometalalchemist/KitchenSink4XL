@@ -271,6 +271,76 @@ def rotate_slots(doc_path: str | os.PathLike) -> dict:
     return rotated
 
 
+class RotationTicket:
+    """Two-phase slot rotation for the save path (destroyer round, M-1).
+
+    rotate_slots() replaces the slots IMMEDIATELY, so a mutation that then
+    failed at promote time (os.replace beaten by a lock landing between the
+    write-probe and the promote) had already burned the prev slot: prev held
+    a copy of the CURRENT content and the restore point for the previous
+    successful mutation was gone, even though nothing was written.
+
+    prepare() captures the current content into temp files inside the slot
+    folder using the same hardlink-or-copy mechanism; commit() (called only
+    AFTER a successful promote) replaces the slots; abort() unlinks the
+    temps and leaves every slot exactly as it was. The hardlinked temps keep
+    the pre-mutation inode alive across the promote, so commit still stores
+    the pre-mutation bytes even though the path now holds the new content.
+    """
+
+    def __init__(self) -> None:
+        self._moves: list[tuple[Path, Path]] = []
+        self.rotated = {"prev": False, "anchor": False}
+
+    def commit(self) -> dict:
+        for tmp, slot in self._moves:
+            replace_with_retry(tmp, slot)
+            name = "prev" if slot.name == PREV_SLOT else "anchor"
+            self.rotated[name] = True
+        self._moves = []
+        return self.rotated
+
+    def abort(self) -> None:
+        for tmp, _slot in self._moves:
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+        self._moves = []
+
+
+def prepare_rotation(doc_path: str | os.PathLike) -> RotationTicket:
+    """Stage a slot rotation for `doc_path` WITHOUT touching the slots.
+    Same anchor/prev policy as rotate_slots; the returned ticket's commit()
+    lands it, abort() discards it."""
+    doc = Path(doc_path).resolve()
+    d = slot_dir(doc, create=True)
+    prev = d / PREV_SLOT
+    anchor = d / ANCHOR_SLOT
+    ticket = RotationTicket()
+
+    def _stage(slot_path: Path) -> None:
+        tmp = slot_path.parent / f".slot-{uuid.uuid4().hex}.tmp"
+        _link_or_copy(doc, tmp)
+        ticket._moves.append((tmp, slot_path))
+
+    try:
+        if not anchor.exists():
+            _stage(anchor)
+        elif prev.exists():
+            try:
+                idle = time.time() - prev.stat().st_mtime
+            except OSError:
+                idle = 0.0
+            if idle >= ANCHOR_IDLE_SECONDS:
+                _stage(anchor)
+        _stage(prev)
+    except BaseException:
+        ticket.abort()
+        raise
+    return ticket
+
+
 # ------------------------------------------------------------------ locking
 
 _MUTEXES: dict[str, threading.RLock] = {}

@@ -545,17 +545,40 @@ class WorkbookPackage:
                     "verify-after-write failed; the original file was NOT "
                     "modified. " + "; ".join(pre.reasons))
 
+            # Two-phase backup rotation: STAGE the pre-mutation content now,
+            # COMMIT it onto the slots only after a successful promote. A
+            # promote that fails must leave the slots untouched; rotating
+            # first burned the prev undo of the previous successful mutation
+            # even though nothing was written (destroyer round, M-1).
             backup_slot = None
+            ticket = None
             if backup:
-                _safesave.rotate_slots(path)
-                backup_slot = "prev"
+                ticket = _safesave.prepare_rotation(path)
             try:
                 _safesave.replace_with_retry(tmp, path)
             except PermissionError as exc:
+                if ticket is not None:
+                    ticket.abort()
                 _silent_remove(tmp)
                 raise WorkbookLocked(
                     f"{Path(path).name}: cannot replace the file (it may be "
                     f"open in Excel). {exc}")
+            except BaseException:
+                if ticket is not None:
+                    ticket.abort()
+                _silent_remove(tmp)
+                raise
+            if ticket is not None:
+                try:
+                    ticket.commit()
+                    backup_slot = "prev"
+                except OSError as exc:
+                    ticket.abort()
+                    warnings.append(
+                        "the save succeeded but the backup slot rotation "
+                        f"failed ({type(exc).__name__}: {exc}); the prev "
+                        "slot still holds the state before the PREVIOUS "
+                        "mutation, not this one")
 
             post = self._run_verify(path, allow_loss)
             if not post.ok:
