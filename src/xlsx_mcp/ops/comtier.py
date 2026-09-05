@@ -26,6 +26,7 @@ com_validate_opens_clean is available as the deep check.
 from __future__ import annotations
 
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -943,6 +944,27 @@ def com_goal_seek(path: str, target_cell: str, target_value: float,
     return result
 
 
+def _qualify_sparkline_source(source: str, sheet_name: str) -> str:
+    """Bind an UNQUALIFIED sparkline source to the group's OWN sheet.
+
+    Excel's ``SparklineGroups.Add`` resolves a bare "B2:F10" against the ACTIVE
+    sheet, not the sheet the group lives on. Under the pooled hidden worker
+    (whose active sheet is whatever the file stored) an unqualified source
+    silently binds the sparkline to the WRONG sheet's data -- the field
+    report's "list reports Pivot2!" was that mis-binding, not a display glitch
+    (the stored xm:f was literally Pivot2!). Qualifying with the group's sheet
+    binds it where the caller meant and makes ``.SourceData`` read back the
+    right sheet. A caller-supplied "Sheet!ref" (a deliberate cross-sheet
+    sparkline) already carries its sheet and is left untouched.
+    """
+    if "!" in source:
+        return source
+    nm = sheet_name
+    if re.search(r"[^A-Za-z0-9_]", nm):
+        nm = "'" + nm.replace("'", "''") + "'"
+    return f"{nm}!{source}"
+
+
 def com_set_sparkline(path: str, action: str = "create",
                       location: str | None = None,
                       source: str | None = None,
@@ -1013,8 +1035,9 @@ def com_set_sparkline(path: str, action: str = "create",
     def body(app, wb) -> dict:
         try:
             ws = _ws(wb, sheet)
-            group = ws.Range(location).SparklineGroups.Add(SPARK_TYPES[kind], source)
-            return {"sparklines_created": location, "source": source,
+            bound = _qualify_sparkline_source(source, str(ws.Name))
+            group = ws.Range(location).SparklineGroups.Add(SPARK_TYPES[kind], bound)
+            return {"sparklines_created": location, "source": bound,
                     "type": kind, "sheet": str(ws.Name),
                     "count": int(group.Count) if hasattr(group, "Count")
                     else None}

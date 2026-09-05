@@ -45,6 +45,20 @@ def _book(path: Path) -> str:
 # ------------------------------------------------------ argument refusals
 
 
+def test_sparkline_source_qualified_to_group_sheet():
+    # Field finding (MAJOR): an unqualified source bound to the ACTIVE sheet,
+    # not the group's sheet, so a sparkline on "Sparklines" charted (and listed)
+    # the wrong sheet's data. An unqualified ref now gets the group's own sheet.
+    assert comtier._qualify_sparkline_source("B2:F10", "Sparklines") \
+        == "Sparklines!B2:F10"
+    # A sheet name needing quoting is quoted.
+    assert comtier._qualify_sparkline_source("B2:F10", "My Data") \
+        == "'My Data'!B2:F10"
+    # A deliberate cross-sheet source already carries its sheet: untouched.
+    assert comtier._qualify_sparkline_source("Data!B2:F10", "Sparklines") \
+        == "Data!B2:F10"
+
+
 def test_pivot_bad_action(tmp_path):
     p = _book(tmp_path / "b.xlsx")
     with pytest.raises(XlMcpError, match="action must be"):
