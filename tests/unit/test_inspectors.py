@@ -210,6 +210,12 @@ def test_inspect_vba_extracts_modules_from_cfb(tmp_path):
     out = _inspectors.inspect_vba(p)
     assert out["has_vba"] is True
     assert out["extension_matches"] is True
+    # When the CFB parse degrades, inspect_vba answers honestly with a note
+    # and no module keys. Assert on the note first, so a failure here says
+    # WHY the container would not parse instead of a bare KeyError.
+    assert out.get("modules") is not None, (
+        f"module extraction degraded: {out.get('note')!r} "
+        f"(size={out.get('size')}, part={out.get('part')!r})")
     assert out["module_count"] == 2
     mods = {m["name"]: m for m in out["modules"]}
     assert mods["Module1"]["type"] == "procedural"
