@@ -53,7 +53,7 @@ def test_cached_value_labeling():
     assert calc.label_cell(None, 5) == calc.LABEL_VALUE
     assert calc.label_cell("=A1+A2", None) == calc.LABEL_ABSENT
     assert calc.label_cell("=A1+A2", 42) == calc.LABEL_CACHED
-    assert calc.label_cell("=A1+A2", None, computed=True) == calc.LABEL_COMPUTED
+    assert calc.label_cell("=A1+A2", None, calculated=True) == calc.LABEL_CALCULATED
 
 
 def test_set_full_calc_logic():

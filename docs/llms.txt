@@ -38,7 +38,7 @@ closed five-value vocabulary.
 
 - `value` a plain literal. No formula behind it. Nothing to be stale.
 - `cached` a formula cell, carrying the value a prior real calculation left in the file. It may be stale.
-- `computed` a formula cell this session actually recalculated. Produced by `recalculate` (com pack), never inferred.
+- `calculated` a formula cell this session actually recalculated. Produced by `recalculate` (com pack), never inferred.
 - `absent` a formula cell with NO cached value at all, common in files written by other tools. It is not blank, and it is never reported as blank.
 - `formula` the read returned the formula string rather than a value, because that is what was asked for.
 
@@ -46,10 +46,9 @@ Behaviors that follow:
 
 - Reads name the affected addresses when anything they touch is `cached` or `absent`. You get the cells, not just a warning.
 - Aggregations state which cells a filter skipped, so a total is never quietly computed over fewer rows than you think.
-- `recalculate` (com pack) asks Excel itself to compute; its values come back `computed`. That is the only route to `computed`.
+- `recalculate` (com pack) asks Excel itself to compute; its values come back `calculated`. That is the only route to `calculated`.
 - A file-tier write cannot recompute anything downstream of itself. Cells depending on your edit keep their old `cached` values until Excel recalculates.
 - Formula detection is by cell TYPE, not by a leading `=`. Text that merely looks like a formula is never re-armed as a formula on copy, move, sort, or reference rewrite.
-- Lay-facing copy on the website and in the README says "calculated" where the wire says `computed`. Branch on the wire value.
 
 ## 3. Behavioral contracts
 

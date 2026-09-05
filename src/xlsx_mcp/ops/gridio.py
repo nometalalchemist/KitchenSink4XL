@@ -5,7 +5,7 @@ workbook directly (sandbox-gated, keep_vba for .xlsm) and resolve the location
 object through core.locate. The one subtlety is the honest calc story (DESIGN
 Section 4): openpyxl exposes EITHER formula strings (data_only=False) OR the
 last cached values (data_only=True), never both from one load. So a read that
-wants both loads twice, and every returned value is labelled cached | computed |
+wants both loads twice, and every returned value is labelled cached | calculated |
 formula | absent | value so no read ever passes off an empty formula cell as a
 blank cell.
 

@@ -7,7 +7,7 @@ until Excel opens and recalculates. This module owns:
 
   - the _xlfn / _xlfn._xlws / _xlpm normalization shim so modern functions do
     not land as #NAME?,
-  - cached-value labeling (cached | computed | formula | absent) so no read
+  - cached-value labeling (cached | calculated | formula | absent) so no read
     ever silently returns an empty cell where a formula lives,
   - fullCalcOnLoad injection (the no-Excel flag that forces recalc on open),
   - the COM recalc round-trip (the fidelity path, com_ground_truth exp 5),
@@ -634,20 +634,20 @@ def looks_like_formula_text(cell) -> bool:
 
 # ---------------------------------------------------- cached-value labeling
 
-LABEL_CACHED = "cached"      # formula present, a prior real calc left a value
-LABEL_COMPUTED = "computed"  # this session recalculated it
-LABEL_FORMULA = "formula"    # returning the formula string, not a value
-LABEL_ABSENT = "absent"      # formula present, NO cached value (openpyxl write)
-LABEL_VALUE = "value"        # a plain literal, no formula
+LABEL_CACHED = "cached"          # formula present, a prior real calc left it
+LABEL_CALCULATED = "calculated"  # this session recalculated it
+LABEL_FORMULA = "formula"        # the formula string, not a value
+LABEL_ABSENT = "absent"          # formula present, NO cached value
+LABEL_VALUE = "value"            # a plain literal, no formula
 
 
-def label_cell(formula: str | None, cached, *, computed: bool = False) -> str:
+def label_cell(formula: str | None, cached, *, calculated: bool = False) -> str:
     """Classify what a returned cell value actually is, so a read tool never
     passes off an empty formula cell as a blank cell."""
     if formula is None:
         return LABEL_VALUE
-    if computed:
-        return LABEL_COMPUTED
+    if calculated:
+        return LABEL_CALCULATED
     if cached is None:
         return LABEL_ABSENT
     return LABEL_CACHED
@@ -1303,6 +1303,6 @@ __all__ = [
     "preserve_untouched_number_text", "full_precision_loss",
     "recalc_via_com", "recalc_via_formulas", "literal_spans",
     "RecalcResult", "XLFN_FUNCS", "XLFN_XLWS_FUNCS",
-    "LABEL_CACHED", "LABEL_COMPUTED", "LABEL_FORMULA", "LABEL_ABSENT",
+    "LABEL_CACHED", "LABEL_CALCULATED", "LABEL_FORMULA", "LABEL_ABSENT",
     "LABEL_VALUE",
 ]

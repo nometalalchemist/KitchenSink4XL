@@ -412,7 +412,7 @@ def recalculate(path: str, engine: str = "auto",
         "formula_cells_without_cached_value_after": absent_after,
     }
     result["freshness"] = (
-        "cached values were computed by Excel just now (label: computed); "
+        "cached values were computed by Excel just now (label: calculated); "
         "reads through any engine will see current results")
     if seeded[0]:
         result["changed"]["iterative_cells_reseeded"] = seeded[0]

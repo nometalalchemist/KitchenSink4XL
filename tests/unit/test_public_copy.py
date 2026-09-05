@@ -144,15 +144,17 @@ def test_pack_tables_match_measurement():
 def test_calc_labels_in_llms_txt_are_the_wire_values():
     """The agent-facing doc uses the labels the code actually emits.
 
-    The lay-facing copy says "calculated"; core/calc.py emits `computed`. An
-    agent branching on the marketing word gets nothing, so llms.txt has to
-    carry the real vocabulary.
+    The lay-facing copy and the wire used to disagree: the website said
+    "calculated" where core/calc.py emitted `computed`, and an agent branching
+    on the marketing word got nothing. The pre-release rename settled it on
+    `calculated` in both places. This guard keeps llms.txt reading the
+    constants rather than a copy of them, so the next divergence goes red.
     """
     sys.path.insert(0, str(ROOT / "src"))
     from xlsx_mcp.core import calc
 
     text = (ROOT / "docs" / "llms.txt").read_text(encoding="utf-8")
-    for label in (calc.LABEL_VALUE, calc.LABEL_CACHED, calc.LABEL_COMPUTED,
+    for label in (calc.LABEL_VALUE, calc.LABEL_CACHED, calc.LABEL_CALCULATED,
                   calc.LABEL_ABSENT, calc.LABEL_FORMULA):
         assert f"`{label}`" in text, (
             f"llms.txt does not document the {label!r} calc label"
