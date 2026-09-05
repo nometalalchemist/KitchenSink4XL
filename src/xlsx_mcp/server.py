@@ -50,6 +50,7 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
+from .core import update_check as _upd
 from .ops import annotations as _annotations
 from .ops import backups as _backups
 from .ops import cells as _cells
@@ -178,7 +179,7 @@ def get_server_info() -> dict:
     call that needs no workbook and touches no file; use it to confirm the
     server is reachable and to see which packs are currently loaded before
     deciding whether to call enable_tools."""
-    return {
+    out = {
         "name": "kitchensink4xl",
         "version": __version__,
         "phase": "6 (consolidated: pack re-cut, anchors, tiered loading)",
@@ -187,6 +188,12 @@ def get_server_info() -> dict:
         "platform": _platform.platform(),
         "python": _sys.version.split()[0],
     }
+    # The server's one and only update surface: a cached line, added when a
+    # newer stable release exists. Reads no network and never raises.
+    notice = _upd.update_notice()
+    if notice:
+        out["update"] = notice
+    return out
 
 
 # ============================================================ PHASE 3a TOOLS
@@ -1747,6 +1754,12 @@ def main() -> None:
     disabled = _startup_disabled_names()
     if disabled:
         mcp.add_transform(_Visibility(False, names=disabled))
+    # Fire and forget: a daemon thread asks PyPI whether a newer release
+    # exists (at most every 14 days, off entirely under
+    # KS4XL_NO_UPDATE_CHECK). Nothing waits on it, nothing it does can
+    # delay or break serving, and the answer only ever appears as one line
+    # in get_server_info.
+    _upd.start_background_check()
     mcp.run()
 
 
