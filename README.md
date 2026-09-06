@@ -356,6 +356,8 @@ what broke.
 - 🔧 [Found a dead circuit?](https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=bug_report.yml)
   Something glitched, refused, or came back with the wrong number. Never
   attach a private workbook; rebuild the structure with placeholder data.
+  Before filing: ask your AI to run `get_server_info` and paste the output
+  here; it is designed to be safe to share.
 - 🔌 [Missing an outlet?](https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=feature_request.yml)
   An Excel capability the sink should also have. Describe the real task behind
   it and it goes on the workbench.

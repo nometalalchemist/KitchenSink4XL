@@ -9,6 +9,9 @@ body:
         Thanks for the report! One important note before you start:
         **never attach a private workbook.** If the bug needs a workbook to
         reproduce, rebuild the structure with placeholder data.
+
+        Before filing: ask your AI to run `get_server_info` and paste the
+        output here; it is designed to be safe to share.
   - type: input
     id: tool
     attributes:
