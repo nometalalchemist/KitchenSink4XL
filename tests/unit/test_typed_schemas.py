@@ -133,13 +133,17 @@ def test_no_array_ships_untyped_items():
 @pytest.mark.parametrize("tool_name,param", sorted(LOCATION_PARAMS))
 def test_every_addressing_parameter_carries_the_location_schema(
         tool_name, param):
-    """The shared selector schema, on every parameter that takes one.
+    """Both accepted types, on every parameter that takes an address.
 
     The live symptom this closes: a caller sent {"cell": "A1"} and the
     client serialized it to the string '{"cell": "A1"}' because the schema
     gave it nothing to validate against. The server then correctly refused
     a string that is not an A1 reference, and the failure read like a
-    transport artifact for a whole round.
+    transport artifact for a whole round. Naming both branches closes it;
+    enumerating the selectors inside the object branch does not close it any
+    further and costs about 270 tokens on each of these parameters, so the
+    vocabulary lives in the instructions and the refusals instead (the
+    ruling is recorded on LOCATION_SCHEMA).
     """
     tools = _all_tools()
     assert tool_name in tools, f"{tool_name} is no longer a tool"
@@ -150,27 +154,44 @@ def test_every_addressing_parameter_carries_the_location_schema(
     assert branches, f"{tool_name}.{param} is not the location union"
     kinds = {b.get("type") for b in branches}
     assert "string" in kinds, "the bare-A1-string shorthand is undocumented"
-    obj = next((b for b in branches if b.get("type") == "object"), None)
-    assert obj is not None, "the selector-object form is undocumented"
-
-    props = obj.get("properties") or {}
-    for selector in ("cell", "range", "a1", "r1c1", "name", "named_range",
-                     "table", "used_range", "region", "search", "anchor"):
-        assert selector in props, (
-            f"{tool_name}.{param} does not advertise the {selector} selector")
-    for modifier in ("sheet", "scope", "column", "part"):
-        assert modifier in props, (
-            f"{tool_name}.{param} does not advertise the {modifier} modifier")
+    assert "object" in kinds, "the selector-object form is undocumented"
 
 
-def test_the_advertised_selectors_are_the_resolver_s_selectors():
-    """The schema and core/locate.py must not drift apart. A selector the
-    schema advertises and the resolver rejects is worse than none."""
+def test_the_addressing_schema_stays_types_only():
+    """The cost ruling, kept from drifting back by hand.
+
+    Re-enumerating the selectors here is what took lite from ~11.7k to
+    ~21.2k tokens. If a future release wants them back, this test is the
+    place the decision gets re-made rather than re-happening.
+    """
+    branches = schemas.LOCATION_SCHEMA["anyOf"]
+    assert [b.get("type") for b in branches] == ["string", "object"]
+    for branch in branches:
+        assert set(branch) == {"type"}, (
+            "the addressing schema grew a body again; it is billed on every "
+            f"parameter that takes one: {branch!r}")
+
+
+def test_the_selector_vocabulary_is_documented_where_a_client_reads_it():
+    """The vocabulary and core/locate.py must not drift apart.
+
+    It used to live in the schema, where this guard could read it directly.
+    It now lives in the server instructions, which every client receives
+    once at handshake instead of once per parameter, so the anti-drift check
+    moves there with it. Aliases may be omitted; a real selector the
+    resolver accepts and nothing advertises may not.
+    """
     from xlsx_mcp.core import locate
+    from xlsx_mcp import server
 
-    obj = schemas.LOCATION_SCHEMA["anyOf"][1]["properties"]
-    modifiers = {"sheet", "scope", "column", "part"}
-    assert set(obj) - modifiers == set(locate.SELECTORS)
+    text = server.mcp.instructions or ""
+    aliases = {"a1", "named_range"}
+    for selector in set(locate.SELECTORS) - aliases:
+        assert selector in text, (
+            f"the {selector!r} selector is not named in the server "
+            "instructions, so nothing tells a client it exists")
+    assert '{"cell": "B7", "sheet": "Q3"}' in text, (
+        "the instructions carry no worked location example")
 
 
 def test_the_schema_is_inlined_rather_than_referenced():

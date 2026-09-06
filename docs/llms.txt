@@ -17,10 +17,10 @@ below is a behavior you can rely on without testing it first.
 
 ## 1. Token economics
 
-- Session start loads 40 tools, about 21,200 tokens. Nothing else is on the wire until you ask for it.
+- Session start loads 40 tools, about 13,800 tokens. Nothing else is on the wire until you ask for it.
 - `enable_tools(["<pack>"])` adds a pack mid-session. `disable_tools([...])` removes one. Both take effect on the next `tools/list`, announced by `tools/list_changed`.
 - Pack costs, from `scripts/measure_surface.py`: design 9 tools / 6.1k, io 9 / 2.8k, com 11 / 2.6k.
-- Everything enabled: 69 tools (67 workbook tools plus the two pack toggles), about 32,700 tokens.
+- Everything enabled: 69 tools (67 workbook tools plus the two pack toggles), about 22,900 tokens.
 - `enable_tools(["everything"])` is the convenience alias for all packs.
 - Set `KS4XL_MODE=full` at server start to skip tiering, or `KS4XL_MODE=design,com` for a fixed subset. `KS4XL_PACK_POLICY=locked` makes the startup surface final and refuses runtime pack changes.
 - The lite core contains no degraded stand-ins for pack capabilities. A lite tool asked for out-of-scope work returns the pack name and the exact `enable_tools` call to run. You never have to guess which pack holds a capability.

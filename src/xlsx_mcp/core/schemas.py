@@ -20,18 +20,21 @@ the underlying Python type, so ``location`` still arrives as the plain str
 or dict the resolver has always taken, and core/locate.py keeps producing
 its own refusals for a bad selector, an unknown key, or an ambiguous match.
 Those refusals name every candidate and are better than anything a schema
-validator would say, so the schema's job here is to describe, not to police:
-each object form lists its keys with types and leaves the exact-one-selector
-rule to the resolver, which can say which keys it actually found.
+validator would say, so the schema's job here is to name types, not to
+police or to teach. The addressing parameter says string-or-object and
+leaves the selector vocabulary to the server instructions, the tool
+descriptions, and the resolver's own refusals; see LOCATION_SCHEMA for the
+measured reason.
 
 Schemas are DEREFERENCED (FastMCP's default), not written with ``$ref``.
 The clients this fixes are the ones with the weakest schema parsers, and
 Gemini's function-calling subset does not resolve ``$ref`` at all, so a
 shared definition would reintroduce the same class of skip in a new form.
-The cost is real and is paid deliberately: the location schema is repeated
-inline on all 31 parameters that take one, and the text below is kept terse
-for that reason. A tool a client silently deletes has zero coverage no
-matter how good its prose.
+Every schema below is therefore repeated inline on each parameter that
+takes one, which is why the text below is kept terse and why the addressing
+schema is types-only. A tool a client silently deletes has zero coverage no
+matter how good its prose, and a schema nobody reads is billed to every
+session anyway.
 """
 
 from __future__ import annotations
@@ -44,49 +47,32 @@ from pydantic.json_schema import WithJsonSchema
 
 #: The one addressing object, DESIGN Section 5. Exactly one selector key
 #: plus optional modifiers; a bare string is shorthand for {"a1": ...}.
+#:
+#: TYPES ONLY, BY RULING (2026-09-06). This schema says a location is a
+#: string or an object and stops there. The selector vocabulary was briefly
+#: enumerated here instead, which reads better in isolation and cost about
+#: 270 tokens on each of the 24 lite parameters that take one: roughly 9.5k
+#: tokens billed to every session, at startup, to describe keys most
+#: sessions never use. The ruling is pay on error, not on load. The defect
+#: this file exists to close is the empty schema {} that made clients delete
+#: tools, and two named types close it completely. The vocabulary lives
+#: where it is free: the server instructions, each tool's own description,
+#: core/locate.py's module docstring, and above all core/locate.py's
+#: refusals, which name the selector list and every candidate they found at
+#: the moment a caller actually gets one wrong. A validator could never say
+#: that much. Restoring the enumerated form is one edit here and nothing
+#: else in the tree depends on the shape.
+#:
+#: There is no shared description either, for the same reason: the sentence
+#: that explained the object form was 23 copies of itself on the lite
+#: surface, about 1.2k tokens, saying what the tool's own description
+#: already says in context. Parameters that need a ROLE described still
+#: carry one (see SourceLocation, DestLocation); what is gone is the
+#: boilerplate that was identical on every one of them.
 LOCATION_SCHEMA: dict[str, Any] = {
-    "description": (
-        "Where to act: an A1 string ('B7', 'A1:C10'), or an object with "
-        "EXACTLY ONE selector key plus an optional sibling 'sheet'. The "
-        "tool description lists what each selector takes."
-    ),
     "anyOf": [
         {"type": "string"},
-        {
-            "type": "object",
-            "properties": {
-                "cell": {"type": "string"},
-                "range": {"type": "string"},
-                "a1": {"type": "string"},
-                "r1c1": {"type": "string"},
-                "name": {"type": "string"},
-                "named_range": {"type": "string"},
-                "table": {"type": "string"},
-                "used_range": {"anyOf": [{"type": "string"},
-                                         {"type": "boolean"}]},
-                "region": {"type": "object",
-                           "properties": {"near": {"type": "string"},
-                                          "sheet": {"type": "string"}},
-                           "required": ["near"]},
-                "search": {"anyOf": [
-                    {"type": "string"},
-                    {"type": "object",
-                     "properties": {"text": {"type": "string"},
-                                    "sheet": {"type": "string"},
-                                    "occurrence": {"type": "integer"},
-                                    "match_case": {"type": "boolean"},
-                                    "match": {"type": "string",
-                                              "enum": ["exact", "contains"]}},
-                     "required": ["text"]}]},
-                "anchor": {"type": "string"},
-                "sheet": {"type": "string"},
-                "scope": {"type": "string"},
-                "column": {"type": "string"},
-                "part": {"type": "string",
-                         "enum": ["all", "data", "headers", "totals"]},
-            },
-            "additionalProperties": False,
-        },
+        {"type": "object"},
     ],
 }
 
@@ -105,11 +91,14 @@ def _optional(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def _location(description: str = "", *, optional: bool = False) -> Any:
-    """A Location, optionally nullable, optionally re-described for its role."""
+    """A Location, optionally nullable, optionally described for its role.
+
+    A role description says which of two locations a tool is talking about,
+    which the type cannot. Nothing here restates the selector vocabulary.
+    """
     schema = dict(LOCATION_SCHEMA)
     if description:
-        schema["description"] = (description + " "
-                                 + LOCATION_SCHEMA["description"])
+        schema["description"] = description
     if optional:
         schema = _optional(schema)
         return Annotated[str | dict[str, Any] | None,

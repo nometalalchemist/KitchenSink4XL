@@ -172,32 +172,34 @@ def test_menu_matches_registry_and_costs():
 #: said (V1-12). Measured cost of both: about 47 tokens. Docstrings
 #: elsewhere were tightened to keep the rest of the growth at zero.
 #:
-#: RAISED AGAIN, AND THIS ONE IS LARGE: 11,500 -> 21,000, measured 20,576.
+#: RAISED AGAIN, AND THIS ONE WAS LARGE: 11,500 -> 21,600, measured 21,209.
 #: The typed-schema pass replaced 39 `Any` parameters that serialized to the
-#: empty schema {} with real JSON Schema, and the addressing object alone is
-#: about 270 tokens on each of the 24 lite parameters that take one. The
-#: empty schema is what made OpenCode delete the incumbent's tools and
-#: Gemini CLI skip them, so the alternative to paying this is a surface some
-#: clients do not load at all, which costs 100% of the tokens and delivers
-#: none of the tools.
+#: empty schema {} with real JSON Schema. The empty schema is what made
+#: OpenCode delete the incumbent's tools and Gemini CLI skip them, so the
+#: alternative to paying something here is a surface some clients do not
+#: load at all, which costs 100% of the tokens and delivers none of the
+#: tools. Most of the raise was one thing: the addressing object, enumerated
+#: selector by selector, inline on each of the 24 lite parameters that take
+#: one.
 #:
-#: FLAGGED FOR THE AUTHOR, because the cost-aware ruling is the author's and
-#: the lite bill is in shipped copy. Three settings, measured:
-#:   ~11.7k  types only: {"anyOf":[{"type":"string"},{"type":"object"}]}.
-#:           Closes the client-deletion defect completely and says nothing
-#:           about what belongs in the object.
-#:   ~18.4k  selectors named, region and search left as bare objects.
-#:   ~20.6k  what ships: every selector named, region and search carrying
-#:           their own required keys ({near} and {text} are not guessable).
-#: The revert to either cheaper setting is a single edit to LOCATION_SCHEMA
-#: in core/schemas.py; nothing else in the tree depends on the shape.
+#: LOWERED, BY RULING (2026-09-06): 21,600 -> 14,200, measured 13,791. The
+#: ruling is pay on error, not on load. The addressing schema is types-only
+#: now, string-or-object and no body, which closes the client-deletion
+#: defect completely, and the selector vocabulary moved to the places that
+#: are free or nearly so: the server instructions (once per handshake, with
+#: a worked example), each tool's own description, and core/locate.py's
+#: refusals, which name the selector list and every candidate they found at
+#: the moment somebody actually gets it wrong. Three settings were measured
+#: before the ruling; the enumerated form cost about 9.5k over the
+#: types-only one and bought guidance most sessions never read.
 #:
-#: Then 21,000 -> 21,600 (measured 21,209) for the outline surface:
-#: set_dimensions gained group_rows, group_columns, ungroup_rows,
-#: ungroup_columns and outline_summary, with their span schema, plus the
-#: docstring that names the vocabulary. About 630 tokens for a whole
-#: capability class that had no code at all.
-LITE_TOKEN_CEILING = 21_600
+#: The remaining ~2.3k of the typed-schema pass is the other 15 schemas
+#: (cell values and matrices, predicates, sort and aggregate specs, the
+#: outline spans) plus about 630 tokens for the outline surface itself,
+#: which is a whole capability class that had no code at all. Those are
+#: item-shape schemas on parameters whose shape is not guessable, and they
+#: stay.
+LITE_TOKEN_CEILING = 14_200
 
 
 def test_pack_bills_cost_aware():
