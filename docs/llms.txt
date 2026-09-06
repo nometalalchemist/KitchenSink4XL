@@ -110,6 +110,7 @@ what was wrong, leaves the file untouched, and carries the next call in
 returns ordered steps, the tool for each step, why the step exists, and the
 pack that step needs.
 
+- `recover-workbook`: your file will not open or an edit went wrong. Get a good copy back from the automatic backups.
 - `merge-workbooks`: combine data from several workbooks into one target without silently losing anything either side holds.
 - `report-build`: raw data to report workbook. Import, table, formulas, chart, then the page and view polish.
 - `data-cleanup`: find and replace, then validation rules, then sort, verified at each end.
