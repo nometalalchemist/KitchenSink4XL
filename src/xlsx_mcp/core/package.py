@@ -41,6 +41,7 @@ The object addresses cells through core.locate (the grid location resolver).
 from __future__ import annotations
 
 import os
+import stat
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -61,6 +62,28 @@ from .errors import (
     XlMcpError,
 )
 from .sandbox import check_path
+
+
+# --------------------------------------------------- unwritable-target copy
+# Two different situations produced one message for the life of 1.0. Both
+# sentences are registered in core/authorcopy.py; the wording is the
+# author's, the diagnosis is the code's.
+
+
+def held_refusal(path: str) -> str:
+    """Another process has the file open and will not share the write."""
+    return (f"{Path(path).name} is open in Excel (or another process holds "
+            "it); close it, or use a live/COM route, then retry")
+
+
+def read_only_refusal(path: str) -> str:
+    """The file itself is marked read-only. Nothing has it open."""
+    return (f"{Path(path).name} is marked read-only, so no program can write "
+            "to it. Nothing has it open, and closing Excel will not help: "
+            "clear the read-only attribute on the file (Properties, or "
+            "attrib -r on Windows, chmod +w elsewhere) and retry. Files "
+            "copied off read-only media, restored from cloud storage, or "
+            "pulled from a locked share arrive this way")
 
 
 class WorkbookPackage:
@@ -394,16 +417,36 @@ class WorkbookPackage:
         exp 4 caveat, verified in the COM-tier gate), so the write-probe
         decides. A real Excel hold denies the r+b open; a stale lockfile
         leaves the file writable."""
+        present, writable, _why = self._lock_diagnosis()
+        return present, writable
+
+    def _lock_diagnosis(self) -> tuple[bool, bool, str | None]:
+        """(lockfile_present, writable, why) where why names the CAUSE of an
+        unwritable target: 'read_only_attribute' or 'held'.
+
+        The probe alone cannot tell them apart, and the difference is the
+        whole message. A file carrying the read-only attribute (a copy off
+        old media, a OneDrive restore, anything that came off a CD or a
+        locked share) used to refuse with "is open in Excel", which sends
+        the user to close a program they never opened. The attribute is
+        checked first because it is a property of the file rather than a
+        race: st_mode's owner-write bit is exactly the read-only attribute
+        on Windows and the ordinary permission bit elsewhere."""
         p = Path(self.path)
         owner = p.parent / ("~$" + p.name)
         present = owner.exists()
-        writable = True
+        try:
+            mode = os.stat(p).st_mode
+        except OSError:
+            mode = None
+        if mode is not None and not mode & stat.S_IWRITE:
+            return present, False, "read_only_attribute"
         try:
             fh = open(p, "r+b")
             fh.close()
         except OSError:
-            writable = False
-        return present, writable
+            return present, False, "held"
+        return present, True, None
 
     def _extension_warnings(self) -> list[str]:
         """The announced-loss line for in-part extension blocks openpyxl
@@ -424,8 +467,9 @@ class WorkbookPackage:
                 + "; ".join(self._dropped_extensions)
                 + ". These live inside the worksheet part (x14 conditional "
                   "formatting, sparklines, slicer lists), so no part-level "
-                  "check can catch them; use the com pack to edit this "
-                  "workbook with full fidelity."]
+                  "check can catch them. You asked for this with allow_loss, "
+                  "and the pre-edit backup is the only copy that still has "
+                  "them."]
 
     def _refuse_extension_loss(self) -> None:
         """Backstop refusal for extension blocks openpyxl announced dropping
@@ -443,12 +487,15 @@ class WorkbookPackage:
             + ". These live inside the worksheet part (x14 conditional "
               "formatting, sparklines, slicer lists), so no part-level check "
               "can catch the loss after the fact. Refusing the mutation "
-              "rather than destroy them. Remedy: use the com pack (Excel "
-              "saves with everything intact), or pass allow_loss:true to "
-              "proceed with a backup and accept the loss.")
+              "rather than destroy them. Two routes, and they are the only "
+              "two: pass allow_loss:true to accept the loss (the workbook is "
+              "backed up first, and the loss is permanent in the saved "
+              "file), or leave this workbook alone at the file tier. The com "
+              "pack is NOT a route for this: none of its tools writes a "
+              "cell, a format, or a row. Reads never touch the workbook, and "
+              "copy_workbook branches it byte-for-byte.")
         exc.detail = {"dropped_extensions": list(self._dropped_extensions),
-                      "routes": ["enable COM (com pack)",
-                                 "allow_loss:true with backup"]}
+                      "routes": _hazard.refusal_routes()}
         raise exc
 
     def _hazard_gate(self, allow_loss: bool) -> list[str]:
@@ -506,16 +553,25 @@ class WorkbookPackage:
                       for k in drop_keys]
             parts = [p for h in rep.hazards if h.key in drop_keys
                      for p in h.parts]
+            costs = _hazard.loss_costs(drop_keys)
             exc = HazardRefused(
                 "this workbook holds " + ", ".join(labels)
-                + " that a file-based (openpyxl) save drops silently. Refusing "
-                "the mutation rather than destroy them. Remedy: enable the COM "
-                "route once available (Excel saves with everything intact), or "
-                "pass allow_loss:true to proceed with a backup and accept the "
-                "loss.")
+                + " that a file-based (openpyxl) save drops silently. "
+                "Refusing the mutation rather than destroy them. Exactly "
+                "what is lost if you proceed: " + "; ".join(costs)
+                + ". Two routes, and they are the only two: pass "
+                "allow_loss:true to accept those losses (the workbook is "
+                "backed up first, and the losses are permanent in the saved "
+                "file), or leave this workbook alone at the file tier. The "
+                "com pack is NOT a route for this: it drives Excel for "
+                "recalculation, pivots, goal seek, PDF export, rendering, "
+                "conversion, and encryption, and none of its tools writes a "
+                "cell, a format, or a row. Reads never touch the workbook, "
+                "and copy_workbook branches it byte-for-byte if you want a "
+                "working copy.")
             exc.detail = {"parts": parts, "labels": labels,
-                          "routes": ["enable COM (com pack)",
-                                     "allow_loss:true with backup"]}
+                          "losses": costs,
+                          "routes": _hazard.refusal_routes()}
             raise exc
         if allow_loss and (drop_keys or degrade_keys):
             # Record exactly which hazard families the caller was told they
@@ -669,11 +725,11 @@ class WorkbookPackage:
         path = self.path
         with _safesave.write_lock(path):
             self._check_unchanged()
-            lock_present, writable = self._lock_state()
+            lock_present, writable, why = self._lock_diagnosis()
             if not writable:
-                raise WorkbookLocked(
-                    f"{Path(path).name} is open in Excel (or another process "
-                    "holds it); close it, or use a live/COM route, then retry")
+                raise WorkbookLocked(read_only_refusal(path)
+                                     if why == "read_only_attribute"
+                                     else held_refusal(path))
             warnings = self._hazard_gate(allow_loss)
             if lock_present:
                 warnings.append(

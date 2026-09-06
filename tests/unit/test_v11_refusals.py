@@ -161,3 +161,210 @@ def test_ordinary_output_names_are_untouched_by_the_device_guard(tmp_path):
                  "com.csv", "prnt.csv"):
         assert outguard._device_name(tmp_path / name) is None
         dataio.export_range(p, out_file=str(tmp_path / name))
+
+
+# ------------------------------------------------------------------- V1-9
+
+
+def test_a_read_only_file_is_not_diagnosed_as_open_in_excel(tmp_path):
+    """A read-only-attribute file refused with "is open in Excel", which
+    sends the user to close a program they never opened. Files off old
+    media, cloud restores, and locked shares all arrive this way."""
+    import os
+    import stat as _stat
+
+    from xlsx_mcp.core.errors import WorkbookLocked
+
+    p = _book(tmp_path / "ro.xlsx", [["a", 1]])
+    os.chmod(p, _stat.S_IREAD)
+    try:
+        with pytest.raises(WorkbookLocked) as exc:
+            cells_ops.set_cell(p, "A1", 2)
+        msg = str(exc.value)
+        assert "read-only" in msg
+        assert "open in Excel" not in msg
+        assert "closing Excel will not help" in msg
+    finally:
+        os.chmod(p, _stat.S_IWRITE)
+    # and the same file writes once the attribute is cleared
+    cells_ops.set_cell(p, "A1", 2)
+
+
+def test_a_genuinely_held_file_still_says_so(tmp_path):
+    """The new branch must not swallow the lock message it split off."""
+    from xlsx_mcp.core.package import held_refusal, read_only_refusal
+
+    assert "open in Excel" in held_refusal("b.xlsx")
+    assert "read-only" in read_only_refusal("b.xlsx")
+    assert "open in Excel" not in read_only_refusal("b.xlsx")
+
+
+# ---------------------------------------------- the exit-less hazard gate
+
+
+HAZARD_FIXTURE = "shape.xlsx"
+
+
+def test_the_hazard_refusal_stops_naming_a_route_com_cannot_take(tmp_path):
+    """The refusal offered "enable COM (com pack)" for a refused cell
+    write. The com pack's eleven tools recalculate, drive pivots and goal
+    seek, export PDF, render, convert, encrypt, set sparklines, autofit,
+    and report status. None of them writes a cell, so a caller who
+    enabled the pack as instructed found nothing there that could do the
+    thing that was refused."""
+    import shutil
+    from pathlib import Path
+
+    from xlsx_mcp.core.errors import HazardRefused
+
+    src = Path(__file__).parent.parent / "fixtures" / "corpus" / HAZARD_FIXTURE
+    if not src.exists():  # pragma: no cover
+        pytest.skip(f"{HAZARD_FIXTURE} fixture not built")
+    p = tmp_path / HAZARD_FIXTURE
+    shutil.copy2(src, p)
+
+    with pytest.raises(HazardRefused) as exc:
+        cells_ops.set_cell(str(p), "A1", 1)
+    msg = str(exc.value)
+    detail = getattr(exc.value, "detail", {}) or {}
+
+    assert "enable COM" not in msg and "enable the COM" not in msg
+    assert "not a route" in msg.lower(), msg
+    for route in detail.get("routes", []):
+        assert "com pack" not in route.lower(), route
+    # the exact costs, per class, are stated rather than named
+    assert detail.get("losses"), "the refusal no longer states the losses"
+    assert "allow_loss:true" in msg
+    # and the allow_loss route still works, which is what makes it an exit
+    out = cells_ops.set_cell(str(p), "A1", 1, allow_loss=True)
+    assert out["changed"]
+
+
+def test_the_loss_costs_come_from_the_hazard_table(tmp_path):
+    from xlsx_mcp.core import hazard
+
+    costs = hazard.loss_costs(["slicers", "media"])
+    assert len(costs) == 2
+    assert costs[0].startswith("slicers: ")
+    assert "removed on save" in costs[0]
+    assert hazard.loss_costs(["not-a-key"]) == []
+
+
+# ------------------------------------------------------------------ V1-11
+
+
+def test_render_sheet_refuses_by_name_when_the_session_has_no_clipboard(
+        tmp_path, monkeypatch):
+    """Excel's only range-to-bitmap route is CopyPicture, which goes
+    through the Windows clipboard. Without one the user got Excel's raw
+    "CopyPicture method of Range class failed" and no cause."""
+    from xlsx_mcp.ops import comtier
+
+    monkeypatch.setattr(comtier, "_clipboard_available", lambda: False)
+    p = _book(tmp_path / "render.xlsx", [["a", 1]])
+    with pytest.raises(XlMcpError) as exc:
+        comtier.com_render_sheet(p, str(tmp_path / "out.png"))
+    msg = str(exc.value)
+    assert "clipboard" in msg
+    assert "CopyPicture" in msg
+    assert "com_export_pdf" in msg, "the refusal names no working route"
+
+
+def test_the_clipboard_probe_never_raises():
+    """The probe answers about the environment and must not become a new
+    failure mode of its own on a machine with no pywin32."""
+    from xlsx_mcp.ops import comtier
+
+    assert comtier._clipboard_available() in (True, False)
+
+
+# ------------------------------------------------------------------ V1-10
+
+
+class TestConstructedNamesStayWritable:
+    """Every filename this server BUILDS is held inside both per-component
+    limits, on every platform.
+
+    Windows caps a component at 255 characters, ext4 and friends cap it at
+    255 BYTES, and a Korean character is three bytes in UTF-8. A workbook
+    name that is comfortable on Windows therefore produced an unwritable
+    snapshot, .bak, or per-sheet export on Linux, and CI dodged it once by
+    shortening the test's fixture name instead of bounding the product.
+    Now that PyPI serves Linux and macOS, that is a live save bug.
+    """
+
+    LONG_KO = "매우" * 60 + "장부"        # 122 chars / 366 bytes
+
+    def test_bound_name_leaves_ordinary_names_alone(self):
+        from xlsx_mcp.core import safesave
+
+        for name in ("book.xlsx", "장부.xlsx", "a" * 200 + ".xlsx"):
+            assert safesave.bound_name(name) == name
+
+    def test_bound_name_fits_both_ceilings(self):
+        from xlsx_mcp.core import safesave
+
+        out = safesave.bound_name(self.LONG_KO + ".xlsx")
+        assert safesave.name_fits(out), out
+        assert out.endswith(".xlsx"), "the extension was truncated"
+        assert len(out.encode("utf-8")) <= safesave.MAX_NAME_BYTES
+
+    def test_bound_name_honors_headroom(self):
+        from xlsx_mcp.core import safesave
+
+        out = safesave.bound_name(self.LONG_KO + ".xlsx", headroom=24)
+        assert safesave.name_fits(out, headroom=24), out
+
+    def test_two_long_names_sharing_a_prefix_do_not_collide(self):
+        from xlsx_mcp.core import safesave
+
+        a = safesave.bound_name(self.LONG_KO + "1.xlsx")
+        b = safesave.bound_name(self.LONG_KO + "2.xlsx")
+        assert a != b, "the hash suffix is not doing its job"
+
+    def test_a_snapshot_of_a_long_named_workbook_is_writable(self, tmp_path):
+        """The snapshot name adds a 14-character DTG and up to 61 more for a
+        label, on top of a name that may already be near the ceiling."""
+        from xlsx_mcp.core import safesave
+        from xlsx_mcp.ops import backups as backups_ops
+
+        p = _book(tmp_path / (self.LONG_KO[:60] + ".xlsx"), [["a", 1]])
+        out = backups_ops.create_snapshot(p, label="x" * 60)
+        import os
+        name = os.path.basename(out["snapshot"])
+        assert safesave.name_fits(name), name
+        assert os.path.exists(out["snapshot"])
+
+    def test_an_overwrite_bak_of_a_long_named_target_is_writable(
+            self, tmp_path):
+        from xlsx_mcp.core import safesave
+        from xlsx_mcp.core.outguard import _timestamped_backup
+
+        target = tmp_path / (self.LONG_KO[:75] + ".csv")
+        target.write_text("a,b", encoding="utf-8")
+        bak = _timestamped_backup(str(target))
+        import os
+        assert safesave.name_fits(os.path.basename(bak)), bak
+        assert os.path.exists(bak)
+
+    def test_a_per_sheet_export_of_a_long_named_workbook_is_writable(
+            self, tmp_path):
+        from xlsx_mcp.core import safesave
+
+        p = tmp_path / (self.LONG_KO[:70] + ".xlsx")
+        wb = openpyxl.Workbook()
+        wb.active.title = "S1"
+        wb.active.append(["a", 1])
+        wb.create_sheet("두번째시트이름입니다").append(["b", 2])
+        wb.save(p)
+        wb.close()
+
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        out = dataio.export_file(str(p), out_dir=str(out_dir), fmt="csv")
+        import os
+        files = out["written_to"]
+        assert len(files) == 2, out
+        for f in files:
+            assert safesave.name_fits(os.path.basename(f)), f
+            assert os.path.exists(f)

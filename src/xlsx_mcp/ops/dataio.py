@@ -30,6 +30,7 @@ from typing import Any
 from openpyxl.utils import get_column_letter
 
 from ..core import limits as _limits
+from ..core import safesave as _safesave
 from ..core.errors import RangeOutOfBounds, XlMcpError
 from ..core.outguard import guard_out_dir, guard_out_file
 from ..core.package import WorkbookPackage
@@ -369,8 +370,14 @@ def export_file(path: str, fmt: str = "csv", sheets: list | None = None,
                 dests = []
                 for name, text in per_sheet.items():
                     safe = _UNSAFE_NAME.sub("_", name)
-                    dests.append(
-                        (os.path.join(od, f"{stem}_{safe}.{fmt}"), text))
+                    # workbook stem + sheet name + extension is built, not
+                    # given, so it can exceed a filesystem's per-component
+                    # limit (255 BYTES on ext4, 255 characters on Windows)
+                    # even though both halves were legal on their own.
+                    dests.append((
+                        os.path.join(
+                            od, _safesave.bound_name(f"{stem}_{safe}.{fmt}")),
+                        text))
                 lows = [os.path.normcase(d) for d, _t in dests]
                 if len(set(lows)) < len(lows):
                     raise XlMcpError(

@@ -160,7 +160,7 @@ def refuse_if_partial(ws, grid, what: str) -> None:
     if hits:
         _refuse(f"{what} {grid.a1}", ws.title, hits,
                 "Widen the range to cover the whole array, convert it to "
-                "values first, or use the com pack.")
+                "values first. The com pack is not a route: none of its tools writes a cell.")
 
 
 def refuse_if_split(ws, kind: str, index: int, count: int) -> None:
@@ -191,7 +191,7 @@ def refuse_if_split(ws, kind: str, index: int, count: int) -> None:
         verb = "insert" if kind.startswith("insert") else "delete"
         _refuse(f"{verb} {count} {axis}(s) at {index}", ws.title, hits,
                 "Move the edit outside the array's span, convert the array "
-                "to values first, or use the com pack.")
+                "to values first. The com pack is not a route: none of its tools writes a cell or a row.")
 
 
 def rebase(af, dr: int, dc: int, offset_formula):

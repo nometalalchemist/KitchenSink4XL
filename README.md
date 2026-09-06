@@ -182,8 +182,9 @@ pip install kitchensink4xl
 The mode is `"lite"` (the default), `"full"`, or a comma-separated pack list.
 The `xl-mcp` executable is an equivalent entry point. The installed package is
 named `xlsx_mcp`, so a client that wants an interpreter and a module instead
-of a console script can run `python -m xlsx_mcp` or `python -m
-xlsx_mcp.server`, which start the same server. Running from a clone
+of a console script can run `python -m xlsx_mcp`.
+`python -m xlsx_mcp.server` starts the same server and is what releases
+before 1.1 support. Running from a clone
 works the same way; point the command at the `xl-mcp` executable in the
 clone's virtual environment:
 

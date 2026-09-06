@@ -191,17 +191,13 @@ def _tool(pack: str):
 @_tool("lite")
 def get_server_info() -> dict:
     """Report the KitchenSink4XL server build: version, the active tool
-    surface (enabled tool count and approximate token bill), the available
-    optional packs, and the host platform and Python. A read-only orient
-    call that needs no workbook and touches no file; use it to confirm the
-    server is reachable and to see which packs are currently loaded before
-    deciding whether to call enable_tools.
-
-    It also reports the two settings a Desktop user picks in the install
-    dialog and otherwise cannot confirm arrived: whether path sandboxing is
-    on and how many roots it allows, and whether saves deep-verify through
-    Excel by default. The roots are reported as a count, not as paths, so a
-    directory layout does not travel back to the client."""
+    surface (enabled tool count and approximate token bill), the optional
+    packs, the host platform and Python, and config, which carries the
+    install settings a user otherwise cannot confirm arrived: whether path
+    sandboxing is on with how many roots (a count, never the paths), and
+    whether saves deep-verify through Excel. A read-only orient call that
+    needs no workbook and touches no file; use it to confirm the server is
+    up and see which packs are loaded."""
     out = {
         "name": "kitchensink4xl",
         "version": __version__,
@@ -434,16 +430,15 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     """Filter, project, sort, paginate, and aggregate a range SERVER-SIDE so an
     agent reads only the rows and columns it needs instead of a whole sheet.
 
-    location defaults to the sheet's true used range. With header=true the first
-    row names the columns (referenced by name; otherwise by A1 letter). where is
-    a list of {column, op, value} predicates joined by match ('all' or 'any');
+    location defaults to the sheet's true used range. With header=true the
+    first row names the columns (otherwise the A1 letter does). where is a
+    list of {column, op, value} predicates joined by match ('all' or 'any');
     ops: eq, ne, gt, ge, lt, le, contains, startswith, endswith, regex, in,
     not_in, is_blank, not_blank. columns projects a subset; order_by is a list
     of {column, dir} specs (unknown directions refuse); offset and limit page;
     distinct dedupes. aggregate is a list of {column, func} (count,
     count_nonblank, count_distinct, sum, avg, min, max, first, last),
-    optionally per group_by, returning group summaries (records=true
-    emits objects).
+    optionally per group_by (records=true emits objects).
 
     Semantics: predicates read CACHED and literal values (uncalculated
     formulas read as blank; recalc for exact results); gt/ge/lt/le compare
@@ -452,10 +447,9 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     Aggregates follow Excel: sum/avg/min/max consume NUMERIC cells only
     (text and booleans ignored even when text looks numeric; exclusions
     are reported); count is the RAW row count, unlike Excel COUNT; min/max
-    fall back to text when no numbers exist. Row visibility is not
-    consulted: rows an autofilter is hiding are read and aggregated like
-    any other row, unlike Excel's SUBTOTAL. Use where to exclude them.
-    Read-only."""
+    fall back to text when no numbers exist. Filter-hidden rows are read
+    and aggregated like any other row, unlike SUBTOTAL; use where to drop
+    them. Read-only."""
     return _cells.query_range(
         path, location=location, sheet=sheet, header=header, columns=columns,
         where=where, match=match, order_by=order_by, aggregate=aggregate,
@@ -862,15 +856,13 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
                  records: bool = False, out_file: str | None = None,
                  overwrite: bool = False) -> dict:
     """Export a range, table, or sheet to CSV, TSV, or JSON. location defaults
-    to the sheet's true used range; {table} exports a table. values is
-    cached | formula | both; the result states the mode used. out_file
-    writes to a file; otherwise text returns inline. The target is
-    guarded: never the source workbook, a workbook extension, or
-    .ks4xl-backups; an existing file refuses unless overwrite is true,
-    which first keeps a timestamped .bak. Multi-sheet export is
-    export_file (io pack). Rows an autofilter is hiding are exported like
-    any other row; visibility is not consulted. Read-only; the workbook
-    never changes."""
+    to the true used range; {table} exports a table. values is cached |
+    formula | both; the result states the mode used. out_file writes a file;
+    otherwise text returns inline. The target is guarded: never the source
+    workbook, a workbook extension, a reserved device name, or
+    .ks4xl-backups; an existing file needs overwrite, which keeps a .bak
+    first. Filter-hidden rows export like any other row. Multi-sheet is
+    export_file, io pack. Read-only."""
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
         values=values, records=records, out_file=out_file,
@@ -1639,15 +1631,13 @@ def com_set_sparkline(path: str, action: str = "create",
                       type: str = "line", sheet: str | None = None,
                       timeout_seconds: float | None = None,
                       backup: bool = True) -> dict:
-    """Create, clear, or list sparkline groups through Excel (sparklines
-    live in worksheet XML the file tier cannot round-trip, so Excel owns
-    them here). action='create': location is the cell/range that displays
-    them (e.g. 'G2:G10'), source the data range (e.g. 'A2:F10'), type
-    'line', 'column', or 'win_loss'. action='clear' removes groups in
-    location; action='list' is a read-only inventory, scoped to sheet when
-    one is named and workbook-wide otherwise. Auto-backup on
-    mutations; private hidden Excel instance, serialized, timeout-bounded;
-    refuses while the file is open in Excel."""
+    """Create, clear, or list sparkline groups through Excel (they live in
+    worksheet XML the file tier cannot round-trip, so Excel owns them).
+    action='create': location is the cell/range that shows them (e.g.
+    'G2:G10'), source the data range (e.g. 'A2:F10'), type 'line',
+    'column', or 'win_loss'. 'clear' removes groups in location; 'list'
+    inventories sheet, or the workbook when no sheet is named. Auto-backup
+    on mutations; private hidden Excel, serialized, timeout-bounded."""
     return _comtier.com_set_sparkline(
         path, action=action, location=location, source=source, type=type,
         sheet=sheet, timeout_seconds=timeout_seconds, backup=backup)

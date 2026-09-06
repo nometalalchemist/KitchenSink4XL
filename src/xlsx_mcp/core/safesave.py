@@ -114,15 +114,82 @@ def canonical_key(path: str | os.PathLike) -> str:
     return os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path))))
 
 
+#: Per-component filename ceilings. Windows counts CHARACTERS, ext4 and
+#: friends count BYTES, and a Korean character is three bytes in UTF-8, so a
+#: name that is comfortable on one is unwritable on the other. Every name
+#: this server CONSTRUCTS is held inside both limits, on every platform, so a
+#: workbook that saves on Windows also saves when the same tree is mounted on
+#: Linux (and the CI matrix now runs all three). The user's own filename is
+#: not this server's to bound; what is bounded is anything built by appending
+#: to it, which is where a legal name became an illegal one.
+MAX_NAME_CHARS = 255
+MAX_NAME_BYTES = 255
+
+#: Room left for the decorations a caller appends after bounding (a temp
+#: suffix, a .bak marker). 24 covers the longest this tree adds,
+#: ".20260906_153045.bak".
+NAME_HEADROOM = 24
+
+
+def name_fits(name: str, *, headroom: int = 0) -> bool:
+    """True when name is inside BOTH per-component limits."""
+    return (len(name) + headroom <= MAX_NAME_CHARS
+            and len(name.encode("utf-8", "surrogatepass")) + headroom
+            <= MAX_NAME_BYTES)
+
+
+def _truncate_to_bytes(text: str, limit: int) -> str:
+    """Longest prefix of text whose UTF-8 encoding fits in limit bytes,
+    never splitting a character."""
+    if len(text.encode("utf-8", "surrogatepass")) <= limit:
+        return text
+    out = text
+    while out and len(out.encode("utf-8", "surrogatepass")) > limit:
+        out = out[:-1]
+    return out
+
+
+def bound_name(name: str, *, headroom: int = 0,
+               max_chars: int | None = None) -> str:
+    """Fit a CONSTRUCTED filename inside the per-component limits.
+
+    The extension is kept whole (a truncated ".xlsx" is a different file
+    type), and the stem is cut and given an 8-hex digest of the full
+    original, so two long names that share a prefix never collapse onto one
+    file. A name that already fits comes back untouched, which keeps the
+    common case trivially reversible.
+
+    headroom reserves bytes for a suffix the caller appends afterwards.
+    max_chars applies an additional, tighter character cap (the slot-folder
+    rule uses it).
+    """
+    cap_chars = min(MAX_NAME_CHARS, max_chars or MAX_NAME_CHARS) - headroom
+    cap_bytes = MAX_NAME_BYTES - headroom
+    if len(name) <= cap_chars and \
+            len(name.encode("utf-8", "surrogatepass")) <= cap_bytes:
+        return name
+    stem, ext = os.path.splitext(name)
+    digest = hashlib.sha1(
+        os.path.normcase(name).encode("utf-8", "surrogatepass")
+    ).hexdigest()[:8]
+    tail = f"-{digest}{ext}"
+    stem = stem[: max(1, cap_chars - len(tail))]
+    stem = _truncate_to_bytes(
+        stem, max(1, cap_bytes - len(tail.encode("utf-8", "surrogatepass"))))
+    return f"{stem}{tail}"
+
+
 def _folder_name_for(doc_name: str) -> str:
     """Slot subfolder name for a workbook file name. The workbook's own name
-    when it fits (trivial reverse mapping); truncated + 8-hex-hash when long."""
-    if len(doc_name) <= _MAX_FOLDER_NAME:
-        return doc_name
-    digest = hashlib.sha1(
-        os.path.normcase(doc_name).encode("utf-8", "surrogatepass")
-    ).hexdigest()[:8]
-    return f"{doc_name[: _MAX_FOLDER_NAME - 9]}-{digest}"
+    when it fits (trivial reverse mapping); truncated + 8-hex-hash when long.
+
+    The 80-character rule is this server's own, chosen so a slot folder plus
+    everything under it stays comfortably inside a path limit. bound_name
+    adds the byte ceiling on top, which is what a Korean workbook name needs
+    on Linux: 80 characters of Korean is 240 bytes. No headroom is reserved,
+    because nothing is appended to a slot folder name; the files inside it
+    carry their own fixed names."""
+    return bound_name(doc_name, max_chars=_MAX_FOLDER_NAME)
 
 
 def backup_root(doc_path: str | os.PathLike) -> Path:

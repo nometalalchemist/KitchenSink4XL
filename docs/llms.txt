@@ -90,7 +90,7 @@ These are contracts. Handle them; do not retry blindly. The 15 closed codes:
 - `RANGE_OUT_OF_BOUNDS` the range is inverted or exceeds the grid. The message names the valid bounds.
 - `WORKBOOK_LOCKED` the file is open in Excel or held by another process. Close it and retry.
 - `VALIDATION_FAILED` the produced package failed its post-write check. The original was NOT modified.
-- `HAZARD_REFUSED` the workbook holds parts the file writer would drop on save. The message names the classes and the routes: enable the com pack, or pass `allow_loss: true` to proceed with a backup.
+- `HAZARD_REFUSED` the workbook holds parts the file writer would drop on save. The message names the classes, states exactly what each one loses, and gives the two routes that exist: pass `allow_loss: true` to accept those losses (the workbook is backed up first and the losses are permanent in the saved file), or leave the workbook alone at the file tier. The com pack is not a route here: it drives Excel for recalculation, pivots, goal seek, export, rendering, conversion, and encryption, and none of its tools writes a cell, a format, or a row. Reads never touch the workbook and `copy_workbook` branches it byte-for-byte.
 - `FORMULA_REJECTED` the write hit the formula-injection or unsafe-function policy. The message names the function and the override.
 - `CALC_UNAVAILABLE` a fidelity recalculation needs Excel (the com pack) or functions the fallback does not cover. The message lists what it hit.
 - `UNSUPPORTED_CONTENT` structurally unsupported or password-protected content, refused instead of written partially.

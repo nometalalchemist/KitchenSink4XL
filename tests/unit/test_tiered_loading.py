@@ -163,7 +163,15 @@ def test_menu_matches_registry_and_costs():
 #: the budget matters more than the per-call route, the revert is to drop
 #: the parameter from the 34 signatures and correct the claim in
 #: core/package.py instead, and this number goes back to 11,000.
-LITE_TOKEN_CEILING = 11_400
+#:
+#: Raised again for 1.1 (11,400 -> 11,500) to pay for two documented facts
+#: the surface was missing: get_server_info now reports the sandbox and
+#: verify-COM settings a Desktop user sets in a dialog and could not
+#: otherwise confirm arrived (V1-3), and query_range / export_range now say
+#: that filter-hidden rows are included, which they always were and never
+#: said (V1-12). Measured cost of both: about 47 tokens. Docstrings
+#: elsewhere were tightened to keep the rest of the growth at zero.
+LITE_TOKEN_CEILING = 11_500
 
 
 def test_pack_bills_cost_aware():

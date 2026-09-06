@@ -331,10 +331,19 @@ def create_snapshot(path: str, *, label: str | None = None,
     dtg = _dt.datetime.now().strftime("%Y%m%d_%H%M")
     stem = _DTG_PREFIX.sub("", doc.stem)
     base = f"{dtg}_{stem}" + (f"_{label}" if label else "")
-    dest = target_dir / f"{base}{doc.suffix}"
+    # The snapshot name is BUILT from the workbook's, so a name that was
+    # legal can come out illegal: the DTG prefix costs 14 characters and a
+    # label up to 61 more, and ext4 caps a component at 255 BYTES while
+    # Windows caps it at 255 characters. Korean is three bytes a character,
+    # so a perfectly ordinary workbook name overflowed on Linux and the
+    # snapshot failed with a bare OS error. Room is left for the " (n)"
+    # uniquifier below.
+    name = safesave.bound_name(f"{base}{doc.suffix}", headroom=8)
+    base, suffix = os.path.splitext(name)
+    dest = target_dir / name
     n = 2
     while dest.exists():
-        dest = target_dir / f"{base} ({n}){doc.suffix}"
+        dest = target_dir / f"{base} ({n}){suffix}"
         n += 1
 
     shutil.copy2(doc, dest)

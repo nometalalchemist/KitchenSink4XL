@@ -34,7 +34,7 @@ import shutil
 from pathlib import Path
 
 from .errors import XlMcpError
-from .safesave import BACKUP_DIR_NAME, canonical_key
+from .safesave import BACKUP_DIR_NAME, bound_name, canonical_key
 from .sandbox import check_path
 
 #: Extensions that mean "this path is (or is meant to be) a workbook".
@@ -70,12 +70,24 @@ def _in_backup_store(p: Path) -> bool:
 
 def _timestamped_backup(target: str) -> str:
     """Copy the file about to be replaced to <name>.<DTG>.bak beside it,
-    uniquified so a rapid double-overwrite never eats its own backup."""
+    uniquified so a rapid double-overwrite never eats its own backup.
+
+    The .bak name is BUILT from the target's, adding 20 characters, so a
+    target that was legal can produce a name that is not: ext4 caps a
+    filename component at 255 BYTES, Windows at 255 characters, and a
+    non-ASCII name hits the byte ceiling first. bound_name holds the built
+    name inside both, hash-truncating the stem rather than failing the
+    overwrite the caller already authorized."""
     stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    base = f"{target}.{stamp}.bak"
-    dest, n = base, 2
+    directory, name = os.path.split(target)
+
+    def built(tag: str) -> str:
+        return os.path.join(
+            directory, bound_name(f"{name}.{stamp}{tag}.bak", headroom=4))
+
+    dest, n = built(""), 2
     while os.path.exists(dest):
-        dest = f"{target}.{stamp} ({n}).bak"
+        dest = built(f" ({n})")
         n += 1
     shutil.copy2(target, dest)
     return dest

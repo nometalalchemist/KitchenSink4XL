@@ -175,8 +175,10 @@ HINTS: dict[str, str] = {
     ),
     "HAZARD_REFUSED": (
         "the workbook holds parts openpyxl would drop on save; the message "
-        "names them and the routes (enable the com pack, or pass "
-        "allow_loss:true to proceed with a backup)"
+        "names them, states exactly what each loses, and gives the two real "
+        "routes (pass allow_loss:true to accept the loss after a backup, or "
+        "leave the workbook to Excel). The com pack cannot perform a cell, "
+        "format, or structural write, so it is not a route here"
     ),
     "FORMULA_REJECTED": (
         "the write hit the formula-injection or unsafe-function policy; the "

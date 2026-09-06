@@ -53,10 +53,16 @@ still caught.
 The author's package policy governs the outcome (ratified): drop-risk refuses
 without allow_loss, degrade-risk warns and proceeds. In-part extensions are
 drop-risk, so a mutation that would lose them now raises HAZARD_REFUSED naming
-the rules at risk and the two ways out (the COM route, or allow_loss with a
-backup). Under allow_loss the loss is still announced item by item. This
-replaces the previous warn-and-proceed behavior, which announced the loss but
-let it happen.
+the rules at risk and the ways out. Under allow_loss the loss is still
+announced item by item. This replaces the previous warn-and-proceed behavior,
+which announced the loss but let it happen.
+
+The refusal used to name a COM route (see refusal_routes below). It does not
+any more: the com pack holds no tool that writes a cell, a format, or a row,
+so for a refused file-tier mutation that route was a dead end the caller had
+to walk before finding out. Preservation is the real fix and it is not in
+this release; until it lands the refusal states the exact losses and the two
+options that exist.
 """
 
 from __future__ import annotations
@@ -1015,7 +1021,10 @@ def route(
             )
         return ROUTE_REFUSE, (
             "degradable parts present (" + ", ".join(report.labels())
-            + "); enable COM or pass allow_loss to accept degradation"
+            + "); pass allow_loss to accept the degradation, or leave the "
+              "workbook to Excel. The com pack drives Excel for "
+              "recalculation, pivots, export, rendering and conversion, "
+              "and writes no cells, so it cannot carry this edit"
         )
     # would_lose: parts openpyxl drops outright.
     if edit == "surgical" and _raw_safe(report):
@@ -1038,9 +1047,51 @@ def route(
     return ROUTE_REFUSE, (
         "would lose " + ", ".join(
             _SPEC_BY_KEY[k].label for k in report.lossy_keys)
-        + "; enable COM, use a surgical raw-OOXML edit, or pass allow_loss "
-        "with a backup"
+        + "; a surgical raw-OOXML edit preserves them, or pass allow_loss "
+        "with a backup to accept the loss. The com pack writes no cells "
+        "and is not a route for this"
     )
+
+
+# ------------------------------------------------- refusal routes (honest)
+# The gate used to offer "enable COM (com pack)" as the remedy for any
+# refused file-tier mutation. The com pack holds eleven tools -- recalculate,
+# com_manage_pivot, com_goal_seek, com_export_pdf, com_render_sheet,
+# com_convert_format, com_save_with_password, com_set_sparkline, com_autofit,
+# com_validate_opens_clean, com_status -- and NONE of them writes a cell, a
+# format, or a row. A caller who enabled the pack as instructed found nothing
+# there that could perform the operation that was refused. Naming a remedy
+# that does not exist is worse than naming none, in a product whose whole
+# claim is that its labels are honest.
+#
+# So the routes are now the two that are real: accept the loss explicitly,
+# with the exact cost stated per class, or do not put this workbook through
+# the file tier. Preservation is the fix and it is not in this release.
+
+#: The route strings, kept as data so the refusal text, the .detail payload,
+#: and the tests all read the same list.
+ROUTE_ALLOW_LOSS = "allow_loss:true (backed up first; the losses below are permanent in the saved file)"
+ROUTE_LEAVE_ALONE = "leave this workbook to Excel: copy_workbook branches it byte-for-byte, and reads never touch it"
+
+
+def loss_costs(keys) -> list[str]:
+    """"<label>: <what openpyxl does to it>" for each refused hazard class.
+
+    The caller deciding whether to pass allow_loss is deciding to destroy
+    specific content, so the refusal states which content and what happens
+    to it, rather than a class name the caller has to go look up."""
+    out = []
+    for k in keys:
+        spec = _SPEC_BY_KEY.get(k)
+        if spec is None:
+            continue
+        out.append(f"{spec.label}: {spec.note.rstrip('.')}")
+    return out
+
+
+def refusal_routes() -> list[str]:
+    """The routes a refused file-tier mutation actually has."""
+    return [ROUTE_ALLOW_LOSS, ROUTE_LEAVE_ALONE]
 
 
 def _raw_safe(report: HazardReport) -> bool:
@@ -1054,6 +1105,7 @@ def _raw_safe(report: HazardReport) -> bool:
 __all__ = [
     "HazardReport", "Hazard", "HazardSpec", "HAZARD_SPECS",
     "EXT_DROP_LABELS", "IN_PART_EXT_KEY",
+    "loss_costs", "refusal_routes", "ROUTE_ALLOW_LOSS", "ROUTE_LEAVE_ALONE",
     "ole_container_kind", "ole_refusal_text", "refuse_ole_container",
     "OLE_KIND_BIFF", "OLE_KIND_ENCRYPTED", "OLE_KIND_UNKNOWN",
     "scan_path", "scan_names", "route",
