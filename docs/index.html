@@ -374,6 +374,10 @@ th.us{background:var(--brass)!important;color:var(--paper)}
 .scenario td:first-child{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-size:15px;font-weight:700;min-width:190px}
 .scenario th{text-align:left}
 .scenario th .stars{display:block;margin-top:4px;font-size:10px;letter-spacing:.05em;font-weight:500;text-transform:none;opacity:.72}
+/* the shelf metaphor gets a literal gloss wherever it appears, on its own smaller
+   line where the phrase is a heading and inline where it is running prose */
+.scenario th .gloss,.demo-panel h3 .gloss{display:block;margin-top:3px;font-size:10px;
+  letter-spacing:.04em;font-weight:500;text-transform:none;opacity:.8}
 
 /* the context bill, itemized like a utility statement */
 .bill td,.bill th{white-space:nowrap}
@@ -405,6 +409,25 @@ th.us{background:var(--brass)!important;color:var(--paper)}
 .step .go{display:inline-block;font-size:11px;letter-spacing:.18em;text-transform:uppercase;
   color:var(--brass);font-weight:600;text-decoration:none;border-bottom:2px solid var(--brass);
   padding-bottom:2px}
+/* the permissions tip: a pinned notice, not a footnote. Live-amber bar across the top so it
+   reads as the one thing to do after installing, distinct from the two install stations
+   above it and from the hazard tape on the maturity panel. */
+.tipcard{position:relative;margin-top:30px;border:2px solid var(--ink);
+  background:var(--paper-deep);box-shadow:var(--shadow);padding:26px 30px 24px}
+.tipcard:before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--live)}
+.tipcard .badge{position:absolute;top:-11px;left:24px;background:var(--brass);color:var(--paper);
+  font-size:10px;letter-spacing:.3em;padding:4px 12px;text-transform:uppercase;white-space:nowrap}
+.tipcard h3{font-size:clamp(18px,2.4vw,23px);font-weight:900;margin:6px 0 10px;
+  display:flex;align-items:baseline;gap:11px}
+.tipcard h3:before{content:"\26A1";font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;
+  font-size:18px;color:var(--brass);flex:0 0 auto;line-height:1}
+.tipcard p{font-size:13.5px;color:var(--ink-soft);line-height:1.7;max-width:760px}
+.tipcard code{background:var(--paper);border:1px solid var(--rule);padding:1px 5px;font-size:12.5px}
+/* the pointer to it from the guarantee panel */
+.tiplink{display:inline-block;margin-top:16px;font-size:12px;letter-spacing:.06em;
+  color:var(--brass);text-decoration:none;border-bottom:1.5px dashed var(--brass);padding-bottom:2px}
+.tiplink:hover{color:var(--ink);border-bottom-style:solid}
+
 /* ---------- THE PARTS WINDOW ----------
    Family treatment for the advanced-instructions block, shared with Word and PPT. It used
    to be a dashed hairline, which is the visual language of a caveat, so developers scrolled
@@ -673,7 +696,7 @@ footer a{color:var(--brass)}
       <div class="demo-panel bad">
         <span class="corner-tag" data-i18n="demo.badtag">NO LABEL</span>
         <span class="nope" data-i18n="demo.nope">IS IT CURRENT?</span>
-        <h3 data-i18n="demo.badh">Other tools on this shelf</h3>
+        <h3 data-i18n="demo.badh">Other tools on this shelf<span class="gloss">(other Excel MCPs)</span></h3>
         <div class="demo-fig">
           <svg class="cir" viewBox="0 0 300 150" width="300" height="150" role="img" aria-label="Three cells wired in a chain. The input reads 20, the two downstream cells read 48 and 60, and none of the three carries a label saying whether those values are current.">
             <line class="wire" x1="84" y1="62" x2="118" y2="62"/>
@@ -765,7 +788,7 @@ footer a{color:var(--brass)}
     <p class="stakes" data-i18n="cmp.stakes">Why it matters: the AI cannot see what a tool never hands it. Give it a stale number and it will repeat that number to you with full confidence; drop a row silently and its summary is wrong with no warning. Every line in this table is a way you end up trusting a wrong answer.</p>
     <div class="ticked"><div class="tablewrap">
       <table class="scenario">
-        <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🔌 KitchenSink4XL</th><th data-i18n="cmp.h3">haris-musa (openpyxl)<span class="stars">4,155 GitHub stars&dagger;</span></th><th data-i18n="cmp.h4">Other tools on this shelf*<span class="stars">negokaz 1,021 &middot; sbroenne 655&dagger;</span></th></tr>
+        <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🔌 KitchenSink4XL</th><th data-i18n="cmp.h3">haris-musa (openpyxl)<span class="stars">4,155 GitHub stars&dagger;</span></th><th data-i18n="cmp.h4">Other tools on this shelf*<span class="gloss">(other Excel MCPs)</span><span class="stars">negokaz 1,021 &middot; sbroenne 655&dagger;</span></th></tr>
         <tr><td data-i18n="cr1.q">"Insert a column in the middle, keep every formula pointing where it should."</td><td class="us yes" data-i18n="cr1.us">✔ formulas, tables, named ranges, charts and cross-sheet links all follow, checked against Excel's own recalculation</td><td class="no" data-i18n="cr1.inc">✘ nothing in the docs says otherwise, and openpyxl, the library underneath, states plainly that it does not maintain formulas, tables or charts when rows and columns move</td><td class="part" data-i18n="cr1.oth">Excel does the shifting itself, on Windows, with the workbook closed and the application running</td></tr>
         <tr><td data-i18n="cr2.q">"Is this total current, or left over from the last save?"</td><td class="us yes" data-i18n="cr2.us">✔ every value labeled calculated, cached or absent, and the stale cells named by address</td><td class="no" data-i18n="cr2.inc">✘ reads return the formula string; there is no way to get even the cached value</td><td class="part" data-i18n="cr2.oth">one competing tool can ask Excel itself to recalculate, but the value comes back with no marking of whether it is fresh or stale</td></tr>
         <tr><td data-i18n="cr3.q">"Sort it the way Excel would sort it, blanks and all."</td><td class="us yes" data-i18n="cr3.us">✔ numbers, then text case-insensitively, then FALSE, TRUE, errors, blanks last, both directions, checked cell for cell against Excel</td><td class="no" data-i18n="cr3.inc">✘ no sort tool</td><td class="part" data-i18n="cr3.oth">Excel's own sort, with the application running</td></tr>
@@ -774,7 +797,7 @@ footer a{color:var(--brass)}
         <tr><td data-i18n="cr6.q">"Recalculate it for real and prove it."</td><td class="us yes" data-i18n="cr6.us">✔ a private hidden Excel does the arithmetic and the result comes back labeled calculated, never mixed in with cached values</td><td class="no" data-i18n="cr6.inc">✘ no recalculation tool, and the documentation never raises the subject</td><td class="part" data-i18n="cr6.oth">real recalculation by driving Excel directly, which needs Windows, an installed Excel, a logged-in desktop, and the workbook closed first</td></tr>
       </table>
     </div></div>
-    <p class="foot-note" data-i18n="cmp.note">Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf: negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.</p>
+    <p class="foot-note" data-i18n="cmp.note">Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf (other Excel MCPs): negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.</p>
   </div>
 </section>
 
@@ -871,7 +894,12 @@ footer a{color:var(--brass)}
         <div class="term"><div><span class="p">$</span> claude mcp add xl -s user -- uvx kitchensink4xl</div></div>
       </div>
     </div>
-    <details class="devfold schematic" data-plate="Behind the panel">
+    <div class="tipcard">
+      <span class="badge" data-i18n="inst.tipb">Do this first</span>
+      <h3 id="tip" data-i18n="inst.tipt">One tip that removes most permission pop-ups</h3>
+      <p data-i18n="inst.tipp">In Claude Desktop's <code>Tool permissions</code> for this server, set the <code>Read-only tools</code> group to <code>Always Allow</code>. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on <code>Ask</code>, so anything that changes things still checks with you first.</p>
+    </div>
+    <details class="devfold" data-plate="Behind the panel">
       <summary data-i18n="inst.dev">For developers: pip, uvx, source, other MCP clients</summary>
       <div class="devbody">
         <p data-i18n="inst.dp1">Install the package and point any MCP client at the executable:</p>
@@ -921,6 +949,7 @@ footer a{color:var(--brass)}
       <span class="seal">🛡️</span>
       <h3 data-i18n="g.t">Engineered Not to Corrupt</h3>
       <p data-i18n="g.p1">Saves either complete perfectly or change nothing, never half. Automatic backups before every change. And one extra wire, because this is a spreadsheet: before a release ships, every kind of edit is checked against Excel's own math. The wiring gets inspected before the power goes on.</p>
+      <a class="tiplink" href="#tip" data-i18n="inst.tipt">One tip that removes most permission pop-ups</a>
       <p style="margin-top:14px;font-size:11px;opacity:.75" data-i18n="g.p2">Provided as-is, without warranty of any kind, per the license; the engineering above is simply how seriously your workbooks are taken. Keep backups. (It makes them for you.)</p>
     </div>
   </div>
@@ -1113,7 +1142,7 @@ en: {
 "demo.lead": "Here is the dirty secret of every tool that reads Excel files: a spreadsheet remembers its answers, not its thinking. When something changes upstream, the old answers just sit there, looking exactly like real numbers. Most AI tools will read one anyway and confidently report it, and you will make a decision based on it. This server refuses to bluff. Every number it hands your AI comes with the truth attached: freshly calculated, remembered from the last save, or missing, with the affected cells named. And when it really matters, it asks Excel itself to recalculate and prove it.",
 "demo.badtag": "NO LABEL",
 "demo.nope": "IS IT CURRENT?",
-"demo.badh": "Other tools on this shelf",
+"demo.badh": "Other tools on this shelf<span class=\"gloss\">(other Excel MCPs)</span>",
 "demo.badp": "Three numbers and no way to tell them apart. The first cell says 20, so the second one should say 80. It says 48, which is what it said before anybody changed anything. Nothing here warns you.",
 "demo.goodtag": "LABELED",
 "demo.goodh": "This one",
@@ -1164,7 +1193,7 @@ en: {
 "cmp.stakes": "Why it matters: the AI cannot see what a tool never hands it. Give it a stale number and it will repeat that number to you with full confidence; drop a row silently and its summary is wrong with no warning. Every line in this table is a way you end up trusting a wrong answer.",
 "cmp.h1": "\"Hey, could you…\"",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub stars&dagger;</span>",
-"cmp.h4": "Other tools on this shelf*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "Other tools on this shelf*<span class=\"gloss\">(other Excel MCPs)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "\"Insert a column in the middle, keep every formula pointing where it should.\"",
 "cr1.us": "✔ formulas, tables, named ranges, charts and cross-sheet links all follow, checked against Excel's own recalculation",
 "cr1.inc": "✘ nothing in the docs says otherwise, and openpyxl, the library underneath, states plainly that it does not maintain formulas, tables or charts when rows and columns move",
@@ -1188,7 +1217,7 @@ en: {
 "cr6.us": "✔ a private hidden Excel does the arithmetic and the result comes back labeled calculated, never mixed in with cached values",
 "cr6.inc": "✘ no recalculation tool, and the documentation never raises the subject",
 "cr6.oth": "real recalculation by driving Excel directly, which needs Windows, an installed Excel, a logged-in desktop, and the workbook closed first",
-"cmp.note": "Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf: negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.",
+"cmp.note": "Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf (other Excel MCPs): negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.",
 "h2.eff": "The context bill",
 "eff.lead": "Most MCP servers move into your AI's context like a hoarder: everything, up front, whether the job needs it or not. This one starts light and only unpacks a shelf when the work calls for it. Here is the bill, measured:",
 "bill.h1": "On the meter", "bill.h2": "Tools", "bill.h3": "Tokens", "bill.h4": "When it draws",
@@ -1217,6 +1246,9 @@ en: {
 "inst.dp1": "Install the package and point any MCP client at the executable:",
 "inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.",
+"inst.tipt": "One tip that removes most permission pop-ups",
+"inst.tipp": "In Claude Desktop's <code>Tool permissions</code> for this server, set the <code>Read-only tools</code> group to <code>Always Allow</code>. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on <code>Ask</code>, so anything that changes things still checks with you first.",
+"inst.tipb": "Do this first",
 "h2.svc": "Customer service",
 "mat.t": "Young, and tested like it isn't",
 "mat.p": "Before release this server was tested the hard way: months of deliberate attack rounds trying to corrupt files, sneak past the safety checks, and catch it lying, plus every kind of edit checked against Excel's own math. All of it came back clean. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the customer service counter and tell us what broke.",
@@ -1275,7 +1307,7 @@ ko: {
 "demo.lead": "Excel 파일을 읽는 모든 도구가 안고 있는 불편한 진실이 있습니다. 스프레드시트는 계산 과정이 아니라 계산 결과만 기억한다는 것입니다. 앞쪽에서 무언가가 바뀌어도 예전 답은 그 자리에 그대로 남아, 진짜 숫자와 똑같은 얼굴을 하고 있습니다. 대부분의 AI 도구는 그 값을 그대로 읽어 자신 있게 보고하고, 사용자는 그 숫자를 근거로 판단을 내리게 됩니다. 이 서버는 허세를 부리지 않습니다. AI에게 건네는 모든 숫자에는 사실이 함께 붙습니다. 방금 계산된 값인지, 마지막 저장 시점에 기억해 둔 값인지, 아니면 아예 없는 값인지, 그리고 해당하는 셀 주소까지 함께 알려 줍니다. 정말 중요한 순간에는 Excel 자신에게 다시 계산하게 하고 그 결과로 증명합니다.",
 "demo.badtag": "라벨 없음",
 "demo.nope": "지금 값이 맞나요?",
-"demo.badh": "이 선반의 다른 도구들",
+"demo.badh": "이 선반의 다른 도구들<span class=\"gloss\">(다른 Excel MCP)</span>",
 "demo.badp": "숫자 세 개, 구분할 방법은 없습니다. 첫 셀이 20이니 두 번째는 80이어야 합니다. 그런데 48이라고 되어 있습니다. 아무도 손대기 전에 적혀 있던 값입니다. 여기에는 아무런 경고도 없습니다.",
 "demo.goodtag": "라벨 있음",
 "demo.goodh": "이 도구",
@@ -1326,7 +1358,7 @@ ko: {
 "cmp.stakes": "왜 중요한가: 도구가 건네지 않은 것은 AI가 볼 수 없습니다. 오래된 숫자를 건네면 AI는 그 숫자를 아주 자신 있게 그대로 옮겨 말합니다. 행 하나가 조용히 빠지면 AI의 요약은 아무 경고 없이 틀립니다. 이 표의 모든 줄은 당신이 틀린 답을 믿게 되는 경로입니다.",
 "cmp.h1": "“저기, 혹시…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 스타 4,155개&dagger;</span>",
-"cmp.h4": "이 선반의 다른 도구들*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "이 선반의 다른 도구들*<span class=\"gloss\">(다른 Excel MCP)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "“가운데에 열 하나 넣고, 모든 수식이 제자리를 가리키게 해 줘.”",
 "cr1.us": "✔ 수식, 표, 이름 정의, 차트, 시트 간 링크가 전부 따라오고, Excel 자신의 재계산과 대조해 확인합니다",
 "cr1.inc": "✘ 문서 어디에도 그렇지 않다는 말이 없고, 기반 라이브러리인 openpyxl은 행이나 열이 움직일 때 수식·표·차트를 유지하지 않는다고 분명히 밝히고 있습니다",
@@ -1350,7 +1382,7 @@ ko: {
 "cr6.us": "✔ 숨겨진 별도 Excel이 계산하고, 결과는 계산됨 라벨을 달고 돌아오며 캐시된 값과 절대 섞이지 않습니다",
 "cr6.inc": "✘ 재계산 도구가 없고, 문서에서 이 주제를 아예 다루지 않습니다",
 "cr6.oth": "Excel을 직접 몰아 실제로 재계산합니다. 다만 Windows와 설치된 Excel, 로그인된 바탕 화면, 그리고 먼저 닫아 둔 통합 문서가 필요합니다",
-"cmp.note": "2026-09-04 기준 기능 조사이며, 공개 저장소와 문서, 이슈 트래커를 근거로 정리했습니다. n/d는 조사한 자료에 문서화되어 있지 않다는 뜻이며, 없다고 단정하는 표시가 아닙니다. 가장 인기 있는 Excel MCP 서버는 haris-musa/excel-mcp-server로, openpyxl 기반 도구 25종이며 마지막 릴리스는 2026-04-12입니다. 그 저장소의 공개 이슈 #94와 #118은 수식 문자열 대신 계산된 값을 달라고 요청하고 있습니다. openpyxl 문서는 행이나 열을 삽입하거나 삭제할 때 수식, 표, 차트 같은 의존 관계를 관리하지 않는다고 밝히고 있습니다. * 이 선반의 다른 도구들: negokaz/excel-mcp-server (Go, 도구 7종, 나눠 읽기, Windows에서 실시간 편집), sbroenne/mcp-server-excel (C#, 실제 Excel 애플리케이션을 구동하는 연산 326개를 감싼 도구 31종, 기능의 천장이지만 Windows와 설치된 Excel, 파일 단독 점유가 필요하고 파일 기반 계층이 없음). 실제 계산 엔진을 품은 신생 서버 두 곳, PSU3D0/agent-spreadsheet와 logisky/logisheets-mcp도 지켜볼 만합니다. Microsoft는 Excel MCP 서버를 내놓지 않았고, Claude for Excel은 MCP 서버가 아니라 Office 추가 기능입니다. &dagger; 스타 수는 2026-09-04에 GitHub API로 읽었으며 참고용입니다. 스타는 그 선반이 얼마나 오래 눈에 띄었는지를 말해 줄 뿐, 그 위에 무엇이 있는지는 말해 주지 않습니다. 테스트와 스트레스 근거는 위 사양 표시줄에 있습니다. 정정 환영합니다. 이슈를 열어 주세요.",
+"cmp.note": "2026-09-04 기준 기능 조사이며, 공개 저장소와 문서, 이슈 트래커를 근거로 정리했습니다. n/d는 조사한 자료에 문서화되어 있지 않다는 뜻이며, 없다고 단정하는 표시가 아닙니다. 가장 인기 있는 Excel MCP 서버는 haris-musa/excel-mcp-server로, openpyxl 기반 도구 25종이며 마지막 릴리스는 2026-04-12입니다. 그 저장소의 공개 이슈 #94와 #118은 수식 문자열 대신 계산된 값을 달라고 요청하고 있습니다. openpyxl 문서는 행이나 열을 삽입하거나 삭제할 때 수식, 표, 차트 같은 의존 관계를 관리하지 않는다고 밝히고 있습니다. * 이 선반의 다른 도구들 (다른 Excel MCP): negokaz/excel-mcp-server (Go, 도구 7종, 나눠 읽기, Windows에서 실시간 편집), sbroenne/mcp-server-excel (C#, 실제 Excel 애플리케이션을 구동하는 연산 326개를 감싼 도구 31종, 기능의 천장이지만 Windows와 설치된 Excel, 파일 단독 점유가 필요하고 파일 기반 계층이 없음). 실제 계산 엔진을 품은 신생 서버 두 곳, PSU3D0/agent-spreadsheet와 logisky/logisheets-mcp도 지켜볼 만합니다. Microsoft는 Excel MCP 서버를 내놓지 않았고, Claude for Excel은 MCP 서버가 아니라 Office 추가 기능입니다. &dagger; 스타 수는 2026-09-04에 GitHub API로 읽었으며 참고용입니다. 스타는 그 선반이 얼마나 오래 눈에 띄었는지를 말해 줄 뿐, 그 위에 무엇이 있는지는 말해 주지 않습니다. 테스트와 스트레스 근거는 위 사양 표시줄에 있습니다. 정정 환영합니다. 이슈를 열어 주세요.",
 "h2.eff": "컨텍스트 청구서",
 "eff.lead": "대부분의 MCP 서버는 저장 강박증 환자처럼 AI의 컨텍스트로 이사해 옵니다. 필요하든 말든 전부, 미리 말이죠. 이 서버는 가볍게 시작하고 일이 부를 때만 선반을 하나씩 풉니다. 청구서는 이렇습니다. 측정한 값입니다.",
 "bill.h1": "계량기에 잡히는 항목", "bill.h2": "도구", "bill.h3": "토큰", "bill.h4": "언제 전류가 흐르나",
@@ -1379,6 +1411,9 @@ ko: {
 "inst.dp1": "패키지를 설치하고 아무 MCP 클라이언트나 실행 파일을 가리키게 하세요.",
 "inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. Windows에서는 COM 의존성이 기본 설치만으로도 함께 딸려 오는 경우가 많습니다. 그래도 <code>[com]</code>으로 설치하는 쪽이 확실한 방법이고, 한 번 더 해도 아무 문제 없습니다. 전체 설정은 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>에 있습니다.",
 "inst.note": "이 서버의 대부분은 Excel 설치가 전혀 필요 없고 어느 컴퓨터에서나 돌아갑니다. Excel에게 직접 일을 시키는 부분만 Excel이 설치된 Windows를 요구하며, 그때도 자기만의 숨겨진 사본을 열기 때문에 화면에 띄워 둔 통합 문서는 건드리지 않습니다.",
+"inst.tipt": "권한 팝업을 대부분 없애 주는 요령 하나",
+"inst.tipp": "Claude Desktop에서 이 서버의 <code>Tool permissions</code>를 열고, <code>Read-only tools</code> 그룹을 <code>Always Allow</code>로 바꾸세요. 이 도구들은 아무것도 바꾸지 못하므로 한 번 허용해도 안전하고, Claude가 읽을 때마다 묻는 일이 없어집니다. 실제로 작업하는 도구는 <code>Ask</code>로 그대로 두세요. 무언가를 바꾸는 일은 여전히 먼저 당신에게 확인합니다.",
+"inst.tipb": "먼저 이것부터",
 "h2.svc": "고객 서비스",
 "mat.t": "젊지만, 시험은 젊지 않았습니다",
 "mat.p": "출시 전에 이 서버는 어려운 길로 시험했습니다. 파일을 망가뜨리고, 안전 검사를 몰래 지나치고, 거짓말하는 순간을 잡아내려는 의도적인 공격 라운드를 몇 달 동안 돌렸고, 모든 종류의 편집을 Excel 자체의 계산과 대조했습니다. 전부 깨끗하게 돌아왔습니다. 아직 없는 것은 남의 통합 문서 속에서 보낸 긴 시간이고, 스프레드시트는 실험실이 아니라 현장에서 신뢰를 얻습니다. Excel이 당신이 사는 곳이라면, 당신이 바로 이 서버에 필요한 실험실입니다. 가장 지저분한 통합 문서를 고객 서비스 창구로 가져와 무엇이 망가졌는지 알려 주세요.",
@@ -1437,7 +1472,7 @@ ja: {
 "demo.lead": "Excel ファイルを読むツールすべてに共通する、あまり語られない事実があります。表計算が覚えているのは答えであって、考え方ではありません。どこか上流が変わっても、古い答えはそのまま残り、本物の数字とまったく同じ顔をしています。たいていの AI ツールはそれを読み、自信たっぷりに報告し、あなたはその数字をもとに判断してしまいます。このサーバーははったりを言いません。AI に渡すすべての数字に、事実が添えられます。いま計算した値なのか、前回の保存時に覚えていた値なのか、そもそも無いのか。該当するセルの位置も一緒に伝えます。そして本当に大事な場面では、Excel 自身に再計算させて証明します。",
 "demo.badtag": "ラベルなし",
 "demo.nope": "これ、今の値?",
-"demo.badh": "この棚のほかの道具",
+"demo.badh": "この棚のほかの道具<span class=\"gloss\">(ほかの Excel MCP)</span>",
 "demo.badp": "数字が三つ、見分ける手立てはありません。最初のセルが 20 なら、二つ目は 80 のはずです。表示は 48。誰も何も触る前の値です。ここには何の警告もありません。",
 "demo.goodtag": "ラベルあり",
 "demo.goodh": "こちらの道具",
@@ -1488,7 +1523,7 @@ ja: {
 "cmp.stakes": "なぜ大事か。道具が渡さなかったものを、AIは見ることができません。古い数字を渡せば、AIはその数字を自信たっぷりにそのまま伝えてきます。行が黙って落ちれば、AIの要約は何の警告もないまま間違っています。この表の一行一行が、あなたが誤った答えを信じてしまう筋道です。",
 "cmp.h1": "「ねえ、ちょっと…」",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub スター 4,155&dagger;</span>",
-"cmp.h4": "この棚のほかの道具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "この棚のほかの道具*<span class=\"gloss\">(ほかの Excel MCP)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "「真ん中に列を一つ入れて、どの数式も正しい先を指したままにして。」",
 "cr1.us": "✔ 数式、テーブル、名前の定義、グラフ、シート間のリンクがすべて追従し、Excel 自身の再計算と突き合わせて確認します",
 "cr1.inc": "✘ そうでないとはどの文書にも書かれておらず、土台のライブラリ openpyxl は、行や列が動くときに数式・テーブル・グラフの面倒は見ないと明言しています",
@@ -1512,7 +1547,7 @@ ja: {
 "cr6.us": "✔ 隠れた専用の Excel が計算し、結果は計算済みのラベルを付けて返り、キャッシュされた値と混ざることはありません",
 "cr6.inc": "✘ 再計算のツールがなく、文書でもこの話題に触れていません",
 "cr6.oth": "Excelを直接動かして本当に再計算します。ただしWindowsと、入っているExcelと、ログイン済みのデスクトップと、先に閉じてあるブックが要ります",
-"cmp.note": "2026-09-04 時点の機能調査で、公開リポジトリ、ドキュメント、イシュートラッカーをもとにまとめました。n/d は調査した資料に記載がないという意味で、無いと断定するものではありません。もっとも人気のある Excel MCP サーバーは haris-musa/excel-mcp-server で、openpyxl 上の 25 ツール、最終リリースは 2026-04-12 です。このリポジトリの公開イシュー #94 と #118 は、数式の文字列ではなく計算済みの値がほしいと求めています。openpyxl の文書は、行や列を挿入または削除するときに数式・テーブル・グラフといった依存関係の面倒は見ないと述べています。* この棚のほかの道具: negokaz/excel-mcp-server (Go、7 ツール、分割読み取り、Windows での実時間編集)、sbroenne/mcp-server-excel (C#、実際の Excel アプリを動かす 326 の操作を包む 31 ツール、機能の天井だが Windows とインストール済み Excel、ファイルの排他利用が要り、ファイルベースの層がない)。本物の計算エンジンを積んだ新顔が二つ、PSU3D0/agent-spreadsheet と logisky/logisheets-mcp も見ておく価値があります。Microsoft は Excel の MCP サーバーを出しておらず、Claude for Excel は MCP サーバーではなく Office のアドインです。&dagger; スター数は 2026-09-04 に GitHub API で取得した参考値です。スターはその棚がどれだけ長く目に入ってきたかを示すだけで、そこに何が載っているかは示しません。テストと負荷の根拠は上の仕様帯にあります。訂正は歓迎です。イシューをどうぞ。",
+"cmp.note": "2026-09-04 時点の機能調査で、公開リポジトリ、ドキュメント、イシュートラッカーをもとにまとめました。n/d は調査した資料に記載がないという意味で、無いと断定するものではありません。もっとも人気のある Excel MCP サーバーは haris-musa/excel-mcp-server で、openpyxl 上の 25 ツール、最終リリースは 2026-04-12 です。このリポジトリの公開イシュー #94 と #118 は、数式の文字列ではなく計算済みの値がほしいと求めています。openpyxl の文書は、行や列を挿入または削除するときに数式・テーブル・グラフといった依存関係の面倒は見ないと述べています。* この棚のほかの道具 (ほかの Excel MCP): negokaz/excel-mcp-server (Go、7 ツール、分割読み取り、Windows での実時間編集)、sbroenne/mcp-server-excel (C#、実際の Excel アプリを動かす 326 の操作を包む 31 ツール、機能の天井だが Windows とインストール済み Excel、ファイルの排他利用が要り、ファイルベースの層がない)。本物の計算エンジンを積んだ新顔が二つ、PSU3D0/agent-spreadsheet と logisky/logisheets-mcp も見ておく価値があります。Microsoft は Excel の MCP サーバーを出しておらず、Claude for Excel は MCP サーバーではなく Office のアドインです。&dagger; スター数は 2026-09-04 に GitHub API で取得した参考値です。スターはその棚がどれだけ長く目に入ってきたかを示すだけで、そこに何が載っているかは示しません。テストと負荷の根拠は上の仕様帯にあります。訂正は歓迎です。イシューをどうぞ。",
 "h2.eff": "コンテキストの請求書",
 "eff.lead": "たいていの MCP サーバーは、ため込み屋のように AI のコンテキストへ引っ越してきます。必要かどうかに関係なく、全部、最初から。このサーバーは軽く始めて、仕事が呼んだときだけ棚をひとつ開けます。請求書はこちらです。実測値です。",
 "bill.h1": "メーターに乗るもの", "bill.h2": "ツール", "bill.h3": "トークン", "bill.h4": "いつ電気を食うか",
@@ -1541,6 +1576,9 @@ ja: {
 "inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指してください。",
 "inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。Windows では COM の依存パッケージが基本のインストールだけで一緒に入ってくることがよくあります。それでも <code>[com]</code> を付けて入れるほうが確実で、重ねて実行しても害はありません。設定の全体は <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a> にあります。",
 "inst.note": "このサーバーの大半は Excel のインストールをまったく必要とせず、どのパソコンでも動きます。Excel に仕事をさせる部分だけが Excel の入った Windows を求め、そのときも自分専用の隠れた一つを開くので、画面に出したままのブックには触れません。",
+"inst.tipt": "権限のポップアップをほとんど消せるコツが一つ",
+"inst.tipp": "Claude Desktop でこのサーバーの <code>Tool permissions</code> を開き、<code>Read-only tools</code> のグループを <code>Always Allow</code> にしてください。これらの道具は何も変更できないので、一度許可しても安全で、Claude が読み取りのたびに尋ねてくることがなくなります。手を加えるほうの道具は <code>Ask</code> のままにしておいてください。何かを変える操作は、これまでどおり先にあなたに確認します。",
+"inst.tipb": "まずこれを",
 "h2.svc": "カスタマーサービス",
 "mat.t": "若いのに、試され方は若くありません",
 "mat.p": "公開の前に、このサーバーは難しいほうの道で試しました。ファイルを壊し、安全確認をすり抜け、嘘をついた瞬間を捕まえようとする意図的な攻撃ラウンドを何か月も回し、あらゆる種類の編集をExcel自身の計算と突き合わせました。すべて問題なく戻ってきました。まだ持っていないのは、他人のブックの中で過ごす長い時間です。表計算は実験室ではなく現場で信頼を得ます。Excelがあなたの住む場所なら、あなたこそこのサーバーに必要な実験室です。いちばん汚いブックをカスタマーサービスの窓口へ持ってきて、何が壊れたか教えてください。",
@@ -1599,7 +1637,7 @@ zh: {
 "demo.lead": "所有读取 Excel 文件的工具都有一个不太有人说的实情: 表格记住的是答案,不是算法。上游一变,旧答案就那样留在原地,长得和真数字一模一样。多数 AI 工具照读不误,还讲得很有把握,而你会照着这个数字做决定。这台服务器不虚张声势。它交给 AI 的每一个数字都附带实情: 是刚算出来的,是上次保存时记下的,还是根本没有,并且点名受影响的单元格。真到关键处,它会请 Excel 亲自重算,拿结果作证。",
 "demo.badtag": "无标注",
 "demo.nope": "这是现在的值吗?",
-"demo.badh": "这个货架上的其他工具",
+"demo.badh": "这个货架上的其他工具<span class=\"gloss\">(其他 Excel MCP)</span>",
 "demo.badp": "三个数字,没法分辨。第一个单元格是 20,那第二个该是 80。它写着 48,那是谁都还没动过之前的值。这里没有任何提醒。",
 "demo.goodtag": "带标注",
 "demo.goodh": "这一个",
@@ -1650,7 +1688,7 @@ zh: {
 "cmp.stakes": "为什么这要紧:工具没交出去的东西,AI根本看不见。给它一个过时的数,它会满怀信心地把那个数原样报给你;悄悄漏掉一行,它的汇总就错了,而且不会有任何提示。这张表里的每一行,都是一条让你最后信了错答案的路。",
 "cmp.h1": "“嘿,能不能…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 星标 4,155&dagger;</span>",
-"cmp.h4": "这个货架上的其他工具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "这个货架上的其他工具*<span class=\"gloss\">(其他 Excel MCP)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "“在中间插一列,每个公式还得指对地方。”",
 "cr1.us": "✔ 公式、表格、名称、图表和跨表链接全都跟着走,并与 Excel 自己的重算结果核对",
 "cr1.inc": "✘ 文档里没有任何相反的说法,而底层库 openpyxl 明确写着: 行列移动时它不负责维护公式、表格和图表",
@@ -1674,7 +1712,7 @@ zh: {
 "cr6.us": "✔ 由一个隐藏的专用 Excel 来算,结果带着已计算的标注回来,绝不和缓存值混在一起",
 "cr6.inc": "✘ 没有重算工具,文档里也从未提起这件事",
 "cr6.oth": "直接驱动Excel做真正的重算,不过要有Windows、装好的Excel、一个已登录的桌面,还得先把工作簿关掉",
-"cmp.note": "能力调研截至 2026-09-04,取自公开仓库、文档与问题追踪。n/d 表示所查资料中没有记载,并非断言其缺失。最受欢迎的 Excel MCP 服务器是 haris-musa/excel-mcp-server,基于 openpyxl 的 25 件工具,最后一次发布是 2026-04-12。该仓库自己的公开 issue #94 和 #118 就在要求返回算出来的值,而不是公式文本。openpyxl 的文档写明: 插入或删除行列时,它不管理公式、表格、图表这类依赖关系。* 这个货架上的其他工具: negokaz/excel-mcp-server (Go,七件工具,分页读取,Windows 下可实时编辑)、sbroenne/mcp-server-excel (C#,31 件工具封装 326 项操作,驱动真正的 Excel 应用,是能力天花板,但要 Windows 加已装 Excel 并独占文件,而且没有文件层)。另有两台内置真计算引擎的新服务器值得留意: PSU3D0/agent-spreadsheet 与 logisky/logisheets-mcp。Microsoft 没有推出 Excel MCP 服务器,Claude for Excel 是 Office 加载项,不是 MCP 服务器。&dagger; 星标数于 2026-09-04 通过 GitHub API 读取,仅供参考: 星标说明这个货架被看了多久,不说明上面摆的是什么。测试与压力方面的凭据在页首的规格条里。欢迎指正,请开 issue。",
+"cmp.note": "能力调研截至 2026-09-04,取自公开仓库、文档与问题追踪。n/d 表示所查资料中没有记载,并非断言其缺失。最受欢迎的 Excel MCP 服务器是 haris-musa/excel-mcp-server,基于 openpyxl 的 25 件工具,最后一次发布是 2026-04-12。该仓库自己的公开 issue #94 和 #118 就在要求返回算出来的值,而不是公式文本。openpyxl 的文档写明: 插入或删除行列时,它不管理公式、表格、图表这类依赖关系。* 这个货架上的其他工具 (其他 Excel MCP): negokaz/excel-mcp-server (Go,七件工具,分页读取,Windows 下可实时编辑)、sbroenne/mcp-server-excel (C#,31 件工具封装 326 项操作,驱动真正的 Excel 应用,是能力天花板,但要 Windows 加已装 Excel 并独占文件,而且没有文件层)。另有两台内置真计算引擎的新服务器值得留意: PSU3D0/agent-spreadsheet 与 logisky/logisheets-mcp。Microsoft 没有推出 Excel MCP 服务器,Claude for Excel 是 Office 加载项,不是 MCP 服务器。&dagger; 星标数于 2026-09-04 通过 GitHub API 读取,仅供参考: 星标说明这个货架被看了多久,不说明上面摆的是什么。测试与压力方面的凭据在页首的规格条里。欢迎指正,请开 issue。",
 "h2.eff": "上下文账单",
 "eff.lead": "多数 MCP 服务器像囤积症患者一样搬进你 AI 的上下文: 不管这活儿用不用得上,先全搬进来。这一台起步很轻,只有活儿找上门才拆开一格货架。账单在这里,是量出来的。",
 "bill.h1": "上表的项目", "bill.h2": "工具", "bill.h3": "token", "bill.h4": "什么时候耗电",
@@ -1703,6 +1741,9 @@ zh: {
 "inst.dp1": "装上这个包,然后让任意 MCP 客户端指向该可执行文件:",
 "inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。在 Windows 上,COM 依赖往往会随基础安装一起被带进来;不管怎样,用 <code>[com]</code> 安装都是稳妥的做法,重复装一次也无妨。完整设置见 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>。",
 "inst.note": "这台服务器的大部分完全不需要装 Excel,在任何电脑上都能跑。只有请 Excel 亲自干活的那部分需要装有 Excel 的 Windows,而且它会另开一个自己的隐藏副本,你屏幕上开着的那个工作簿不会被碰。",
+"inst.tipt": "一个能让权限弹窗少掉大半的窍门",
+"inst.tipp": "在 Claude Desktop 里打开这个服务器的 <code>Tool permissions</code>,把 <code>Read-only tools</code> 那一组设成 <code>Always Allow</code>。这些工具什么都改不了,所以一次性批准是安全的,Claude 也就不会每读一次就问你一遍。会动手的那些工具保持在 <code>Ask</code>,这样任何会改变东西的操作,仍然会先来问过你。",
+"inst.tipb": "先做这一步",
 "h2.svc": "客户服务",
 "mat.t": "年纪轻,可试得一点都不轻",
 "mat.p": "发布之前,这个服务器是走难路试出来的:好几个月的蓄意攻击轮次,专门去弄坏文件、绕过安全检查、抓它说谎,再加上每一种编辑都拿Excel自己的算法核对过。结果全都是干净的。它还缺的,是在别人的工作簿里过上一段长日子;表格的信任是在现场挣来的,不是在实验室里。如果Excel就是你过日子的地方,你就是这个服务器需要的实验室:把你最难看的那个工作簿带到客户服务柜台来,告诉我们哪里坏了。",
@@ -1761,7 +1802,7 @@ de: {
 "demo.lead": "Hier ist das offene Geheimnis jedes Werkzeugs, das Excel-Dateien liest: eine Tabelle merkt sich ihre Antworten, nicht ihren Rechenweg. Ändert sich weiter oben etwas, bleiben die alten Antworten einfach stehen und sehen dabei aus wie echte Zahlen. Die meisten KI-Werkzeuge lesen so eine Zahl trotzdem und melden sie voller Überzeugung, und Sie entscheiden danach. Dieser Server blufft nicht. Jede Zahl, die er Ihrer KI reicht, kommt mit der Wahrheit im Gepäck: frisch berechnet, aus dem letzten Speichern erinnert oder gar nicht vorhanden, samt Nennung der betroffenen Zellen. Und wenn es wirklich darauf ankommt, lässt er Excel selbst neu rechnen und den Beweis liefern.",
 "demo.badtag": "OHNE ANGABE",
 "demo.nope": "IST DAS AKTUELL?",
-"demo.badh": "Andere Werkzeuge in diesem Regal",
+"demo.badh": "Andere Werkzeuge in diesem Regal<span class=\"gloss\">(andere Excel-MCPs)</span>",
 "demo.badp": "Drei Zahlen, und keine Möglichkeit, sie auseinanderzuhalten. Die erste Zelle sagt 20, also müsste die zweite 80 sagen. Sie sagt 48, und das ist der Stand, bevor jemand irgendetwas geändert hat. Nichts hier warnt Sie.",
 "demo.goodtag": "MIT ANGABE",
 "demo.goodh": "Dieses hier",
@@ -1812,7 +1853,7 @@ de: {
 "cmp.stakes": "Warum das zählt: Die KI kann nicht sehen, was ein Werkzeug ihr nie aushändigt. Geben Sie ihr eine veraltete Zahl, und sie gibt Ihnen genau diese Zahl mit voller Überzeugung zurück; fällt still eine Zeile weg, ist ihre Zusammenfassung falsch, ohne jede Warnung. Jede Zeile in dieser Tabelle ist ein Weg, auf dem Sie am Ende einer falschen Antwort vertrauen.",
 "cmp.h1": "„Du, könntest du…“",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub-Sterne&dagger;</span>",
-"cmp.h4": "Andere Werkzeuge in diesem Regal*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "Andere Werkzeuge in diesem Regal*<span class=\"gloss\">(andere Excel-MCPs)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "„Füg in der Mitte eine Spalte ein, und jede Formel soll weiter dorthin zeigen, wohin sie gehört.“",
 "cr1.us": "✔ Formeln, Tabellen, benannte Bereiche, Diagramme und blattübergreifende Verweise ziehen alle mit, geprüft gegen Excels eigene Neuberechnung",
 "cr1.inc": "✘ nichts in der Dokumentation behauptet das Gegenteil, und openpyxl, die Bibliothek darunter, sagt klar, dass sie Formeln, Tabellen und Diagramme beim Verschieben von Zeilen und Spalten nicht pflegt",
@@ -1836,7 +1877,7 @@ de: {
 "cr6.us": "✔ ein verborgenes, eigenes Excel rechnet, und das Ergebnis kommt als berechnet ausgewiesen zurück, nie vermischt mit gespeicherten Werten",
 "cr6.inc": "✘ kein Werkzeug zum Neuberechnen, und die Dokumentation bringt das Thema nie zur Sprache",
 "cr6.oth": "echte Neuberechnung, indem Excel direkt gesteuert wird, wofür Windows, ein installiertes Excel, ein angemeldeter Desktop und eine zuvor geschlossene Arbeitsmappe nötig sind",
-"cmp.note": "Fähigkeitsübersicht mit Stand 2026-09-04, zusammengetragen aus öffentlichen Repositorys, Dokumentation und Issue-Trackern. n/d: in den gesichteten Quellen nicht dokumentiert, was keine behauptete Abwesenheit ist. Der beliebteste Excel-MCP-Server ist haris-musa/excel-mcp-server, 25 Werkzeuge auf openpyxl, letzte Veröffentlichung am 2026-04-12. Die offenen Issues #94 und #118 dieses Projekts bitten genau darum, berechnete Werte statt Formeltext zu bekommen. Die Dokumentation von openpyxl hält fest, dass sie Abhängigkeiten wie Formeln, Tabellen und Diagramme beim Einfügen oder Löschen von Zeilen und Spalten nicht verwaltet. * Andere Werkzeuge in diesem Regal: negokaz/excel-mcp-server (Go, sieben Werkzeuge, seitenweises Lesen, Live-Bearbeitung unter Windows), sbroenne/mcp-server-excel (C#, 31 Werkzeuge über 326 Operationen, die die echte Excel-Anwendung steuern, die Obergrenze des Machbaren, aber Windows mit installiertem Excel und alleiniger Zugriff auf die Datei, ohne dateibasierte Ebene). Zwei neuere Server mit echter Rechenmaschine sind einen Blick wert: PSU3D0/agent-spreadsheet und logisky/logisheets-mcp. Microsoft liefert keinen Excel-MCP-Server, und Claude for Excel ist ein Office-Add-in, kein MCP-Server. &dagger; Sternzahlen am 2026-09-04 über die GitHub-API gelesen, zur Einordnung: Sterne sagen, wie lange ein Regal schon zu sehen ist, nicht was darauf steht. Die Belege zu Tests und Stress stehen oben in der Datenleiste. Korrekturen willkommen: Issue aufmachen.",
+"cmp.note": "Fähigkeitsübersicht mit Stand 2026-09-04, zusammengetragen aus öffentlichen Repositorys, Dokumentation und Issue-Trackern. n/d: in den gesichteten Quellen nicht dokumentiert, was keine behauptete Abwesenheit ist. Der beliebteste Excel-MCP-Server ist haris-musa/excel-mcp-server, 25 Werkzeuge auf openpyxl, letzte Veröffentlichung am 2026-04-12. Die offenen Issues #94 und #118 dieses Projekts bitten genau darum, berechnete Werte statt Formeltext zu bekommen. Die Dokumentation von openpyxl hält fest, dass sie Abhängigkeiten wie Formeln, Tabellen und Diagramme beim Einfügen oder Löschen von Zeilen und Spalten nicht verwaltet. * Andere Werkzeuge in diesem Regal (andere Excel-MCPs): negokaz/excel-mcp-server (Go, sieben Werkzeuge, seitenweises Lesen, Live-Bearbeitung unter Windows), sbroenne/mcp-server-excel (C#, 31 Werkzeuge über 326 Operationen, die die echte Excel-Anwendung steuern, die Obergrenze des Machbaren, aber Windows mit installiertem Excel und alleiniger Zugriff auf die Datei, ohne dateibasierte Ebene). Zwei neuere Server mit echter Rechenmaschine sind einen Blick wert: PSU3D0/agent-spreadsheet und logisky/logisheets-mcp. Microsoft liefert keinen Excel-MCP-Server, und Claude for Excel ist ein Office-Add-in, kein MCP-Server. &dagger; Sternzahlen am 2026-09-04 über die GitHub-API gelesen, zur Einordnung: Sterne sagen, wie lange ein Regal schon zu sehen ist, nicht was darauf steht. Die Belege zu Tests und Stress stehen oben in der Datenleiste. Korrekturen willkommen: Issue aufmachen.",
 "h2.eff": "Die Kontextrechnung",
 "eff.lead": "Die meisten MCP-Server ziehen in den Kontext Ihrer KI wie ein Messie: alles, sofort, ob die Aufgabe es braucht oder nicht. Dieser hier startet leicht und packt ein Regal erst aus, wenn die Arbeit danach ruft. Hier ist die Rechnung, gemessen:",
 "bill.h1": "Auf dem Zähler", "bill.h2": "Werkzeuge", "bill.h3": "Token", "bill.h4": "Wann Strom fließt",
@@ -1865,6 +1906,9 @@ de: {
 "inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
 "inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Unter Windows kommt die COM-Abhängigkeit oft schon transitiv mit der Basisinstallation; die Installation mit <code>[com]</code> ist ohnehin der sichere Weg und schadet nicht, wenn man sie wiederholt. Die vollständige Einrichtung steht in der <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Das meiste an diesem Server braucht überhaupt kein installiertes Excel und läuft auf jedem Rechner. Nur die Teile, die Excel selbst arbeiten lassen, wollen Windows mit Excel darauf, und sie öffnen dafür eine eigene, verborgene Ausgabe, sodass die Arbeitsmappe auf Ihrem Bildschirm unangetastet bleibt.",
+"inst.tipt": "Ein Tipp, der die meisten Berechtigungsabfragen beseitigt",
+"inst.tipp": "Öffnen Sie in Claude Desktop die <code>Tool permissions</code> für diesen Server und stellen Sie die Gruppe <code>Read-only tools</code> auf <code>Always Allow</code>. Diese Werkzeuge können nichts verändern, das einmalige Zulassen ist also sicher, und Claude fragt nicht mehr bei jedem Lesevorgang nach. Lassen Sie die handelnden Werkzeuge auf <code>Ask</code>, damit alles, was etwas verändert, weiterhin zuerst bei Ihnen nachfragt.",
+"inst.tipb": "Zuerst dies",
 "h2.svc": "Kundendienst",
 "mat.t": "Jung, und getestet, als wäre es das nicht",
 "mat.p": "Vor der Veröffentlichung wurde dieser Server auf die harte Tour geprüft: monatelange, absichtliche Angriffsrunden, die Dateien beschädigen, an den Sicherheitsprüfungen vorbeischlüpfen und ihn beim Lügen ertappen sollten, dazu jede Art von Bearbeitung gegen Excels eigene Rechnung geprüft. Alles kam sauber zurück. Was ihm noch fehlt, ist ein langes Leben in fremden Arbeitsmappen, und Tabellen verdienen sich Vertrauen im Feld, nicht im Labor. Wenn Excel Ihr Zuhause ist, sind Sie das Labor, das dieser Server braucht: Bringen Sie Ihre hässlichste Arbeitsmappe an den Kundendienstschalter und erzählen Sie uns, was kaputtgegangen ist.",
@@ -1923,7 +1967,7 @@ fr: {
 "demo.lead": "Voici le secret de polichinelle de tout outil qui lit des fichiers Excel : un tableur retient ses réponses, pas son raisonnement. Dès que quelque chose change en amont, les anciennes réponses restent là, avec l'allure exacte de vrais chiffres. La plupart des outils d'IA en lisent un quand même, le rapportent avec aplomb, et vous décidez sur cette base. Ce serveur ne bluffe pas. Chaque chiffre qu'il remet à votre IA arrive avec la vérité attachée : fraîchement calculé, mémorisé depuis la dernière sauvegarde, ou absent, avec les cellules concernées nommées. Et quand cela compte vraiment, il demande à Excel lui-même de recalculer et de le prouver.",
 "demo.badtag": "SANS MENTION",
 "demo.nope": "C'EST À JOUR ?",
-"demo.badh": "Les autres outils de cette étagère",
+"demo.badh": "Les autres outils de cette étagère<span class=\"gloss\">(autres MCP Excel)</span>",
 "demo.badp": "Trois chiffres, aucun moyen de les distinguer. La première cellule affiche 20, donc la deuxième devrait afficher 80. Elle affiche 48, ce qu'elle affichait avant que quiconque ne touche à quoi que ce soit. Rien ici ne vous avertit.",
 "demo.goodtag": "AVEC MENTION",
 "demo.goodh": "Celui-ci",
@@ -1974,7 +2018,7 @@ fr: {
 "cmp.stakes": "Pourquoi cela compte : l'IA ne peut pas voir ce qu'un outil ne lui remet jamais. Donnez-lui un chiffre périmé et elle vous le répétera avec un aplomb total ; laissez tomber une ligne en silence et son résumé est faux, sans le moindre avertissement. Chaque ligne de ce tableau est une façon de finir par croire une mauvaise réponse.",
 "cmp.h1": "« Dis, tu pourrais… »",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 étoiles GitHub&dagger;</span>",
-"cmp.h4": "Les autres outils de cette étagère*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "Les autres outils de cette étagère*<span class=\"gloss\">(autres MCP Excel)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "« Insère une colonne au milieu, et que chaque formule continue de pointer où il faut. »",
 "cr1.us": "✔ formules, tableaux, plages nommées, graphiques et liens entre feuilles suivent tous, vérifiés contre le recalcul d'Excel lui-même",
 "cr1.inc": "✘ rien dans la documentation ne dit le contraire, et openpyxl, la bibliothèque en dessous, indique clairement qu'elle n'entretient ni les formules, ni les tableaux, ni les graphiques quand des lignes ou des colonnes bougent",
@@ -1998,7 +2042,7 @@ fr: {
 "cr6.us": "✔ un Excel privé et masqué fait le calcul, et le résultat revient avec la mention calculé, jamais mélangé aux valeurs en cache",
 "cr6.inc": "✘ aucun outil de recalcul, et la documentation n'aborde jamais le sujet",
 "cr6.oth": "un vrai recalcul en pilotant Excel directement, ce qui exige Windows, un Excel installé, une session de bureau ouverte et le classeur fermé au préalable",
-"cmp.note": "Relevé des capacités au 2026-09-04, établi à partir des dépôts publics, de la documentation et des suivis de tickets. n/d : non documenté dans les sources consultées, ce qui n'est pas une absence affirmée. Le serveur MCP Excel le plus populaire est haris-musa/excel-mcp-server, 25 outils sur openpyxl, dernière version le 2026-04-12. Ses propres tickets ouverts #94 et #118 demandent justement des valeurs calculées plutôt que du texte de formule. La documentation d'openpyxl précise qu'elle ne gère pas les dépendances telles que formules, tableaux et graphiques lors de l'insertion ou de la suppression de lignes ou de colonnes. * Les autres outils de cette étagère : negokaz/excel-mcp-server (Go, sept outils, lectures paginées, édition en direct sous Windows), sbroenne/mcp-server-excel (C#, 31 outils pour 326 opérations qui pilotent la véritable application Excel, le plafond de capacités, mais Windows avec Excel installé et accès exclusif au fichier, sans couche fichier). Deux serveurs plus récents embarquent un vrai moteur de calcul et méritent l'attention : PSU3D0/agent-spreadsheet et logisky/logisheets-mcp. Microsoft ne propose aucun serveur MCP Excel, et Claude for Excel est un complément Office, pas un serveur MCP. &dagger; Nombres d'étoiles lus via l'API GitHub le 2026-09-04, à titre indicatif : les étoiles disent depuis combien de temps un rayon est visible, pas ce qui est posé dessus. Les preuves de tests et d'endurance sont dans le bandeau de caractéristiques en haut. Corrections bienvenues : ouvrez un ticket.",
+"cmp.note": "Relevé des capacités au 2026-09-04, établi à partir des dépôts publics, de la documentation et des suivis de tickets. n/d : non documenté dans les sources consultées, ce qui n'est pas une absence affirmée. Le serveur MCP Excel le plus populaire est haris-musa/excel-mcp-server, 25 outils sur openpyxl, dernière version le 2026-04-12. Ses propres tickets ouverts #94 et #118 demandent justement des valeurs calculées plutôt que du texte de formule. La documentation d'openpyxl précise qu'elle ne gère pas les dépendances telles que formules, tableaux et graphiques lors de l'insertion ou de la suppression de lignes ou de colonnes. * Les autres outils de cette étagère (autres MCP Excel) : negokaz/excel-mcp-server (Go, sept outils, lectures paginées, édition en direct sous Windows), sbroenne/mcp-server-excel (C#, 31 outils pour 326 opérations qui pilotent la véritable application Excel, le plafond de capacités, mais Windows avec Excel installé et accès exclusif au fichier, sans couche fichier). Deux serveurs plus récents embarquent un vrai moteur de calcul et méritent l'attention : PSU3D0/agent-spreadsheet et logisky/logisheets-mcp. Microsoft ne propose aucun serveur MCP Excel, et Claude for Excel est un complément Office, pas un serveur MCP. &dagger; Nombres d'étoiles lus via l'API GitHub le 2026-09-04, à titre indicatif : les étoiles disent depuis combien de temps un rayon est visible, pas ce qui est posé dessus. Les preuves de tests et d'endurance sont dans le bandeau de caractéristiques en haut. Corrections bienvenues : ouvrez un ticket.",
 "h2.eff": "La facture de contexte",
 "eff.lead": "La plupart des serveurs MCP emménagent dans le contexte de votre IA comme un accumulateur compulsif : tout, d'emblée, que la tâche en ait besoin ou non. Celui-ci démarre léger et ne déballe une étagère que lorsque le travail l'appelle. Voici la facture, mesurée :",
 "bill.h1": "Au compteur", "bill.h2": "Outils", "bill.h3": "Tokens", "bill.h4": "Quand ça consomme",
@@ -2027,6 +2071,9 @@ fr: {
 "inst.dp1": "Installez le paquet et pointez n'importe quel client MCP vers l'exécutable :",
 "inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Sous Windows, la dépendance COM arrive souvent de façon transitive avec l'installation de base ; installer avec <code>[com]</code> reste la voie sûre dans tous les cas, et le répéter ne coûte rien. Installation complète dans le <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "L'essentiel de ce serveur n'a besoin d'aucun Excel installé et tourne sur n'importe quel ordinateur. Seules les parties qui font travailler Excel réclament Windows avec Excel dessus, et elles ouvrent leur propre exemplaire masqué, si bien que le classeur affiché à votre écran n'est jamais touché.",
+"inst.tipt": "Une astuce qui supprime la plupart des fenêtres d'autorisation",
+"inst.tipp": "Dans Claude Desktop, ouvrez les <code>Tool permissions</code> de ce serveur et réglez le groupe <code>Read-only tools</code> sur <code>Always Allow</code>. Ces outils ne peuvent rien modifier, les autoriser une fois est donc sans risque, et Claude cesse de demander à chaque lecture. Laissez sur <code>Ask</code> les outils qui agissent, pour que tout ce qui modifie quelque chose vous demande encore la permission d'abord.",
+"inst.tipb": "À faire en premier",
 "h2.svc": "Service client",
 "mat.t": "Jeune, et testé comme s'il ne l'était pas",
 "mat.p": "Avant sa sortie, ce serveur a été éprouvé par le chemin difficile : des mois de rondes d'attaque délibérées cherchant à corrompre des fichiers, à passer sous les contrôles de sécurité et à le prendre en flagrant délit de mensonge, plus chaque type de modification vérifié contre les calculs d'Excel lui-même. Tout est revenu propre. Ce qui lui manque encore, c'est une longue vie dans les classeurs des autres, et un tableur gagne sa confiance sur le terrain, pas en laboratoire. Si Excel est l'endroit où vous vivez, vous êtes le laboratoire dont ce serveur a besoin : apportez votre classeur le plus vilain au comptoir du service client et dites-nous ce qui a cassé.",
@@ -2085,7 +2132,7 @@ es: {
 "demo.lead": "He aquí el secreto a voces de toda herramienta que lee archivos de Excel: una hoja de cálculo recuerda sus respuestas, no su razonamiento. Cuando algo cambia aguas arriba, las respuestas viejas se quedan ahí, con el aspecto exacto de números de verdad. La mayoría de las herramientas de IA leen una igualmente y la reportan con aplomo, y usted decide a partir de ella. Este servidor no va de farol. Cada número que le entrega a su IA llega con la verdad adjunta: recién calculado, recordado desde el último guardado, o ausente, y con las celdas afectadas nombradas. Y cuando de verdad importa, le pide a Excel que recalcule y lo demuestre.",
 "demo.badtag": "SIN ETIQUETA",
 "demo.nope": "¿ESTO ES ACTUAL?",
-"demo.badh": "Otras herramientas de este estante",
+"demo.badh": "Otras herramientas de este estante<span class=\"gloss\">(otros MCP de Excel)</span>",
 "demo.badp": "Tres números y ninguna forma de distinguirlos. La primera celda dice 20, así que la segunda debería decir 80. Dice 48, que es lo que decía antes de que nadie tocara nada. Aquí no hay ningún aviso.",
 "demo.goodtag": "CON ETIQUETA",
 "demo.goodh": "Esta",
@@ -2136,7 +2183,7 @@ es: {
 "cmp.stakes": "Por qué importa: la IA no puede ver lo que una herramienta nunca le entrega. Déle un número caducado y le repetirá ese número con toda seguridad; pierda una fila en silencio y su resumen queda mal, sin aviso alguno. Cada línea de esta tabla es una manera de acabar fiándose de una respuesta equivocada.",
 "cmp.h1": "«Oye, ¿podrías…?»",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 estrellas en GitHub&dagger;</span>",
-"cmp.h4": "Otras herramientas de este estante*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
+"cmp.h4": "Otras herramientas de este estante*<span class=\"gloss\">(otros MCP de Excel)</span><span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
 "cr1.q": "«Inserta una columna en medio y que cada fórmula siga apuntando adonde debe.»",
 "cr1.us": "✔ fórmulas, tablas, rangos con nombre, gráficos y vínculos entre hojas siguen todos, comprobado contra el recálculo del propio Excel",
 "cr1.inc": "✘ nada en la documentación dice lo contrario, y openpyxl, la biblioteca de debajo, afirma claramente que no mantiene fórmulas, tablas ni gráficos cuando se mueven filas y columnas",
@@ -2160,7 +2207,7 @@ es: {
 "cr6.us": "✔ un Excel propio y oculto hace la aritmética y el resultado vuelve etiquetado como calculado, nunca mezclado con valores en caché",
 "cr6.inc": "✘ no hay herramienta de recálculo, y la documentación no toca el asunto en ningún momento",
 "cr6.oth": "recálculo de verdad manejando Excel directamente, lo que pide Windows, un Excel instalado, un escritorio con sesión iniciada y el libro cerrado antes",
-"cmp.note": "Estudio de capacidades a fecha de 2026-09-04, elaborado a partir de repositorios públicos, documentación y gestores de incidencias. n/d: no documentado en las fuentes consultadas, lo que no equivale a afirmar su ausencia. El servidor MCP de Excel más popular es haris-musa/excel-mcp-server, 25 herramientas sobre openpyxl, última versión el 2026-04-12; sus propias incidencias abiertas #94 y #118 piden valores calculados en lugar de texto de fórmula. La documentación de openpyxl indica que no gestiona dependencias como fórmulas, tablas y gráficos al insertar o eliminar filas o columnas. * Otras herramientas de este estante: negokaz/excel-mcp-server (Go, siete herramientas, lecturas paginadas, edición en vivo en Windows), sbroenne/mcp-server-excel (C#, 31 herramientas sobre 326 operaciones que manejan la aplicación real de Excel, el techo de capacidades, pero con Windows, Excel instalado y acceso exclusivo al archivo, y sin capa basada en archivo). Dos servidores más recientes llevan dentro un motor de cálculo de verdad y conviene seguirlos: PSU3D0/agent-spreadsheet y logisky/logisheets-mcp. Microsoft no publica ningún servidor MCP de Excel, y Claude for Excel es un complemento de Office, no un servidor MCP. &dagger; Recuento de estrellas leído con la API de GitHub el 2026-09-04, a título orientativo: las estrellas dicen cuánto tiempo lleva un estante a la vista, no lo que hay encima. Las pruebas y el estrés están en la franja de datos de arriba. Se agradecen las correcciones: abra una incidencia.",
+"cmp.note": "Estudio de capacidades a fecha de 2026-09-04, elaborado a partir de repositorios públicos, documentación y gestores de incidencias. n/d: no documentado en las fuentes consultadas, lo que no equivale a afirmar su ausencia. El servidor MCP de Excel más popular es haris-musa/excel-mcp-server, 25 herramientas sobre openpyxl, última versión el 2026-04-12; sus propias incidencias abiertas #94 y #118 piden valores calculados en lugar de texto de fórmula. La documentación de openpyxl indica que no gestiona dependencias como fórmulas, tablas y gráficos al insertar o eliminar filas o columnas. * Otras herramientas de este estante (otros MCP de Excel): negokaz/excel-mcp-server (Go, siete herramientas, lecturas paginadas, edición en vivo en Windows), sbroenne/mcp-server-excel (C#, 31 herramientas sobre 326 operaciones que manejan la aplicación real de Excel, el techo de capacidades, pero con Windows, Excel instalado y acceso exclusivo al archivo, y sin capa basada en archivo). Dos servidores más recientes llevan dentro un motor de cálculo de verdad y conviene seguirlos: PSU3D0/agent-spreadsheet y logisky/logisheets-mcp. Microsoft no publica ningún servidor MCP de Excel, y Claude for Excel es un complemento de Office, no un servidor MCP. &dagger; Recuento de estrellas leído con la API de GitHub el 2026-09-04, a título orientativo: las estrellas dicen cuánto tiempo lleva un estante a la vista, no lo que hay encima. Las pruebas y el estrés están en la franja de datos de arriba. Se agradecen las correcciones: abra una incidencia.",
 "h2.eff": "La factura de contexto",
 "eff.lead": "La mayoría de los servidores MCP se mudan al contexto de su IA como un acumulador: todo, de entrada, lo necesite el trabajo o no. Este arranca ligero y solo desembala un estante cuando la tarea lo pide. Aquí está la factura, medida:",
 "bill.h1": "En el contador", "bill.h2": "Herramientas", "bill.h3": "Tokens", "bill.h4": "Cuándo consume",
@@ -2189,6 +2236,9 @@ es: {
 "inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
 "inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. En Windows la dependencia COM suele llegar de forma transitiva con la instalación base; instalar con <code>[com]</code> es la vía garantizada en cualquier caso, y repetirlo no hace daño. La instalación completa está en el <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "La mayor parte de este servidor no necesita Excel instalado y funciona en cualquier ordenador. Solo las partes que le piden trabajo a Excel quieren Windows con Excel encima, y abren su propia copia oculta, así que el libro que tiene en pantalla no se toca nunca.",
+"inst.tipt": "Un consejo que elimina casi todas las ventanas de permisos",
+"inst.tipp": "En Claude Desktop, abra los <code>Tool permissions</code> de este servidor y ponga el grupo <code>Read-only tools</code> en <code>Always Allow</code>. Esas herramientas no pueden cambiar nada, así que autorizarlas una vez es seguro, y Claude deja de preguntar en cada lectura. Deje en <code>Ask</code> las herramientas que actúan, para que todo lo que cambie algo siga pidiéndole permiso antes.",
+"inst.tipb": "Haga esto primero",
 "h2.svc": "Atención al cliente",
 "mat.t": "Joven, y probado como si no lo fuera",
 "mat.p": "Antes de publicarlo, este servidor se probó por el camino difícil: meses de rondas de ataque deliberadas para corromper archivos, colarse por delante de los controles de seguridad y pillarlo mintiendo, además de cada tipo de edición contrastado con las cuentas del propio Excel. Todo volvió limpio. Lo que aún no ha tenido es una vida larga dentro de libros ajenos, y las hojas de cálculo se ganan la confianza en el campo, no en el laboratorio. Si Excel es donde usted vive, usted es el laboratorio que este servidor necesita: traiga su libro más feo al mostrador de atención al cliente y cuéntenos qué se rompió.",
