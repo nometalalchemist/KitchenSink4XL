@@ -14,9 +14,15 @@ jobs:
   test:
     strategy:
       fail-fast: false
+      # The shipped compatibility surface is three platforms and Python
+      # 3.12+, so the tested surface is the floor and the development
+      # interpreter on all three. macOS is declared in the .mcpb manifest a
+      # Claude Desktop user double-clicks, and it had no job at all until
+      # now; the file tier is pure openpyxl and platform-neutral, and the COM
+      # tests are marked `com` and skip themselves off Windows.
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ["3.12"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.12", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
