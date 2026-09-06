@@ -171,7 +171,27 @@ def test_menu_matches_registry_and_costs():
 #: that filter-hidden rows are included, which they always were and never
 #: said (V1-12). Measured cost of both: about 47 tokens. Docstrings
 #: elsewhere were tightened to keep the rest of the growth at zero.
-LITE_TOKEN_CEILING = 11_500
+#:
+#: RAISED AGAIN, AND THIS ONE IS LARGE: 11,500 -> 21,000, measured 20,576.
+#: The typed-schema pass replaced 39 `Any` parameters that serialized to the
+#: empty schema {} with real JSON Schema, and the addressing object alone is
+#: about 270 tokens on each of the 24 lite parameters that take one. The
+#: empty schema is what made OpenCode delete the incumbent's tools and
+#: Gemini CLI skip them, so the alternative to paying this is a surface some
+#: clients do not load at all, which costs 100% of the tokens and delivers
+#: none of the tools.
+#:
+#: FLAGGED FOR THE AUTHOR, because the cost-aware ruling is the author's and
+#: the lite bill is in shipped copy. Three settings, measured:
+#:   ~11.7k  types only: {"anyOf":[{"type":"string"},{"type":"object"}]}.
+#:           Closes the client-deletion defect completely and says nothing
+#:           about what belongs in the object.
+#:   ~18.4k  selectors named, region and search left as bare objects.
+#:   ~20.6k  what ships: every selector named, region and search carrying
+#:           their own required keys ({near} and {text} are not guessable).
+#: The revert to either cheaper setting is a single edit to LOCATION_SCHEMA
+#: in core/schemas.py; nothing else in the tree depends on the shape.
+LITE_TOKEN_CEILING = 21_000
 
 
 def test_pack_bills_cost_aware():

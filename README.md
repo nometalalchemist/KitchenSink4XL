@@ -10,7 +10,7 @@
 
 **Everything plus the kitchen sink for Microsoft Excel: the .xlsx MCP server
 that never hands your AI a number it cannot back up.** 129 workbook
-operations across 67 tools, a lite core that opens at about 11,400 tokens,
+operations across 67 tools, a lite core that opens at about 20,600 tokens,
 and a safety core that backs up before every change and verifies every save.
 
 ## The number that looks right and isn't
@@ -51,10 +51,10 @@ guess costs you the deal.
   docstring carries the counting definition and what is deliberately excluded.
   A committed snapshot (`scripts/operations_snapshot.json`) plus a guard test
   make a drifting figure a test failure rather than a marketing decision.
-- **Tiered loading: starts at about 11.4k tokens, scales to everything.** A
+- **Tiered loading: starts at about 20.6k tokens, scales to everything.** A
   fresh session loads the 40-tool lite core and turns on capability packs only
   when a task needs them, with one `enable_tools` call. Load every pack and
-  the full surface measures about 19,800 tokens. All figures come from
+  the full surface measures about 32,000 tokens. All figures come from
   `scripts/measure_surface.py`; see [Context cost](#context-cost-measured).
 
 ## The packs
@@ -66,11 +66,11 @@ job needs with one call. Numbers below come straight from
 
 | Pack | Tools | Approx tokens | What it carries |
 |---|---:|---:|---|
-| **lite** (startup) | 40 | ~11.4k | The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the `enable_tools` switchboard |
-| design | 9 | ~3.4k | Named cell styles, a format painter, a style-bloat audit, conditional formatting, data validation, images, charts, the full table lifecycle (columns, totals, resize, banding), and named ranges including LAMBDA definitions and a cleanup pass |
-| io | 9 | ~2.5k | Page layout and print setup, headers and footers, advisory protection, legacy comments, multi-sheet export, and the read-side inspectors: external links, VBA, existing pivot tables, and data connections |
+| **lite** (startup) | 40 | ~20.6k | The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the `enable_tools` switchboard |
+| design | 9 | ~6.0k | Named cell styles, a format painter, a style-bloat audit, conditional formatting, data validation, images, charts, the full table lifecycle (columns, totals, resize, banding), and named ranges including LAMBDA definitions and a cleanup pass |
+| io | 9 | ~2.8k | Page layout and print setup, headers and footers, advisory protection, legacy comments, multi-sheet export, and the read-side inspectors: external links, VBA, existing pivot tables, and data connections |
 | com | 11 | ~2.6k | Drives a private hidden Excel instance, never your open session: real recalculation, real pivot tables, goal seek, PDF export, sheet render to image, format conversion, real encryption, sparklines, true autofit, an opens-clean check, and an honest status report |
-| **Full surface** | **69** | **~19.8k** | Everything (67 workbook tools plus `enable_tools` / `disable_tools`) |
+| **Full surface** | **69** | **~32.0k** | Everything (67 workbook tools plus `enable_tools` / `disable_tools`) |
 
 ## Quickstart: start lite, enable what you need
 
@@ -246,11 +246,11 @@ a shelf when the work calls for it. Here is the bill, measured by
 
 | On the meter | Tools | Tokens | When it draws |
 |---|---:|---:|---|
-| Lite core | 40 | ~11.4k | From the first message of every session |
-| Design pack | 9 | ~3.4k | Only after `enable_tools` |
-| Layout plus inspection pack (`io`) | 9 | ~2.5k | Only after `enable_tools` |
+| Lite core | 40 | ~20.6k | From the first message of every session |
+| Design pack | 9 | ~6.0k | Only after `enable_tools` |
+| Layout plus inspection pack (`io`) | 9 | ~2.8k | Only after `enable_tools` |
 | COM pack | 11 | ~2.6k | Only after `enable_tools`, and only on Windows with Excel |
-| Everything switched on | 69 | ~19.8k | `KS4XL_MODE=full`, if you want it all up front |
+| Everything switched on | 69 | ~32.0k | `KS4XL_MODE=full`, if you want it all up front |
 
 No other Excel MCP server surveyed publishes what its own tool definitions
 cost to load. The figures above come from a measuring script that ships with
