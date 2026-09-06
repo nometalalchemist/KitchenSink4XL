@@ -42,6 +42,27 @@ WORKBOOK_EXTS = frozenset({
     ".xlsx", ".xlsm", ".xlsb", ".xltx", ".xltm", ".xlam", ".xls", ".xlt",
 })
 
+#: Reserved Windows device names. A path whose stem is one of these does not
+#: address a file at all: the write goes to the device and succeeds, the
+#: bytes go nowhere, and nothing on disk changes. Excel-shaped column names
+#: make this reachable by accident (out_file="AUX.csv" from a column called
+#: AUX, or "CON" from a header row). Checked on every platform, not only
+#: Windows, so a path built on Linux and consumed on Windows refuses in the
+#: same place either way.
+WINDOWS_DEVICE_NAMES = frozenset({
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+})
+
+
+def _device_name(p: Path) -> str | None:
+    """The reserved device name a target resolves to, or None. Windows
+    matches on the stem, case-insensitively, with trailing dots and spaces
+    stripped, so 'con.csv', 'CON', and 'con. ' are all the console."""
+    stem = p.name.split(".")[0].strip().rstrip(". ").upper()
+    return stem if stem in WINDOWS_DEVICE_NAMES else None
+
 
 def _in_backup_store(p: Path) -> bool:
     return any(part.lower() == BACKUP_DIR_NAME for part in p.parts)
@@ -98,6 +119,13 @@ def guard_out_file(target: str, *, source: str | None = None,
             "store: overwriting a backup slot destroys the undo it holds. "
             "Choose an output path outside the backup store.")
 
+    device = _device_name(tp)
+    if device is not None:
+        raise XlMcpError(
+            f"out target {op} names the reserved Windows device {device}, "
+            f"not a file. A write to it reports success and stores nothing, "
+            f"so the {what} would be silently lost. Pass a real file path.")
+
     if not workbook_target and tp.suffix.lower() in WORKBOOK_EXTS:
         raise XlMcpError(
             f"out target {op} has a workbook extension ({tp.suffix}); this "
@@ -122,4 +150,5 @@ def guard_out_file(target: str, *, source: str | None = None,
     return op, info
 
 
-__all__ = ["guard_out_file", "guard_out_dir", "WORKBOOK_EXTS"]
+__all__ = ["guard_out_file", "guard_out_dir", "WORKBOOK_EXTS",
+           "WINDOWS_DEVICE_NAMES"]

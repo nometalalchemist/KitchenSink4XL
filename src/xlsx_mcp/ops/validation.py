@@ -324,7 +324,11 @@ def validate(path: str, checks: list[str] | None = None) -> dict:
         runner = _CHECKS[check]
         if runner is None:
             findings = audit_results[check]
-            passed = findings["count"] == 0
+            # count covers the error cells. The references check carries a
+            # second finding, unknown_sheet_references, and a verdict that
+            # ignored it reported passed:true over its own non-empty payload.
+            passed = (findings["count"] == 0
+                      and not findings.get("unknown_sheet_references"))
         else:
             passed, findings = runner(path)
         results[check] = {"passed": passed, "findings": findings}

@@ -31,6 +31,30 @@ from . import gridio
 _H_ALIGN = {"left", "center", "right", "fill", "justify", "centerContinuous",
             "distributed", "general"}
 _V_ALIGN = {"top", "center", "bottom", "justify", "distributed"}
+#: Excel stores text rotation as 0-180 degrees, plus the sentinel 255 for
+#: vertically stacked text. openpyxl validates against the same set but
+#: reports it by printing all 182 members, which buries the one fact the
+#: caller needs. checked_rotation below states the range instead.
+_ROTATION_STACKED = 255
+
+
+def _checked_rotation(value):
+    """Validate a text_rotation before openpyxl prints its 182-value set."""
+    if value is None:
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)) \
+            or int(value) != value:
+        raise XlMcpError(
+            f"text_rotation must be a whole number of degrees; got "
+            f"{value!r}")
+    value = int(value)
+    if 0 <= value <= 180 or value == _ROTATION_STACKED:
+        return value
+    raise XlMcpError(
+        f"text_rotation must be 0 to 180 degrees, or {_ROTATION_STACKED} for "
+        f"vertically stacked text; got {value}")
+
+
 _BORDER_STYLES = {"thin", "medium", "thick", "dashed", "dotted", "double",
                   "hair", "mediumDashed", "dashDot", "mediumDashDot",
                   "dashDotDot", "slantDashDot", "none"}
@@ -112,7 +136,8 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
         return Alignment(
             horizontal=h, vertical=v,
             wrap_text=a.get("wrap_text", existing.wrap_text),
-            text_rotation=a.get("text_rotation", existing.text_rotation),
+            text_rotation=_checked_rotation(
+                a.get("text_rotation", existing.text_rotation)),
             indent=a.get("indent", existing.indent))
 
     n = 0
@@ -257,7 +282,7 @@ def _build_named_style(name: str, define: dict):
             raise XlMcpError(f"vertical must be one of {sorted(_V_ALIGN)}")
         ns.alignment = Alignment(
             horizontal=h, vertical=v, wrap_text=a.get("wrap_text"),
-            text_rotation=a.get("text_rotation", 0),
+            text_rotation=_checked_rotation(a.get("text_rotation", 0)),
             indent=a.get("indent", 0))
     return ns
 

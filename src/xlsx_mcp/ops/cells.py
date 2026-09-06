@@ -587,6 +587,14 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
             idx.setdefault(lt, i)
 
         def col_i(name) -> int:
+            if isinstance(name, bool) or not isinstance(name, (int, str)):
+                # A list or dict here used to reach `name in idx` and leak
+                # Python's "unhashable type: 'list'" out of the dict lookup.
+                # Say what a column reference is instead.
+                raise XlMcpError(
+                    f"a column reference must be a header name, a column "
+                    f"letter, or a 1-based number; got "
+                    f"{type(name).__name__} {name!r}")
             if isinstance(name, int):
                 if 1 <= name <= len(col_names):
                     return name - 1
@@ -736,7 +744,12 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
             rows = uniq
         total_after_filter = len(rows)
         if offset:
-            rows = rows[max(0, int(offset)):]
+            # A negative offset used to clamp to 0 and page from the top,
+            # which returns rows the caller did not ask for and reports
+            # nothing about it. limit already refuses; offset now matches.
+            if int(offset) < 0:
+                raise XlMcpError("offset must be >= 0")
+            rows = rows[int(offset):]
         truncated = False
         if limit is not None:
             if int(limit) < 0:

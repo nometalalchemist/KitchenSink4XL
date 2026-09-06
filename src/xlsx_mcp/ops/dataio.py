@@ -19,6 +19,7 @@ verify; export_range is read-only.
 
 from __future__ import annotations
 
+import codecs as _codecs
 import csv as _csv
 import io as _io
 import json as _json
@@ -102,6 +103,18 @@ def import_data(path: str, source: str | None = None,
         raise XlMcpError(f"fmt must be one of {_FORMATS}")
     if not source and not source_file:
         raise XlMcpError("pass source (inline text) or source_file (a path)")
+    # Check the codec name before either branch. The file branch used to
+    # discover a bad name inside open(), which surfaced as a generic lookup
+    # failure, and the inline branch never looked at all, so "utf-99" was
+    # accepted in silence and the caller learned nothing about the encoding
+    # it thought it had asked for.
+    try:
+        _codecs.lookup(encoding)
+    except LookupError:
+        raise XlMcpError(
+            f"unknown encoding {encoding!r}; encoding must name a codec "
+            "Python knows, for example utf-8, utf-8-sig, cp1252, or "
+            "latin-1") from None
     if source_file:
         sp = check_path(source_file, "read import file")
         with open(sp, encoding=encoding) as fh:

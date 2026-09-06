@@ -1644,7 +1644,8 @@ def com_set_sparkline(path: str, action: str = "create",
     them here). action='create': location is the cell/range that displays
     them (e.g. 'G2:G10'), source the data range (e.g. 'A2:F10'), type
     'line', 'column', or 'win_loss'. action='clear' removes groups in
-    location; action='list' is a read-only inventory. Auto-backup on
+    location; action='list' is a read-only inventory, scoped to sheet when
+    one is named and workbook-wide otherwise. Auto-backup on
     mutations; private hidden Excel instance, serialized, timeout-bounded;
     refuses while the file is open in Excel."""
     return _comtier.com_set_sparkline(

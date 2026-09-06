@@ -1052,8 +1052,16 @@ def com_set_sparkline(path: str, action: str = "create",
     if action == "list":
         def body(app, wb) -> dict:
             groups: list[dict] = []
-            for i in range(1, int(wb.Worksheets.Count) + 1):
-                ws = wb.Worksheets(i)
+            # sheet scopes the inventory. Create and clear have always
+            # honored it; list ignored it and returned the whole workbook,
+            # so a caller that named a sheet got an answer about sheets it
+            # had not asked about and no signal that it had been ignored.
+            if sheet is not None:
+                sheets = [_ws(wb, sheet)]
+            else:
+                sheets = [wb.Worksheets(i)
+                          for i in range(1, int(wb.Worksheets.Count) + 1)]
+            for ws in sheets:
                 try:
                     # ws.Cells, not UsedRange: sparkline cells hold no
                     # values, so they can sit OUTSIDE the used range.
