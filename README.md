@@ -184,12 +184,24 @@ The `xl-mcp` executable is an equivalent entry point. Running from a clone
 works the same way; point the command at the `xl-mcp` executable in the
 clone's virtual environment:
 
+Windows:
+
 ```
 git clone https://github.com/nometalalchemist/KitchenSink4XL
 cd KitchenSink4XL
 python -m venv .venv
 .venv\Scripts\pip install -e ".[com]"
 claude mcp add xl -s user -- <absolute-path>\.venv\Scripts\xl-mcp.exe
+```
+
+macOS and Linux:
+
+```
+git clone https://github.com/nometalalchemist/KitchenSink4XL
+cd KitchenSink4XL
+python3 -m venv .venv
+.venv/bin/pip install -e ".[com]"
+claude mcp add xl -s user -- <absolute-path>/.venv/bin/xl-mcp
 ```
 
 The COM pack is an optional extra, `pip install kitchensink4xl[com]`, and it
