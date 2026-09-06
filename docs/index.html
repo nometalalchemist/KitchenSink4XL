@@ -8,12 +8,12 @@
   Before the first deploy: fill every {PLACEHOLDER}, unhide <section id="new">,
   re-run the numbers, and re-date the comparison survey line.
 
-  SHIPPED NUMBERS (re-measured 2026-09-06 for the 1.0.0 release):
+  SHIPPED NUMBERS (re-measured 2026-09-06 for the 1.1.0 release):
     129   distinct operations (.venv/Scripts/python.exe -X utf8 scripts/count_operations.py)
     69    registered tools (.venv/Scripts/python.exe -X utf8 scripts/measure_surface.py)
-    1046  tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
-    40    lite core tools / ~11.4k tokens; full surface ~19.8k tokens (same script)
-    packs: lite 40 (11.4k) + design 9 (3.4k) + io 9 (2.5k) + com 11 (2.6k) = 69 (19.8k)
+    1172  tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
+    40    lite core tools / ~13.8k tokens; full surface ~22.9k tokens (same script)
+    packs: lite 40 (13.8k) + design 9 (4.0k) + io 9 (2.6k) + com 11 (2.6k) = 69 (22.9k)
   NO PLACEHOLDERS REMAIN. Both were resolved by author ruling for 1.0.0:
     stress calls        882, derived by scripts/count_stress_calls.py from the
                         adversarial journal and recorded in
@@ -655,7 +655,7 @@ footer a{color:var(--brass)}
   <div class="specs-strip rev d4"><span class="plate-tab" data-i18n="spec.plate">Ratings plate</span>
     <div class="spec"><span class="n">129</span><span class="l" data-i18n="spec.ops">Operations</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
     <div class="spec"><span class="n">69</span><span class="l" data-i18n="spec.tools">Tools</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
-    <div class="spec"><span class="n">1,046</span><span class="l" data-i18n="spec.tests">Tests</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
+    <div class="spec"><span class="n">1,172</span><span class="l" data-i18n="spec.tests">Tests</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
     <div class="spec"><span class="n">882</span><span class="l" data-i18n="spec.stress">Stress calls</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
     <div class="spec"><span class="n">0</span><span class="l" data-i18n="spec.corr">Corruptions</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
   </div>
@@ -810,11 +810,11 @@ footer a{color:var(--brass)}
     <div class="ticked"><div class="tablewrap">
       <table class="bill">
         <tr><th data-i18n="bill.h1">On the meter</th><th class="num" data-i18n="bill.h2">Tools</th><th class="num" data-i18n="bill.h3">Tokens</th><th data-i18n="bill.h4">When it draws</th></tr>
-        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">40</td><td class="num">11.4k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
-        <tr><td data-i18n="bill.r2">Design pack</td><td class="num">9</td><td class="num">3.4k</td><td data-i18n="bill.w2">Only after enable_tools</td></tr>
-        <tr><td data-i18n="bill.r3">Layout plus inspection pack</td><td class="num">9</td><td class="num">2.5k</td><td data-i18n="bill.w3">Only after enable_tools</td></tr>
+        <tr><td data-i18n="bill.r1">Lite core</td><td class="num">40</td><td class="num">13.8k</td><td data-i18n="bill.w1">From the first message of every session</td></tr>
+        <tr><td data-i18n="bill.r2">Design pack</td><td class="num">9</td><td class="num">4.0k</td><td data-i18n="bill.w2">Only after enable_tools</td></tr>
+        <tr><td data-i18n="bill.r3">Layout plus inspection pack</td><td class="num">9</td><td class="num">2.6k</td><td data-i18n="bill.w3">Only after enable_tools</td></tr>
         <tr><td data-i18n="bill.r4">COM pack</td><td class="num">11</td><td class="num">2.6k</td><td data-i18n="bill.w4">Only after enable_tools, and only on Windows with Excel</td></tr>
-        <tr class="sum"><td data-i18n="bill.sum">Everything switched on</td><td class="num">69</td><td class="num">19.8k</td><td data-i18n="bill.wsum">KS4XL_MODE=full, if you want it all up front</td></tr>
+        <tr class="sum"><td data-i18n="bill.sum">Everything switched on</td><td class="num">69</td><td class="num">22.9k</td><td data-i18n="bill.wsum">KS4XL_MODE=full, if you want it all up front</td></tr>
       </table>
     </div></div>
     <p class="foot-note" data-i18n="bill.note">No other Excel MCP server surveyed publishes what its own tool definitions cost to load. The figures above come from a measuring script that ships with the source, so you can check them yourself.</p>
@@ -857,13 +857,13 @@ footer a{color:var(--brass)}
         <text class="unit" x="125" y="133" text-anchor="start">&#215;1000</text>
       </svg>
       <div class="meter-read">
-        <div class="row"><span class="pip"></span><span class="lab" data-i18n="bill.r1">Lite core</span><span class="fig">11.4k</span></div>
-        <div class="row"><span class="pip full"></span><span class="lab" data-i18n="bill.sum">Everything switched on</span><span class="fig">19.8k</span></div>
+        <div class="row"><span class="pip"></span><span class="lab" data-i18n="bill.r1">Lite core</span><span class="fig">13.8k</span></div>
+        <div class="row"><span class="pip full"></span><span class="lab" data-i18n="bill.sum">Everything switched on</span><span class="fig">22.9k</span></div>
       </div>
     </div>
     <div class="specs-strip" style="margin-top:26px">
       <div class="spec"><span class="n">40</span><span class="l" data-i18n="eff.s1">Tools in the lite core</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
-      <div class="spec"><span class="n">11.4k</span><span class="l" data-i18n="eff.s2">Tokens, lite core up front</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
+      <div class="spec"><span class="n">13.8k</span><span class="l" data-i18n="eff.s2">Tokens, lite core up front</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
       <div class="spec"><span class="n">1</span><span class="l" data-i18n="eff.s3">Call to the whole sink</span><span class="sparkmini" aria-hidden="true"><svg viewBox="0 0 60 16" preserveAspectRatio="none"><polyline class="trace" points="0,12 8,12 14,5 22,12 30,12 36,8 44,3 52,10 60,8"/></svg><i class="node"></i></span></div>
     </div>
     <div class="term" style="margin-top:26px"><div><span class="c"># an agent in lite mode goes looking for a real recalculation</span>
