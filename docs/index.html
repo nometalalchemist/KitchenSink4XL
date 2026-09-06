@@ -54,8 +54,8 @@
 @font-face{font-family:"Plex Mono Fallback";src:local("Courier New");size-adjust:100%;line-gap-override:0%}
 @font-face{font-family:"Fraunces Fallback";src:local("Georgia");size-adjust:104%;line-gap-override:0%}
 :root{
-  --paper:#f8e7c4; --paper-deep:#eed9a4; --ink:#1e3550; --ink-soft:#3f5878;
-  --brass:#735413; --brass-bright:#a3781c; --live:#e8a31e; --stamp:#a3352b; --rule:#ccb27c;
+  --paper:#f5e8cd; --paper-deep:#eadbb4; --ink:#1e3550; --ink-soft:#3f5878;
+  --brass:#735413; --brass-bright:#a3781c; --live:#e8a31e; --stamp:#a3352b; --rule:#c9b385;
   --tint:rgba(125,92,20,.06); --pilot-op:.18;
   --shadow: 0 2px 0 var(--rule), 0 10px 30px rgba(30,53,80,.10);
 }
@@ -71,7 +71,7 @@ body{
 }
 /* energized: the wall switch puts current on the page (per visit, never stored) */
 body.live{
-  --paper:#fae4b6; --paper-deep:#f0d592; --pilot-op:1;
+  --paper:#f7e5bf; --paper-deep:#ecd7a2; --pilot-op:1;
   --tint:rgba(232,163,30,.20);
 }
 h1,h2,h3,.serif{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif}
@@ -245,7 +245,8 @@ body.live .spec .sparkmini .node{box-shadow:0 0 7px 1.5px rgba(232,163,30,.6)}
 .ticked:after{bottom:-8px;right:-8px;border-bottom:2px solid var(--ink);border-right:2px solid var(--ink)}
 
 /* the bench circuit: unlabeled number vs labeled number */
-.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--rule);border:2px solid var(--ink);box-shadow:var(--shadow)}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--rule);
+  border-top:2px solid var(--ink)}
 @media(max-width:760px){.demo-grid{grid-template-columns:1fr}}
 .demo-panel{background:var(--paper);padding:22px 22px 18px;position:relative}
 .demo-panel h3{font-size:12px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:14px}
@@ -258,7 +259,7 @@ body.live .spec .sparkmini .node{box-shadow:0 0 7px 1.5px rgba(232,163,30,.6)}
 .demo-panel.bad .demo-fig svg{pointer-events:none}
 .nope{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-8deg) scale(.7);
   border:3px solid var(--stamp);color:var(--stamp);padding:6px 14px;font-weight:600;font-size:13px;
-  letter-spacing:.14em;text-transform:uppercase;border-radius:4px;background:rgba(248,231,196,.88);
+  letter-spacing:.14em;text-transform:uppercase;border-radius:4px;background:rgba(245,232,205,.88);
   opacity:0;transition:opacity .12s, transform .12s;pointer-events:none;z-index:2}
 .demo-panel.bad:active .nope{opacity:1;transform:translate(-50%,-50%) rotate(-8deg) scale(1)}
 .corner-tag{position:absolute;top:14px;right:14px;font-size:10px;letter-spacing:.18em;
@@ -306,7 +307,24 @@ body.live .spec .sparkmini .node{box-shadow:0 0 7px 1.5px rgba(232,163,30,.6)}
 .mains-btn[disabled]{opacity:.4;cursor:default}
 .bench-read{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-style:italic;font-size:13.5px;
   color:var(--brass);margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-#benchStage.stale ~ .bench-read .say{color:var(--stamp)}
+/* The stale readout is NEW information the instant the user edits, so it lights up like a
+   fault lamp rather than just changing colour. The old rule here was
+   `#benchStage.stale ~ .bench-read .say`, which never matched anything: benchStage lives
+   inside .demo-fig and .bench-read is that div's sibling, not the SVG's. The bench script
+   now toggles .hot on the readout directly. */
+.bench-read .say{padding:2px 4px;border-radius:2px;transition:color .2s ease}
+.bench-read .say.hot{color:var(--ink);font-style:normal;font-weight:600;
+  background:rgba(232,163,30,.34);box-shadow:0 0 0 4px rgba(232,163,30,.34);
+  animation:flag .45s ease-out 1}
+@keyframes flag{
+  0%{background:rgba(232,163,30,0);box-shadow:0 0 0 4px rgba(232,163,30,0)}
+  45%{background:rgba(232,163,30,.62);box-shadow:0 0 0 7px rgba(232,163,30,.42)}
+  100%{background:rgba(232,163,30,.34);box-shadow:0 0 0 4px rgba(232,163,30,.34)}}
+
+/* the stakes line: plain prose under the comparison lead, deliberately not a badge */
+.stakes{max-width:820px;margin:-16px auto 30px;font-size:clamp(14px,1.8vw,16.5px);
+  line-height:1.7;color:var(--ink-soft)}
+.stakes b{color:var(--ink);font-weight:700}
 .stampbtn{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
   border:2px solid var(--stamp);color:var(--stamp);background:none;border-radius:4px;padding:4px 10px;
   cursor:pointer;transform:rotate(-3deg);transition:all .15s;font-weight:600}
@@ -421,11 +439,27 @@ details.devfold .devbody p:last-child{margin-bottom:0}
 details.devfold .term{margin-bottom:14px;font-size:13px;padding:16px 18px}
 
 /* ---------- the demo's AI channel: the label strip is a wire, not a caption ---------- */
-.channel-note{max-width:820px;margin:0 auto 26px;position:relative;
-  border:2px solid var(--ink);border-left-width:6px;background:var(--paper-deep);
-  box-shadow:var(--shadow);padding:15px 20px 15px 44px;font-size:13.5px;line-height:1.6}
+/* THE BENCH IS ONE OBJECT. The callout used to float above the demo as its own
+   shadowed card, which reads as a module closing the intro rather than a header opening
+   the bench, and a skimmer's eye slid straight past the demo. Callout and demo now share
+   a single border and a single shadow, with a conductor running from the callout across
+   the seam into the grid, so the two register as one thing to try. */
+.bench-unit{position:relative;border:2px solid var(--ink);box-shadow:var(--shadow);
+  background:var(--paper-deep);margin-top:26px}
+.channel-note{margin:0;position:relative;border:none;border-left:6px solid var(--brass);
+  background:var(--paper-deep);box-shadow:none;padding:15px 20px 17px 44px;
+  font-size:13.5px;line-height:1.6}
 .channel-note:before{content:"\26A1";position:absolute;left:15px;top:14px;font-size:15px;
   color:var(--brass);line-height:1.3}
+/* the conductor crossing the seam: current leaves the callout and enters the bench */
+.bench-unit .seam{position:absolute;left:0;right:0;height:0;z-index:3;pointer-events:none}
+.bench-unit .seam:before{content:"";position:absolute;left:44px;top:-13px;height:26px;
+  border-left:2px dashed var(--brass)}
+.bench-unit .seam:after{content:"";position:absolute;left:39px;top:11px;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-top:7px solid var(--brass)}
+body.live .bench-unit .seam:before{border-left-color:var(--live)}
+body.live .bench-unit .seam:after{border-top-color:var(--live)}
 .aichannel{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:10px;
   letter-spacing:.18em;text-transform:uppercase;color:var(--brass);font-weight:600;line-height:1.3}
 .aichannel .tap{flex:1;min-width:24px;height:2px;border-top:2px dashed var(--brass);
@@ -631,9 +665,11 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no0">DEPT. 00</span><h2 data-i18n="h2.demo">The number that looks right and isn't</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
     <p class="for-lead" data-i18n="demo.lead">Here is the dirty secret of every tool that reads Excel files: a spreadsheet remembers its answers, not its thinking. When something changes upstream, the old answers just sit there, looking exactly like real numbers. Most AI tools will read one anyway and confidently report it, and you will make a decision based on it. This server refuses to bluff. Every number it hands your AI comes with the truth attached: freshly calculated, remembered from the last save, or missing, with the affected cells named. And when it really matters, it asks Excel itself to recalculate and prove it.</p>
-    <p class="channel-note"><span class="plate-tab" data-i18n="demo.plate">The test bench</span>
-      <span data-i18n="demo.channelnote">The labels in this demo are not decoration for you: they are what this server tells your AI about every number it reads.</span></p>
-    <div class="demo-grid ticked">
+    <div class="bench-unit ticked">
+      <span class="plate-tab" data-i18n="demo.plate">The test bench</span>
+      <p class="channel-note"><span data-i18n="demo.channelnote">The labels in this demo are not decoration for you: they are what this server tells your AI about every number it reads.</span></p>
+      <span class="seam" aria-hidden="true"></span>
+      <div class="demo-grid">
       <div class="demo-panel bad">
         <span class="corner-tag" data-i18n="demo.badtag">NO LABEL</span>
         <span class="nope" data-i18n="demo.nope">IS IT CURRENT?</span>
@@ -692,6 +728,7 @@ footer a{color:var(--brass)}
         <p class="bench-read"><span class="say" id="benchSay" data-i18n="demo.cap">These two results were calculated from the number on the left, and their labels say so: calculated, current.</span></p>
         <p data-i18n="demo.goodp">Now edit the number. The two results keep their old values, and their labels flip to cached: they are showing yesterday's math, and your AI is told so in exactly these words. Press recalculate and watch the labels catch up. Tab and Enter work too.</p>
       </div>
+      </div>
     </div>
     <p class="foot-note" data-i18n="demo.note">This demo is a toy that runs in your browser, so you can feel the idea in ten seconds. On real .xlsx files the real server does the same thing for your AI: every value it hands over is labeled calculated, cached, or absent, read out of the file itself. An AI that is told a number is stale cannot honestly repeat it as current, and when recalculation matters, an actual copy of Excel does the arithmetic. Hallucinated numbers are the biggest trust problem AI has with spreadsheets; this is the layer built to prevent them.</p>
   </div>
@@ -723,8 +760,9 @@ footer a{color:var(--brass)}
 
 <section id="compare">
   <div class="wrap">
-    <div class="sec-head"><span class="no" data-i18n="no3">DEPT. 03</span><h2 data-i18n="h2.cmp">Against the other tools on this shelf</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
+    <div class="sec-head"><span class="no" data-i18n="no3">DEPT. 03</span><h2 data-i18n="h2.cmp">Against the other tools on this shelf (the other Excel MCP servers)</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
     <p class="for-lead" data-i18n="cmp.lead">Instead of a feature checklist, here are six things people actually ask an AI to do with a spreadsheet, and how it usually goes:</p>
+    <p class="stakes" data-i18n="cmp.stakes">Why it matters: the AI cannot see what a tool never hands it. Give it a stale number and it will repeat that number to you with full confidence; drop a row silently and its summary is wrong with no warning. Every line in this table is a way you end up trusting a wrong answer.</p>
     <div class="ticked"><div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🔌 KitchenSink4XL</th><th data-i18n="cmp.h3">haris-musa (openpyxl)<span class="stars">4,155 GitHub stars&dagger;</span></th><th data-i18n="cmp.h4">Other tools on this shelf*<span class="stars">negokaz 1,021 &middot; sbroenne 655&dagger;</span></th></tr>
@@ -950,7 +988,7 @@ if (stage){
       calc: t["lbl.calc"] || "CALCULATED",
       cached: t["lbl.cached"] || "CACHED",
       fresh: t["demo.say.fresh"] || "These two results were calculated from the number on the left, and their labels say so: calculated, current.",
-      stale: t["demo.say.stale"] || "B2 moved. The two values did not, so they are labeled cached, and the file still shows them as numbers."
+      stale: t["demo.say.stale"] || "the number on the left changed. These two did not, and they still look like perfectly good numbers. Now hit recalculate!"
     };
   }
   function render(){
@@ -963,7 +1001,12 @@ if (stage){
     cB3.textContent = stale ? s.cached : s.calc;
     cB4.textContent = stale ? s.cached : s.calc;
     stage.classList.toggle("stale", stale);
-    if (say) say.textContent = stale ? s.stale : s.fresh;
+    if (say){
+      say.textContent = stale ? s.stale : s.fresh;
+      /* re-trigger the fault-lamp flash every time the readout goes stale */
+      say.classList.remove("hot");
+      if (stale){ void say.offsetWidth; say.classList.add("hot"); }
+    }
     if (recalcBtn) recalcBtn.disabled = !stale;
     if (editBtn) editBtn.setAttribute("aria-pressed", String(input !== 12));
   }
@@ -1090,7 +1133,7 @@ en: {
 "demo.reset": "RESET ⟲",
 "demo.cap": "These two results were calculated from the number on the left, and their labels say so: calculated, current.",
 "demo.say.fresh": "These two results were calculated from the number on the left, and their labels say so: calculated, current.",
-"demo.say.stale": "the number on the left changed. These two did not, and they still look like perfectly good numbers.",
+"demo.say.stale": "the number on the left changed. These two did not, and they still look like perfectly good numbers. Now hit recalculate!",
 "demo.goodp": "Now edit the number. The two results keep their old values, and their labels flip to cached: they are showing yesterday's math, and your AI is told so in exactly these words. Press recalculate and watch the labels catch up. Tab and Enter work too.",
 "demo.note": "This demo is a toy that runs in your browser, so you can feel the idea in ten seconds. On real .xlsx files the real server does the same thing for your AI: every value it hands over is labeled calculated, cached, or absent, read out of the file itself. An AI that is told a number is stale cannot honestly repeat it as current, and when recalculation matters, an actual copy of Excel does the arithmetic. Hallucinated numbers are the biggest trust problem AI has with spreadsheets; this is the layer built to prevent them.",
 "h2.tale": "What happens to column F when you insert column D",
@@ -1116,8 +1159,9 @@ en: {
 "pk4.p": "Drives a private hidden Excel instance, never your open session: real recalculation, real pivot tables, goal seek, PDF export, sheet render to image, format conversion, real encryption, sparklines, true autofit, an opens-clean check, and an honest status report.",
 "pk4.e": "e.g. recalculate and get the value with the label to prove it · build a pivot table that is actually a pivot table · confirm the file opens with no repair prompt",
 "pk4.c": "11 TOOLS",
-"h2.cmp": "Against the other tools on this shelf",
+"h2.cmp": "Against the other tools on this shelf (the other Excel MCP servers)",
 "cmp.lead": "Instead of a feature checklist, here are six things people actually ask an AI to do with a spreadsheet, and how it usually goes:",
+"cmp.stakes": "Why it matters: the AI cannot see what a tool never hands it. Give it a stale number and it will repeat that number to you with full confidence; drop a row silently and its summary is wrong with no warning. Every line in this table is a way you end up trusting a wrong answer.",
 "cmp.h1": "\"Hey, could you…\"",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub stars&dagger;</span>",
 "cmp.h4": "Other tools on this shelf*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1251,7 +1295,7 @@ ko: {
 "demo.reset": "초기화 ⟲",
 "demo.cap": "이 두 결과는 왼쪽 숫자로 계산한 값이고, 라벨이 그렇게 말해 줍니다: 계산됨, 현재 값.",
 "demo.say.fresh": "이 두 결과는 왼쪽 숫자로 계산한 값이고, 라벨이 그렇게 말해 줍니다: 계산됨, 현재 값.",
-"demo.say.stale": "왼쪽 숫자가 바뀌었습니다. 이 둘은 바뀌지 않았고, 그래도 여전히 멀쩡한 숫자처럼 보입니다.",
+"demo.say.stale": "왼쪽 숫자가 바뀌었습니다. 이 둘은 바뀌지 않았고, 그래도 여전히 멀쩡한 숫자처럼 보입니다. 이제 재계산을 눌러 보세요!",
 "demo.goodp": "이제 숫자를 바꿔 보세요. 두 결과는 예전 값을 그대로 들고 있고, 라벨은 캐시됨으로 넘어갑니다. 어제의 계산을 보여 주고 있다는 뜻이고, 당신의 AI도 바로 그 표현으로 그렇게 전달받습니다. 재계산을 누르면 라벨이 따라오는 것이 보입니다. Tab과 Enter로도 됩니다.",
 "demo.note": "이 데모는 브라우저에서 도는 장난감이라, 십 초면 요점이 손에 잡힙니다. 진짜 .xlsx 파일에서는 진짜 서버가 당신의 AI에게 똑같은 일을 합니다. 넘겨주는 모든 값에 계산됨, 캐시됨, 없음 중 하나가 붙고, 그 표시는 파일 자체에서 읽어 옵니다. 숫자가 오래됐다고 들은 AI는 그것을 현재 값이라고 정직하게 되풀이할 수 없고, 재계산이 중요한 자리에서는 실제 Excel 사본이 계산을 맡습니다. 지어낸 숫자는 AI가 스프레드시트에서 겪는 가장 큰 신뢰 문제이고, 이것이 그것을 막으려고 만든 층입니다.",
 "h2.tale": "D열을 삽입하면 F열은 어떻게 될까요",
@@ -1277,8 +1321,9 @@ ko: {
 "pk4.p": "사용자가 열어 둔 세션이 아니라 별도의 숨겨진 Excel 인스턴스를 구동합니다. 진짜 재계산, 진짜 피벗 테이블, 목표값 찾기, PDF 내보내기, 시트 이미지 렌더링, 형식 변환, 실제 암호화, 스파크라인, 진짜 자동 맞춤, 정상 열림 확인, 그리고 솔직한 상태 보고가 들어 있습니다.",
 "pk4.e": "예: 재계산하고 그 값을 라벨로 증명받기 · 진짜 피벗 테이블 만들기 · 복구 메시지 없이 열리는지 확인",
 "pk4.c": "도구 11종",
-"h2.cmp": "이 선반의 다른 도구들과 비교",
+"h2.cmp": "이 선반의 다른 도구들과 비교 (다른 Excel MCP 서버들)",
 "cmp.lead": "기능 점검표 대신, 사람들이 실제로 AI에게 스프레드시트로 시키는 일 여섯 가지와 그 일이 보통 어떻게 되는지를 실었습니다:",
+"cmp.stakes": "왜 중요한가: 도구가 건네지 않은 것은 AI가 볼 수 없습니다. 오래된 숫자를 건네면 AI는 그 숫자를 아주 자신 있게 그대로 옮겨 말합니다. 행 하나가 조용히 빠지면 AI의 요약은 아무 경고 없이 틀립니다. 이 표의 모든 줄은 당신이 틀린 답을 믿게 되는 경로입니다.",
 "cmp.h1": "“저기, 혹시…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 스타 4,155개&dagger;</span>",
 "cmp.h4": "이 선반의 다른 도구들*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1412,7 +1457,7 @@ ja: {
 "demo.reset": "リセット ⟲",
 "demo.cap": "この二つの結果は左の数字から計算されたもので、ラベルもそう告げています。計算済み、最新。",
 "demo.say.fresh": "この二つの結果は左の数字から計算されたもので、ラベルもそう告げています。計算済み、最新。",
-"demo.say.stale": "左の数字が変わりました。この二つは変わっていません。それでも、まっとうな数字にしか見えません。",
+"demo.say.stale": "左の数字が変わりました。この二つは変わっていません。それでも、まっとうな数字にしか見えません。さあ、再計算を押してください！",
 "demo.goodp": "次に数字を編集してみてください。二つの結果は古い値のままで、ラベルはキャッシュ済みに切り替わります。昨日の計算を見せているということで、あなたのAIにもまさにその言葉で伝わります。再計算を押すと、ラベルが追いついていきます。TabとEnterでも動きます。",
 "demo.note": "このデモはブラウザで動くおもちゃで、十秒あれば要点がつかめます。本物の .xlsx ファイルでは、本物のサーバーがあなたのAIに同じことをします。渡す値にはすべて、計算済み・キャッシュ済み・不在のいずれかが付き、その表示はファイル自体から読み出されます。古い数字だと告げられたAIは、それを最新の値として正直に繰り返すことはできません。再計算が要る場面では、実際のExcelの複製が計算を引き受けます。でっち上げの数字はAIが表計算で抱える最大の信頼問題であり、これはそれを防ぐために作られた層です。",
 "h2.tale": "D 列を挿入すると F 列はどうなるか",
@@ -1438,8 +1483,9 @@ ja: {
 "pk4.p": "あなたが開いているセッションではなく、専用の隠れた Excel を動かします。本物の再計算、本物のピボットテーブル、ゴールシーク、PDF 書き出し、シートの画像化、形式変換、本物の暗号化、スパークライン、真の自動調整、正常に開くかの確認、そして正直な状態報告が入っています。",
 "pk4.e": "例: 再計算してラベル付きの値を受け取る · 本当にピボットテーブルであるピボットテーブルを作る · 修復メッセージなしで開くことを確認する",
 "pk4.c": "11 ツール",
-"h2.cmp": "この棚のほかの道具と比べて",
+"h2.cmp": "この棚のほかの道具と比べて (ほかの Excel MCP サーバー)",
 "cmp.lead": "機能の一覧表ではなく、人が実際にAIに表計算でやらせる六つのことと、それがたいていどうなるかを並べます。",
+"cmp.stakes": "なぜ大事か。道具が渡さなかったものを、AIは見ることができません。古い数字を渡せば、AIはその数字を自信たっぷりにそのまま伝えてきます。行が黙って落ちれば、AIの要約は何の警告もないまま間違っています。この表の一行一行が、あなたが誤った答えを信じてしまう筋道です。",
 "cmp.h1": "「ねえ、ちょっと…」",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub スター 4,155&dagger;</span>",
 "cmp.h4": "この棚のほかの道具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1573,7 +1619,7 @@ zh: {
 "demo.reset": "复位 ⟲",
 "demo.cap": "这两个结果是照左边那个数算出来的,标注也是这么写的:已计算,当前值。",
 "demo.say.fresh": "这两个结果是照左边那个数算出来的,标注也是这么写的:已计算,当前值。",
-"demo.say.stale": "左边那个数变了。这两个没变,可它们看上去仍然是好端端的数字。",
+"demo.say.stale": "左边那个数变了。这两个没变,可它们看上去仍然是好端端的数字。现在按一下重新计算!",
 "demo.goodp": "现在改一下那个数。两个结果仍是旧值,标注翻成缓存值:它们给你看的是昨天的账,你的AI收到的也正是这几个字。按下重新计算,看标注跟上来。Tab和Enter一样管用。",
 "demo.note": "这个演示是个跑在浏览器里的玩具,十秒钟就能体会到要点。换成真正的 .xlsx 文件,真正的服务器为你的AI做的是同一件事:交出去的每个值都标着已计算、缓存值或缺失,而这些标注是从文件本身读出来的。被告知某个数已经过时的AI,没法再诚实地把它当成当前值报出来;真到了需要重算的时候,由一份实际的 Excel 副本来做这笔算术。凭空编出来的数字是AI在表格上最大的信任难题,这一层就是为了挡住它而做的。",
 "h2.tale": "插入 D 列之后,F 列会怎么样",
@@ -1599,8 +1645,9 @@ zh: {
 "pk4.p": "驱动一个自己的隐藏 Excel 实例,绝不碰你打开着的那个: 真正的重算、真正的数据透视表、单变量求解、导出 PDF、把工作表渲染成图片、格式转换、真正的加密、迷你图、真正的自动调整列宽、能否正常打开的检查,以及一份老实的状态报告。",
 "pk4.e": "例: 重算之后连标注一起拿到手 · 做一个真的是数据透视表的数据透视表 · 确认文件打开时不弹修复提示",
 "pk4.c": "11 件工具",
-"h2.cmp": "跟这个货架上的其他工具比一比",
+"h2.cmp": "跟这个货架上的其他工具比一比 (其他 Excel MCP 服务器)",
 "cmp.lead": "这里不列功能清单,而是六件人们真的会让AI在表格上做的事,以及通常会是什么结果:",
+"cmp.stakes": "为什么这要紧:工具没交出去的东西,AI根本看不见。给它一个过时的数,它会满怀信心地把那个数原样报给你;悄悄漏掉一行,它的汇总就错了,而且不会有任何提示。这张表里的每一行,都是一条让你最后信了错答案的路。",
 "cmp.h1": "“嘿,能不能…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 星标 4,155&dagger;</span>",
 "cmp.h4": "这个货架上的其他工具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1734,7 +1781,7 @@ de: {
 "demo.reset": "ZURÜCK ⟲",
 "demo.cap": "Diese beiden Ergebnisse wurden aus der Zahl links berechnet, und ihre Angaben sagen genau das: berechnet, aktuell.",
 "demo.say.fresh": "Diese beiden Ergebnisse wurden aus der Zahl links berechnet, und ihre Angaben sagen genau das: berechnet, aktuell.",
-"demo.say.stale": "Die Zahl links hat sich geändert. Diese beiden nicht, und sie sehen immer noch aus wie tadellose Zahlen.",
+"demo.say.stale": "Die Zahl links hat sich geändert. Diese beiden nicht, und sie sehen immer noch aus wie tadellose Zahlen. Jetzt auf neu berechnen drücken!",
 "demo.goodp": "Ändern Sie nun die Zahl. Die beiden Ergebnisse behalten ihre alten Werte, und ihre Angaben springen auf zwischengespeichert: Sie zeigen die Rechnung von gestern, und genau mit diesen Worten erfährt Ihre KI das auch. Drücken Sie neu berechnen und sehen Sie zu, wie die Angaben aufholen. Tab und Enter gehen ebenfalls.",
 "demo.note": "Diese Demo ist ein Spielzeug, das in Ihrem Browser läuft, damit Sie die Idee in zehn Sekunden spüren. Bei echten .xlsx-Dateien macht der echte Server dasselbe für Ihre KI: Jeder Wert, den er herausgibt, trägt die Angabe berechnet, zwischengespeichert oder nicht vorhanden, und zwar aus der Datei selbst gelesen. Eine KI, der gesagt wurde, dass eine Zahl veraltet ist, kann sie nicht ehrlich als aktuell weitergeben, und wo es auf die Neuberechnung ankommt, erledigt eine echte Excel-Kopie die Rechenarbeit. Erfundene Zahlen sind das größte Vertrauensproblem, das KI mit Tabellen hat; das hier ist die Schicht, die sie verhindern soll.",
 "h2.tale": "Was mit Spalte F passiert, wenn Sie Spalte D einfügen",
@@ -1760,8 +1807,9 @@ de: {
 "pk4.p": "Steuert eine eigene, verborgene Excel-Instanz und nie Ihre offene Sitzung: echtes Neuberechnen, echte PivotTables, Zielwertsuche, PDF-Export, Blatt als Bild, Formatumwandlung, echte Verschlüsselung, Sparklines, echte Breitenanpassung, eine Prüfung auf sauberes Öffnen und ein ehrlicher Statusbericht.",
 "pk4.e": "z.B. neu berechnen und den Wert mit der Angabe als Beleg bekommen · eine PivotTable bauen, die auch wirklich eine ist · bestätigen, dass die Datei ohne Reparaturhinweis öffnet",
 "pk4.c": "11 WERKZEUGE",
-"h2.cmp": "Gegen die anderen Werkzeuge in diesem Regal",
+"h2.cmp": "Gegen die anderen Werkzeuge in diesem Regal (die anderen Excel-MCP-Server)",
 "cmp.lead": "Statt einer Funktionsliste stehen hier sechs Dinge, um die Menschen eine KI bei einer Tabelle wirklich bitten, und wie es dabei meistens läuft:",
+"cmp.stakes": "Warum das zählt: Die KI kann nicht sehen, was ein Werkzeug ihr nie aushändigt. Geben Sie ihr eine veraltete Zahl, und sie gibt Ihnen genau diese Zahl mit voller Überzeugung zurück; fällt still eine Zeile weg, ist ihre Zusammenfassung falsch, ohne jede Warnung. Jede Zeile in dieser Tabelle ist ein Weg, auf dem Sie am Ende einer falschen Antwort vertrauen.",
 "cmp.h1": "„Du, könntest du…“",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub-Sterne&dagger;</span>",
 "cmp.h4": "Andere Werkzeuge in diesem Regal*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1895,7 +1943,7 @@ fr: {
 "demo.reset": "REMISE À ZÉRO ⟲",
 "demo.cap": "Ces deux résultats ont été calculés à partir du chiffre de gauche, et leurs mentions le disent : calculé, à jour.",
 "demo.say.fresh": "Ces deux résultats ont été calculés à partir du chiffre de gauche, et leurs mentions le disent : calculé, à jour.",
-"demo.say.stale": "le chiffre de gauche a changé. Ces deux-là non, et elles ressemblent pourtant à des chiffres tout à fait valables.",
+"demo.say.stale": "le chiffre de gauche a changé. Ces deux-là non, et elles ressemblent pourtant à des chiffres tout à fait valables. Appuyez maintenant sur recalculer !",
 "demo.goodp": "Modifiez maintenant le chiffre. Les deux résultats gardent leurs anciennes valeurs et leurs mentions basculent sur en cache : elles montrent le calcul d'hier, et votre IA l'apprend dans ces termes exacts. Appuyez sur recalculer et regardez les mentions rattraper leur retard. Tab et Entrée fonctionnent aussi.",
 "demo.note": "Cette démo est un jouet qui tourne dans votre navigateur, de quoi saisir l'idée en dix secondes. Sur de vrais fichiers .xlsx, le vrai serveur fait la même chose pour votre IA : chaque valeur qu'il transmet porte la mention calculé, en cache ou absent, lue dans le fichier lui-même. Une IA à qui l'on dit qu'un chiffre est périmé ne peut pas honnêtement le répéter comme étant à jour, et quand le recalcul compte, c'est une véritable copie d'Excel qui fait l'arithmétique. Les chiffres inventés sont le plus gros problème de confiance que l'IA pose sur les tableurs ; voici la couche construite pour les empêcher.",
 "h2.tale": "Ce qui arrive à la colonne F quand vous insérez la colonne D",
@@ -1921,8 +1969,9 @@ fr: {
 "pk4.p": "Pilote une instance Excel privée et masquée, jamais votre session ouverte : recalcul réel, vrais tableaux croisés dynamiques, valeur cible, export PDF, rendu d'une feuille en image, conversion de format, chiffrement réel, graphiques sparkline, ajustement automatique véritable, vérification d'ouverture propre et un rapport d'état honnête.",
 "pk4.e": "p.ex. recalculer et obtenir la valeur avec la mention qui le prouve · construire un tableau croisé dynamique qui en est vraiment un · confirmer que le fichier s'ouvre sans message de réparation",
 "pk4.c": "11 OUTILS",
-"h2.cmp": "Face aux autres outils de cette étagère",
+"h2.cmp": "Face aux autres outils de cette étagère (les autres serveurs MCP pour Excel)",
 "cmp.lead": "Plutôt qu'une liste de fonctions, voici six choses que les gens demandent vraiment à une IA de faire sur un tableur, et comment cela se passe en général :",
+"cmp.stakes": "Pourquoi cela compte : l'IA ne peut pas voir ce qu'un outil ne lui remet jamais. Donnez-lui un chiffre périmé et elle vous le répétera avec un aplomb total ; laissez tomber une ligne en silence et son résumé est faux, sans le moindre avertissement. Chaque ligne de ce tableau est une façon de finir par croire une mauvaise réponse.",
 "cmp.h1": "« Dis, tu pourrais… »",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 étoiles GitHub&dagger;</span>",
 "cmp.h4": "Les autres outils de cette étagère*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -2056,7 +2105,7 @@ es: {
 "demo.reset": "REINICIAR ⟲",
 "demo.cap": "Estos dos resultados se calcularon a partir del número de la izquierda, y sus etiquetas lo dicen: calculado, al día.",
 "demo.say.fresh": "Estos dos resultados se calcularon a partir del número de la izquierda, y sus etiquetas lo dicen: calculado, al día.",
-"demo.say.stale": "el número de la izquierda cambió. Estos dos no, y aun así parecen números perfectamente buenos.",
+"demo.say.stale": "el número de la izquierda cambió. Estos dos no, y aun así parecen números perfectamente buenos. ¡Ahora pulse recalcular!",
 "demo.goodp": "Ahora cambie el número. Los dos resultados conservan sus valores antiguos y sus etiquetas pasan a en caché: le están enseñando las cuentas de ayer, y su IA lo recibe con esas mismas palabras. Pulse recalcular y mire cómo las etiquetas se ponen al día. Tab e Intro también funcionan.",
 "demo.note": "Esta demostración es un juguete que corre en su navegador, para que capte la idea en diez segundos. Con archivos .xlsx de verdad, el servidor de verdad hace lo mismo para su IA: cada valor que entrega va etiquetado como calculado, en caché o ausente, leído del propio archivo. Una IA a la que se le dice que un número está caducado no puede repetirlo honestamente como actual, y cuando el recálculo importa, es una copia real de Excel la que hace las cuentas. Los números inventados son el mayor problema de confianza que la IA tiene con las hojas de cálculo; esta es la capa construida para impedirlos.",
 "h2.tale": "Qué le pasa a la columna F cuando inserta la columna D",
@@ -2082,8 +2131,9 @@ es: {
 "pk4.p": "Maneja una instancia de Excel propia y oculta, nunca la sesión que usted tiene abierta: recálculo real, tablas dinámicas de verdad, búsqueda de objetivo, exportación a PDF, hoja renderizada a imagen, conversión de formato, cifrado real, minigráficos, autoajuste verdadero, comprobación de apertura limpia y un informe de estado honesto.",
 "pk4.e": "p.ej. recalcular y recibir el valor con la etiqueta que lo demuestra · construir una tabla dinámica que lo sea de verdad · confirmar que el archivo abre sin aviso de reparación",
 "pk4.c": "11 HERRAMIENTAS",
-"h2.cmp": "Frente a las otras herramientas de este estante",
+"h2.cmp": "Frente a las otras herramientas de este estante (los otros servidores MCP para Excel)",
 "cmp.lead": "En lugar de una lista de funciones, aquí van seis cosas que la gente le pide de verdad a una IA con una hoja de cálculo, y cómo suele acabar:",
+"cmp.stakes": "Por qué importa: la IA no puede ver lo que una herramienta nunca le entrega. Déle un número caducado y le repetirá ese número con toda seguridad; pierda una fila en silencio y su resumen queda mal, sin aviso alguno. Cada línea de esta tabla es una manera de acabar fiándose de una respuesta equivocada.",
 "cmp.h1": "«Oye, ¿podrías…?»",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 estrellas en GitHub&dagger;</span>",
 "cmp.h4": "Otras herramientas de este estante*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
