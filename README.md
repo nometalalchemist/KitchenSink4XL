@@ -134,6 +134,11 @@ not what is on it. Corrections welcome:
 
 Pick the line that describes you. Most people are the first one.
 
+First launch through uvx downloads and builds the environment and can take 20
+to 30 seconds before the server answers; every launch after that starts in
+about two. If a client reports a timeout on first install, launch once from a
+terminal and try again.
+
 ### Using Claude Desktop? One double-click.
 
 Download `kitchensink4xl.mcpb` from the

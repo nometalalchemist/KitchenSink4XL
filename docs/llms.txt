@@ -154,6 +154,11 @@ source. Its docstring carries the counting definition and the exclusions.
 - uvx, no install: `uvx kitchensink4xl`
 - Any MCP client: run the `kitchensink4xl` (or `xl-mcp`) executable over stdio, for example `{"mcpServers": {"xl": {"command": "kitchensink4xl"}}}`
 
+First launch through uvx downloads and builds the environment and can take 20
+to 30 seconds before the server answers; every launch after that starts in
+about two. If a client reports a timeout on first install, launch once from a
+terminal and try again.
+
 Environment: `KS4XL_MODE`, `KS4XL_PACK_POLICY`, `KS4XL_ALLOWED_ROOTS` (an
 `os.pathsep`-separated path sandbox, gating reads as well as writes),
 `KS4XL_VERIFY_COM`, `KS4XL_VALIDATE_COM`, `KS4XL_COM_TIMEOUT`.
