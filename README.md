@@ -208,7 +208,10 @@ claude mcp add xl -s user -- <absolute-path>/.venv/bin/xl-mcp
 ```
 
 The COM pack is an optional extra, `pip install kitchensink4xl[com]`, and it
-is a no-op off Windows. With no install at all: `uvx kitchensink4xl`.
+is a no-op off Windows. On Windows the COM dependency often arrives
+transitively with the base install; installing with `[com]` is the guaranteed
+route either way, and harmless to repeat. With no install at all:
+`uvx kitchensink4xl`.
 
 Environment variables the server reads:
 
