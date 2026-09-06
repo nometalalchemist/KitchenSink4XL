@@ -80,6 +80,13 @@ def active() -> bool:
     return bool(_allowed_roots())
 
 
+def root_count() -> int:
+    """How many roots are allowed. A count rather than the paths themselves:
+    get_server_info reports this so an installer can confirm the setting
+    arrived, and a directory layout is not the client's business."""
+    return len(_allowed_roots())
+
+
 # --------------------------------------------------------- canonicalization
 
 

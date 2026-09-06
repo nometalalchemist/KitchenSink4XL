@@ -51,7 +51,9 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
+from .core import package as _package
 from .core import readonly as _readonly
+from .core import sandbox as _sandbox
 from .core import update_check as _upd
 from .core.errors import XlMcpError as _XlMcpError
 from .ops import annotations as _annotations
@@ -81,6 +83,10 @@ from .ops import workflows as _workflows
 
 mcp = FastMCP(
     "kitchensink4xl",
+    # Without this the MCP handshake reports fastmcp's own version as
+    # serverInfo.version, so every client log and every registry scrape
+    # carries the framework's number instead of this package's.
+    version=__version__,
     instructions=(
         "Kitchen-sink Microsoft Excel (.xlsx) editor: cells and ranges, "
         "formulas with an honest cached-value story, server-side query and "
@@ -189,7 +195,13 @@ def get_server_info() -> dict:
     optional packs, and the host platform and Python. A read-only orient
     call that needs no workbook and touches no file; use it to confirm the
     server is reachable and to see which packs are currently loaded before
-    deciding whether to call enable_tools."""
+    deciding whether to call enable_tools.
+
+    It also reports the two settings a Desktop user picks in the install
+    dialog and otherwise cannot confirm arrived: whether path sandboxing is
+    on and how many roots it allows, and whether saves deep-verify through
+    Excel by default. The roots are reported as a count, not as paths, so a
+    directory layout does not travel back to the client."""
     out = {
         "name": "kitchensink4xl",
         "version": __version__,
@@ -198,6 +210,11 @@ def get_server_info() -> dict:
         "packs_available": _packs.pack_names(),
         "platform": _platform.platform(),
         "python": _sys.version.split()[0],
+        "config": {
+            "sandbox_active": _sandbox.active(),
+            "allowed_roots_count": _sandbox.root_count(),
+            "verify_com_default": _package.com_verify_default(),
+        },
     }
     # The server's one and only update surface: a cached line, added when a
     # newer stable release exists. Reads no network and never raises.
@@ -435,7 +452,10 @@ def query_range(path: str, location: Any = None, sheet: str | None = None,
     Aggregates follow Excel: sum/avg/min/max consume NUMERIC cells only
     (text and booleans ignored even when text looks numeric; exclusions
     are reported); count is the RAW row count, unlike Excel COUNT; min/max
-    fall back to text when no numbers exist. Read-only."""
+    fall back to text when no numbers exist. Row visibility is not
+    consulted: rows an autofilter is hiding are read and aggregated like
+    any other row, unlike Excel's SUBTOTAL. Use where to exclude them.
+    Read-only."""
     return _cells.query_range(
         path, location=location, sheet=sheet, header=header, columns=columns,
         where=where, match=match, order_by=order_by, aggregate=aggregate,
@@ -848,7 +868,9 @@ def export_range(path: str, location: Any = None, sheet: str | None = None,
     guarded: never the source workbook, a workbook extension, or
     .ks4xl-backups; an existing file refuses unless overwrite is true,
     which first keeps a timestamped .bak. Multi-sheet export is
-    export_file (io pack). Read-only; the workbook never changes."""
+    export_file (io pack). Rows an autofilter is hiding are exported like
+    any other row; visibility is not consulted. Read-only; the workbook
+    never changes."""
     return _dataio.export_range(
         path, location=location, sheet=sheet, fmt=fmt, header=header,
         values=values, records=records, out_file=out_file,

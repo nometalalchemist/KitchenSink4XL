@@ -182,8 +182,8 @@ pip install kitchensink4xl
 The mode is `"lite"` (the default), `"full"`, or a comma-separated pack list.
 The `xl-mcp` executable is an equivalent entry point. The installed package is
 named `xlsx_mcp`, so a client that wants an interpreter and a module instead
-of a console script can run `python -m xlsx_mcp.server`, which starts the same
-server. Running from a clone
+of a console script can run `python -m xlsx_mcp` or `python -m
+xlsx_mcp.server`, which start the same server. Running from a clone
 works the same way; point the command at the `xl-mcp` executable in the
 clone's virtual environment:
 
@@ -263,6 +263,15 @@ until first use pay close to zero until a tool is actually called.
   lists, restores, and prunes them. Exclude that folder from cloud sync tools:
   the slots churn on every edit and sync clients can hold locks that slow
   saves down.
+  {MAIN_THREAD_COPY:V1-16-readme} <!-- facts: the slots hold only what this
+  server itself changed. An edit made in Excel, or by any other program, is
+  never captured, so `prev` restores the state before the last SERVER
+  mutation, not the state before the last edit to the file. -->
+- Filter-hidden rows: {MAIN_THREAD_COPY:V1-12-readme} <!-- facts:
+  query_range, export_range, and the aggregates read every row in the range,
+  including rows an autofilter is hiding. Excel's own SUBTOTAL ignores hidden
+  rows; these do not. Filter first with `where` if hidden rows should be out
+  of the answer. -->
 - Saves are atomic and validated; a failed operation leaves the original
   byte-identical.
 - A round-trip hazard scan runs before a mutating save. Parts the writer

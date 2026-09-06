@@ -5,9 +5,10 @@ module name a person guesses first is the wrong one either way. `xl-mcp` and
 `kitchensink4xl` both resolve to `xlsx_mcp.server:main`, and so does this;
 `python -m xlsx_mcp.server` keeps working as it always has.
 
-Not documented for 1.0.0: that release has no `__main__` and a README line
-promising this route would be false for everybody who installed from PyPI.
-The line lands with the next release. See V1.1_QUEUE.md.
+Documented from 1.1 on. 1.0.0 has no `__main__`, so for the length of that
+release the README named only `python -m xlsx_mcp.server`: a line promising
+this route would have been false for everybody who installed from PyPI. The
+route publishes with 1.1, and README and docs/llms.txt name both.
 """
 
 from __future__ import annotations

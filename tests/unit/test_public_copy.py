@@ -234,13 +234,24 @@ def test_documented_module_entry_point_resolves():
     `import kitchensink4xl` fails. README now points at
     `python -m xlsx_mcp.server`, so that module has to stay runnable, and it
     has to reach the same entry point the console scripts do.
+
+    1.1 adds the shorter `python -m xlsx_mcp` route to the same two
+    documents, which is why both routes are asserted here rather than only
+    the `.server` one: the package `__main__` shipped in 1.0.0's tree but
+    not in its release, so until now the docs deliberately named only the
+    route the published wheel could honor.
     """
     import importlib.util
 
-    assert "python -m xlsx_mcp.server" in (
-        (ROOT / "README.md").read_text(encoding="utf-8")
-    ), "README no longer documents the module entry point"
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    llms = (ROOT / "docs" / "llms.txt").read_text(encoding="utf-8")
+    for route in ("python -m xlsx_mcp.server", "python -m xlsx_mcp`"):
+        assert route in readme, (
+            f"README no longer documents the module entry point {route!r}")
+    assert "python -m xlsx_mcp`" in llms and "python -m xlsx_mcp.server" in llms, (
+        "docs/llms.txt no longer documents both module entry points")
     assert importlib.util.find_spec("xlsx_mcp.server") is not None
+    assert importlib.util.find_spec("xlsx_mcp.__main__") is not None
     from xlsx_mcp import __main__ as pkg_main
     from xlsx_mcp.server import main as server_main
 
