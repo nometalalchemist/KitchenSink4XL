@@ -648,6 +648,7 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no5">DEPT. 05</span><h2 data-i18n="h2.install">Wiring it in</h2></div>
     <p class="for-lead" data-i18n="inst.lead">Pick the line that describes you. Most people are the first one.</p>
+    <p class="for-lead" style="font-size:15px;color:var(--ink-soft)" data-i18n="inst.cold">First launch through uvx downloads and builds the environment and can take 20 to 30 seconds before the server answers; every launch after that starts in about two. If a client reports a timeout on first install, launch once from a terminal and try again.</p>
     <div class="install-grid">
       <div class="step">
         <span class="badge" data-i18n="inst.b1">Easiest</span>
@@ -668,7 +669,7 @@ footer a{color:var(--brass)}
       <div class="devbody">
         <p data-i18n="inst.dp1">Install the package and point any MCP client at the executable:</p>
         <div class="term"><div><span class="p">$</span> pip install kitchensink4xl</div></div>
-        <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"xl": {"command": "kitchensink4xl", "env": {"KS4XL_MODE": "lite"}}}}</code>, where the mode is "lite" (the default), "full", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. Full setup in the <a href="https://github.com/nometalalchemist/KitchenSink4XL#install">README</a>.</p>
+        <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"xl": {"command": "kitchensink4xl", "env": {"KS4XL_MODE": "lite"}}}}</code>, where the mode is "lite" (the default), "full", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href="https://github.com/nometalalchemist/KitchenSink4XL#install">README</a>.</p>
       </div>
     </details>
     <p class="foot-note" style="margin-top:18px" data-i18n="inst.note">Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.</p>
@@ -964,6 +965,7 @@ en: {
 "eff.note": "The lite core carries no degraded stand-ins, so the lazy path is a dead end on purpose: a refusal for out-of-scope work names the exact pack and the exact call that unlocks it. Power users who want everything loaded from the start can pin it with <b>KS4XL_MODE=full</b> in the server environment, or a comma-separated pack list. Administrators can lock the selection with KS4XL_PACK_POLICY=locked.",
 "h2.install": "Wiring it in",
 "inst.lead": "Pick the line that describes you. Most people are the first one.",
+"inst.cold": "First launch through uvx downloads and builds the environment and can take 20 to 30 seconds before the server answers; every launch after that starts in about two. If a client reports a timeout on first install, launch once from a terminal and try again.",
 "inst.b1": "Easiest",
 "inst.s1": "Using Claude Desktop? One double-click.",
 "inst.p1": "Download the installer bundle from the latest release and double-click it, or drag it into the Claude Desktop window. Desktop adds it as an extension and the sink is connected. Nothing to type, nothing to configure.",
@@ -974,7 +976,7 @@ en: {
 "inst.p2": "One line in a terminal and you are done. It fetches and runs the server for you, so there is nothing to install first.",
 "inst.dev": "For developers: pip, uvx, source, other MCP clients",
 "inst.dp1": "Install the package and point any MCP client at the executable:",
-"inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. Full setup in the <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.",
 "h2.svc": "Service department",
 "mat.t": "Young, and tested like it isn't",
@@ -1118,6 +1120,7 @@ ko: {
 "eff.note": "라이트 코어에는 기능을 흉내 낸 대체품이 없습니다. 그래서 대충 넘어가는 길은 일부러 막다른 길입니다. 범위를 벗어난 작업은 거절하면서 어떤 팩과 어떤 호출이 그것을 여는지 정확히 알려 줍니다. 처음부터 전부 올려 두고 싶은 분은 서버 환경에 <b>KS4XL_MODE=full</b>을 지정하거나 쉼표로 구분한 팩 목록을 넣으시면 됩니다. 관리자는 KS4XL_PACK_POLICY=locked로 선택을 고정할 수 있습니다.",
 "h2.install": "설치와 배선",
 "inst.lead": "본인에게 해당하는 줄을 고르세요. 대부분은 첫 번째입니다.",
+"inst.cold": "uvx로 처음 실행할 때는 환경을 내려받아 구성하기 때문에 서버가 응답하기까지 20~30초가 걸릴 수 있습니다. 그다음부터는 2초 정도면 시작합니다. 설치 직후 클라이언트가 시간 초과를 알리면, 터미널에서 한 번 실행한 다음 다시 시도해 보세요.",
 "inst.b1": "가장 쉬움",
 "inst.s1": "Claude Desktop을 쓰신다면, 더블클릭 한 번.",
 "inst.p1": "최신 릴리스에서 설치 번들을 내려받아 더블클릭하거나 Claude Desktop 창에 끌어다 놓으세요. Desktop이 확장으로 추가하면 싱크대가 연결됩니다. 입력할 것도, 설정할 것도 없습니다.",
@@ -1128,7 +1131,7 @@ ko: {
 "inst.p2": "터미널에 한 줄이면 끝입니다. 서버를 알아서 받아서 실행하므로 미리 설치할 것이 없습니다.",
 "inst.dev": "개발자용: pip, uvx, 소스, 다른 MCP 클라이언트",
 "inst.dp1": "패키지를 설치하고 아무 MCP 클라이언트나 실행 파일을 가리키게 하세요.",
-"inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. 전체 설정은 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>에 있습니다.",
+"inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. Windows에서는 COM 의존성이 기본 설치만으로도 함께 딸려 오는 경우가 많습니다. 그래도 <code>[com]</code>으로 설치하는 쪽이 확실한 방법이고, 한 번 더 해도 아무 문제 없습니다. 전체 설정은 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>에 있습니다.",
 "inst.note": "이 서버의 대부분은 Excel 설치가 전혀 필요 없고 어느 컴퓨터에서나 돌아갑니다. Excel에게 직접 일을 시키는 부분만 Excel이 설치된 Windows를 요구하며, 그때도 자기만의 숨겨진 사본을 열기 때문에 화면에 띄워 둔 통합 문서는 건드리지 않습니다.",
 "h2.svc": "서비스 창구",
 "mat.t": "젊지만, 시험은 젊지 않았습니다",
@@ -1272,6 +1275,7 @@ ja: {
 "eff.note": "ライトコアには機能の劣化版の代役を置いていません。だから手抜きの道はわざと行き止まりです。範囲外の仕事は断りつつ、どのパックのどの呼び出しでそれが開くかを正確に告げます。最初から全部を載せたい方は、サーバー環境に <b>KS4XL_MODE=full</b> を指定するか、カンマ区切りのパック一覧を書いてください。管理者は KS4XL_PACK_POLICY=locked で選択を固定できます。",
 "h2.install": "取り付けと配線",
 "inst.lead": "自分に当てはまる行を選んでください。たいていの方は一つ目です。",
+"inst.cold": "uvx で最初に起動するときは環境のダウンロードと構築が走るため、サーバーが応答するまで 20 秒から 30 秒かかることがあります。二回目からは 2 秒ほどで立ち上がります。インストール直後にクライアントがタイムアウトを報告したら、ターミナルから一度起動してから、もう一度お試しください。",
 "inst.b1": "いちばん簡単",
 "inst.s1": "Claude Desktop なら、ダブルクリック一回。",
 "inst.p1": "最新リリースからインストーラーの束をダウンロードしてダブルクリックするか、Claude Desktop のウィンドウにドラッグしてください。Desktop が拡張として追加し、流しがつながります。入力するものも、設定するものもありません。",
@@ -1282,7 +1286,7 @@ ja: {
 "inst.p2": "端末に一行で完了です。サーバーは自動で取得して起動されるので、先に入れておくものはありません。",
 "inst.dev": "開発者向け: pip, uvx, ソース, ほかの MCP クライアント",
 "inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指してください。",
-"inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。設定の全体は <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a> にあります。",
+"inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。Windows では COM の依存パッケージが基本のインストールだけで一緒に入ってくることがよくあります。それでも <code>[com]</code> を付けて入れるほうが確実で、重ねて実行しても害はありません。設定の全体は <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a> にあります。",
 "inst.note": "このサーバーの大半は Excel のインストールをまったく必要とせず、どのパソコンでも動きます。Excel に仕事をさせる部分だけが Excel の入った Windows を求め、そのときも自分専用の隠れた一つを開くので、画面に出したままのブックには触れません。",
 "h2.svc": "サービス窓口",
 "mat.t": "若いのに、試され方は若くありません",
@@ -1426,6 +1430,7 @@ zh: {
 "eff.note": "精简内核里没有任何打折的替身,所以偷懒那条路是故意留成死胡同的: 超出范围的活儿会被拒绝,同时点明是哪个包、哪一次调用能把它打开。想一上来就全部装载的老手可以钉住它: 在服务器环境里设 <b>KS4XL_MODE=full</b>,或者写一份逗号分隔的包清单。管理员可以用 KS4XL_PACK_POLICY=locked 锁定选择。",
 "h2.install": "装上,接好",
 "inst.lead": "挑一条符合你的。多数人是第一条。",
+"inst.cold": "首次通过 uvx 启动时要下载并构建环境,服务器可能需要 20 到 30 秒才会响应;之后每次启动大约两秒。如果客户端在刚装好时报超时,先在终端里启动一次,然后再试。",
 "inst.b1": "最省事",
 "inst.s1": "用 Claude Desktop? 双击一次就好。",
 "inst.p1": "从最新版本下载安装包并双击,或者把它拖进 Claude Desktop 窗口。Desktop 会把它作为扩展装上,水槽就接通了。不用打字,不用配置。",
@@ -1436,7 +1441,7 @@ zh: {
 "inst.p2": "终端里一行就完事。它会替你取回并运行服务器,不用先装什么。",
 "inst.dev": "面向开发者: pip、uvx、源码、其他 MCP 客户端",
 "inst.dp1": "装上这个包,然后让任意 MCP 客户端指向该可执行文件:",
-"inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。完整设置见 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>。",
+"inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。在 Windows 上,COM 依赖往往会随基础安装一起被带进来;不管怎样,用 <code>[com]</code> 安装都是稳妥的做法,重复装一次也无妨。完整设置见 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>。",
 "inst.note": "这台服务器的大部分完全不需要装 Excel,在任何电脑上都能跑。只有请 Excel 亲自干活的那部分需要装有 Excel 的 Windows,而且它会另开一个自己的隐藏副本,你屏幕上开着的那个工作簿不会被碰。",
 "h2.svc": "服务柜台",
 "mat.t": "年纪轻,可试得一点都不轻",
@@ -1580,6 +1585,7 @@ de: {
 "eff.note": "Der Lite-Kern führt keine abgespeckten Ersatzteile, der bequeme Weg endet also mit Absicht in einer Sackgasse: eine Absage für Arbeit außerhalb des Umfangs nennt genau das Paket und genau den Aufruf, der sie freischaltet. Wer alles von Anfang an geladen haben will, kann es festnageln: <b>KS4XL_MODE=full</b> in der Serverumgebung oder eine kommagetrennte Paketliste. Administratoren sperren die Auswahl mit KS4XL_PACK_POLICY=locked.",
 "h2.install": "Montage und Anschluss",
 "inst.lead": "Nehmen Sie die Zeile, die auf Sie zutrifft. Die meisten sind die erste.",
+"inst.cold": "Der erste Start über uvx lädt und baut die Umgebung und kann 20 bis 30 Sekunden dauern, bis der Server antwortet; jeder weitere Start braucht etwa zwei. Meldet ein Client bei der ersten Installation einen Timeout, starten Sie den Server einmal im Terminal und versuchen Sie es erneut.",
 "inst.b1": "Am einfachsten",
 "inst.s1": "Sie nutzen Claude Desktop? Ein Doppelklick.",
 "inst.p1": "Laden Sie das Installationsbündel aus der neuesten Ausgabe herunter und doppelklicken Sie es, oder ziehen Sie es in das Fenster von Claude Desktop. Desktop nimmt es als Erweiterung auf, und die Spüle ist angeschlossen. Nichts zu tippen, nichts zu konfigurieren.",
@@ -1590,7 +1596,7 @@ de: {
 "inst.p2": "Eine Zeile im Terminal und Sie sind fertig. Der Server wird für Sie geholt und gestartet, vorher ist nichts zu installieren.",
 "inst.dev": "Für Entwickler: pip, uvx, Quelltext, andere MCP-Clients",
 "inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
-"inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Die vollständige Einrichtung steht in der <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Unter Windows kommt die COM-Abhängigkeit oft schon transitiv mit der Basisinstallation; die Installation mit <code>[com]</code> ist ohnehin der sichere Weg und schadet nicht, wenn man sie wiederholt. Die vollständige Einrichtung steht in der <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Das meiste an diesem Server braucht überhaupt kein installiertes Excel und läuft auf jedem Rechner. Nur die Teile, die Excel selbst arbeiten lassen, wollen Windows mit Excel darauf, und sie öffnen dafür eine eigene, verborgene Ausgabe, sodass die Arbeitsmappe auf Ihrem Bildschirm unangetastet bleibt.",
 "h2.svc": "Serviceabteilung",
 "mat.t": "Jung, und getestet, als wäre es das nicht",
@@ -1734,6 +1740,7 @@ fr: {
 "eff.note": "Le noyau allégé ne porte aucun remplaçant au rabais, la voie de la facilité est donc une impasse assumée : un refus pour un travail hors périmètre nomme le pack exact et l'appel exact qui le débloque. Ceux qui veulent tout chargé dès le départ peuvent le fixer : <b>KS4XL_MODE=full</b> dans l'environnement du serveur, ou une liste de packs séparés par des virgules. Les administrateurs verrouillent la sélection avec KS4XL_PACK_POLICY=locked.",
 "h2.install": "Montage et raccordement",
 "inst.lead": "Choisissez la ligne qui vous correspond. La plupart des gens sont la première.",
+"inst.cold": "Le premier lancement via uvx télécharge et construit l'environnement et peut prendre 20 à 30 secondes avant que le serveur réponde ; les lancements suivants prennent environ deux secondes. Si un client signale un délai dépassé à la première installation, lancez-le une fois depuis un terminal, puis réessayez.",
 "inst.b1": "Le plus simple",
 "inst.s1": "Vous utilisez Claude Desktop ? Un double-clic.",
 "inst.p1": "Téléchargez le paquet d'installation depuis la dernière version et double-cliquez dessus, ou faites-le glisser dans la fenêtre de Claude Desktop. Desktop l'ajoute comme extension et l'évier est raccordé. Rien à taper, rien à configurer.",
@@ -1744,7 +1751,7 @@ fr: {
 "inst.p2": "Une ligne dans un terminal et c'est fait. Le serveur est récupéré et lancé pour vous, il n'y a rien à installer avant.",
 "inst.dev": "Pour les développeurs : pip, uvx, source, autres clients MCP",
 "inst.dp1": "Installez le paquet et pointez n'importe quel client MCP vers l'exécutable :",
-"inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Installation complète dans le <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Sous Windows, la dépendance COM arrive souvent de façon transitive avec l'installation de base ; installer avec <code>[com]</code> reste la voie sûre dans tous les cas, et le répéter ne coûte rien. Installation complète dans le <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "L'essentiel de ce serveur n'a besoin d'aucun Excel installé et tourne sur n'importe quel ordinateur. Seules les parties qui font travailler Excel réclament Windows avec Excel dessus, et elles ouvrent leur propre exemplaire masqué, si bien que le classeur affiché à votre écran n'est jamais touché.",
 "h2.svc": "Service après-vente",
 "mat.t": "Jeune, et testé comme s'il ne l'était pas",
@@ -1888,6 +1895,7 @@ es: {
 "eff.note": "El núcleo ligero no lleva sustitutos de segunda, así que el camino cómodo es un callejón sin salida a propósito: una negativa por trabajo fuera de alcance nombra el paquete exacto y la llamada exacta que lo desbloquean. Quien quiera todo cargado desde el principio puede fijarlo: <b>KS4XL_MODE=full</b> en el entorno del servidor, o una lista de paquetes separados por comas. Los administradores bloquean la selección con KS4XL_PACK_POLICY=locked.",
 "h2.install": "Montaje y conexión",
 "inst.lead": "Elija la línea que le describe. La mayoría de la gente es la primera.",
+"inst.cold": "El primer arranque a través de uvx descarga y construye el entorno y puede tardar de 20 a 30 segundos antes de que el servidor responda; los arranques siguientes tardan unos dos. Si un cliente informa de un tiempo de espera agotado en la primera instalación, arránquelo una vez desde una terminal y vuelva a intentarlo.",
 "inst.b1": "Lo más fácil",
 "inst.s1": "¿Usa Claude Desktop? Un doble clic.",
 "inst.p1": "Descargue el paquete de instalación de la última versión y haga doble clic, o arrástrelo a la ventana de Claude Desktop. Desktop lo añade como extensión y el fregadero queda conectado. Nada que escribir, nada que configurar.",
@@ -1898,7 +1906,7 @@ es: {
 "inst.p2": "Una línea en el terminal y listo. Se encarga de traer y ejecutar el servidor, así que no hay nada que instalar antes.",
 "inst.dev": "Para desarrolladores: pip, uvx, código fuente, otros clientes MCP",
 "inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
-"inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. La instalación completa está en el <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. En Windows la dependencia COM suele llegar de forma transitiva con la instalación base; instalar con <code>[com]</code> es la vía garantizada en cualquier caso, y repetirlo no hace daño. La instalación completa está en el <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
 "inst.note": "La mayor parte de este servidor no necesita Excel instalado y funciona en cualquier ordenador. Solo las partes que le piden trabajo a Excel quieren Windows con Excel encima, y abren su propia copia oculta, así que el libro que tiene en pantalla no se toca nunca.",
 "h2.svc": "Departamento de servicio",
 "mat.t": "Joven, y probado como si no lo fuera",
