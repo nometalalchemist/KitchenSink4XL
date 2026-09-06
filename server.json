@@ -3,7 +3,7 @@
   "name": "io.github.nometalalchemist/kitchensink4xl",
   "title": "KitchenSink4XL",
   "description": "Everything plus the kitchen sink for Excel: never hands your AI a number it cannot back up.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "websiteUrl": "https://nometalalchemist.github.io/KitchenSink4XL/",
   "repository": {
     "url": "https://github.com/nometalalchemist/KitchenSink4XL",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4xl",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "transport": {
         "type": "stdio"
       }
