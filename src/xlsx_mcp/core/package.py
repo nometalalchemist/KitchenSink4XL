@@ -160,7 +160,10 @@ class WorkbookPackage:
         if rep.error is not None:
             # A lock is not corruption: the wrong word sends a panicked
             # owner toward a destructive "repair" (destroyer round, M-2).
-            if rep.error_kind == "locked":
+            if rep.error_kind in ("locked", "permissions"):
+                # Neither is corruption. "permissions" is also not a lock:
+                # the file is intact and this process simply may not read
+                # it, which is a different sentence and a different fix.
                 raise WorkbookLocked(f"{p}: {rep.error}")
             raise WorkbookCorrupt(f"{p}: {rep.error}")
         pkg._hazard = rep

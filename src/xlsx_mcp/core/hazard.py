@@ -84,6 +84,7 @@ options that exist.
 
 from __future__ import annotations
 
+import os
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -1097,6 +1098,17 @@ def scan_path(path: str) -> HazardReport:
         return HazardReport(path=path, parts=[], hazards=[],
                             error="file not found", error_kind="missing")
     except PermissionError:
+        # PermissionError means two different things and they need
+        # different words. On Windows it is usually a lock: another
+        # process holds the file and the OS denies the open. On POSIX it
+        # is usually the permission bits, and telling the owner of a file
+        # they cannot read that "another process holds a lock" sends them
+        # hunting for a process that does not exist. Ask the filesystem
+        # which one it is rather than guessing from the exception type.
+        if not os.access(path, os.R_OK):
+            return HazardReport(
+                path=path, parts=[], hazards=[], error=_UNREADABLE_ERROR,
+                error_kind="permissions")
         return HazardReport(
             path=path, parts=[], hazards=[], error=_LOCKED_ERROR,
             error_kind="locked")
@@ -1106,6 +1118,12 @@ def scan_path(path: str) -> HazardReport:
             error=f"cannot read the file ({type(exc).__name__}: {exc})",
             error_kind="os")
 
+
+_UNREADABLE_ERROR = (
+    "this process is not allowed to read the file. The file itself is "
+    "intact and nothing is holding it; its permissions deny read access "
+    "to the account this server runs as. Grant read permission, or run "
+    "the server as an account that has it")
 
 _LOCKED_ERROR = (
     "another process holds a lock on part of this file (an antivirus "

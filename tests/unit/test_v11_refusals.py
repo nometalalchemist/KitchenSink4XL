@@ -176,6 +176,9 @@ def test_a_read_only_file_is_not_diagnosed_as_open_in_excel(tmp_path):
     from xlsx_mcp.core.errors import WorkbookLocked
 
     p = _book(tmp_path / "ro.xlsx", [["a", 1]])
+    # S_IREAD alone is 0o400 on POSIX: readable by the owner, not writable,
+    # which is exactly the state under test. On Windows the same call sets
+    # the read-only attribute.
     os.chmod(p, _stat.S_IREAD)
     try:
         with pytest.raises(WorkbookLocked) as exc:
@@ -188,7 +191,12 @@ def test_a_read_only_file_is_not_diagnosed_as_open_in_excel(tmp_path):
             "message sent users to close a program they never opened")
         assert "attribute" in msg
     finally:
-        os.chmod(p, _stat.S_IWRITE)
+        # BOTH bits. Restoring S_IWRITE alone is 0o200 on POSIX, a
+        # write-only file that the next line then cannot read, and the
+        # refusal for that is a different one about permissions. On Windows
+        # either form just clears the read-only attribute, which is why this
+        # only ever failed on the Linux and macOS runners.
+        os.chmod(p, _stat.S_IREAD | _stat.S_IWRITE)
     # and the same file writes once the attribute is cleared
     cells_ops.set_cell(p, "A1", 2)
 
@@ -380,3 +388,60 @@ class TestConstructedNamesStayWritable:
         for f in files:
             assert safesave.name_fits(os.path.basename(f)), f
             assert os.path.exists(f)
+
+
+# ----------------------------------------- platform-honesty (CI regressions)
+# Both of these failed on the Linux and macOS runners while passing on
+# Windows, which is the failure mode a Windows-first product is most likely
+# to ship: the developer's machine never sees it.
+
+
+def test_a_bad_output_suffix_refuses_before_the_clipboard_is_probed(
+        tmp_path, monkeypatch):
+    """The caller's arguments are judged before the environment is.
+
+    com_render_sheet probed the clipboard first, so on a machine without one
+    (every Linux and macOS runner, and any service account) a .bmp target
+    was answered with a clipboard refusal. The same call then reported two
+    different problems depending on where it ran, and the one it reported
+    was not the one the caller could fix."""
+    from xlsx_mcp.ops import comtier
+
+    monkeypatch.setattr(comtier, "_clipboard_available", lambda: False)
+    p = _book(tmp_path / "render2.xlsx", [["a", 1]])
+    with pytest.raises(XlMcpError) as exc:
+        comtier.com_render_sheet(p, str(tmp_path / "o.bmp"))
+    assert ".png" in str(exc.value)
+    assert "clipboard" not in str(exc.value)
+
+
+def test_an_unreadable_file_is_not_diagnosed_as_a_lock(tmp_path,
+                                                       monkeypatch):
+    """PermissionError means a lock on Windows and permissions on POSIX.
+
+    Telling the owner of a file they cannot read that "another process holds
+    a lock" sends them hunting for a process that does not exist. The scan
+    asks the filesystem which case it is instead of reading it off the
+    exception type."""
+    import zipfile as _zipfile
+
+    from xlsx_mcp.core import hazard
+
+    p = _book(tmp_path / "denied.xlsx", [["a", 1]])
+
+    def deny(*_a, **_k):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(_zipfile, "ZipFile", deny)
+    monkeypatch.setattr(hazard.os, "access", lambda *_a, **_k: False)
+    rep = hazard.scan_path(p)
+    assert rep.error_kind == "permissions"
+    assert "not allowed to read" in rep.error
+    assert "lock" not in rep.error
+
+    # readable but denied anyway: that IS the lock case, and it keeps its
+    # own message.
+    monkeypatch.setattr(hazard.os, "access", lambda *_a, **_k: True)
+    rep = hazard.scan_path(p)
+    assert rep.error_kind == "locked"
+    assert "holds a lock" in rep.error

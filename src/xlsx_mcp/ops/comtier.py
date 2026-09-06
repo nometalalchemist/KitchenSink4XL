@@ -755,9 +755,18 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
     """Render a sheet's used range (or a given range) to a PNG image for
     visual verification, via CopyPicture into a temporary chart canvas."""
     p = _norm_path(path, "com_render_sheet")
+    # The CALLER's own arguments are judged before the environment is. A
+    # .bmp target is wrong on every machine, and answering it with a
+    # clipboard refusal on the machines that have no clipboard makes the
+    # same call report two different problems depending on where it ran.
+    # The suffix check is pure: _out_path can write a .bak, so it stays
+    # after the probe and no file is touched for a call that refuses.
+    if not str(output).lower().endswith(".png"):
+        raise XlMcpError("output must be a .png path")
     if not _clipboard_available():
-        # Named cause, and no workaround offered, because there is none:
-        # CopyPicture is Excel's only range-to-bitmap route.
+        # Named cause, and no workaround offered for the render itself,
+        # because there is none: CopyPicture is Excel's only range-to-bitmap
+        # route.
         raise XlMcpError(
             "rendering this range needs the Windows clipboard, and this "
             "session does not have one (service accounts and locked or "
@@ -766,8 +775,6 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
             "instead")
     out, out_info = _out_path(output, "com_render_sheet output",
                               overwrite=overwrite, source=p)
-    if not out.lower().endswith(".png"):
-        raise XlMcpError("output must be a .png path")
 
     def body(app, wb) -> dict:
         try:
