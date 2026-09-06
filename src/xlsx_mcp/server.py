@@ -51,6 +51,7 @@ from fastmcp.tools.tool import ToolResult as _FmcpToolResult
 from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
+from .core import readonly as _readonly
 from .core import update_check as _upd
 from .core.errors import XlMcpError as _XlMcpError
 from .ops import annotations as _annotations
@@ -144,7 +145,10 @@ def _tool(pack: str):
     (typed exceptions -> structured RefusalResult with isError=true); the
     module attribute stays the raw function so in-process returns stay
     direct. Every tool lands in the packs registry under its pack tag
-    ('lite' = the always-on core)."""
+    ('lite' = the always-on core), and carries the readOnlyHint its
+    core/readonly.py classification gives it. An unclassified tool raises
+    HERE, at import, rather than reaching tools/list without anyone having
+    decided whether it can change a workbook."""
 
     def deco(fn):
         if _inspect.iscoroutinefunction(fn):
@@ -162,7 +166,12 @@ def _tool(pack: str):
                 except _envelope.CATCHABLE as exc:
                     return _envelope.refuse(exc)
 
-        tool = _FunctionTool.from_function(boundary)
+        tool = _FunctionTool.from_function(
+            boundary,
+            annotations={
+                "readOnlyHint": _readonly.read_only_hint(fn.__name__)
+            },
+        )
         mcp.add_tool(tool)
         _packs.register(fn.__name__, None if pack == "lite" else pack, tool)
         return fn
