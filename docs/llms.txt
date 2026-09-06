@@ -153,6 +153,7 @@ source. Its docstring carries the counting definition and the exclusions.
 - pip: `pip install kitchensink4xl` (COM pack: `pip install kitchensink4xl[com]`, a no-op off Windows)
 - uvx, no install: `uvx kitchensink4xl`
 - Any MCP client: run the `kitchensink4xl` (or `xl-mcp`) executable over stdio, for example `{"mcpServers": {"xl": {"command": "kitchensink4xl"}}}`
+- Interpreter plus module, same server: `python -m xlsx_mcp.server`. The distribution is `kitchensink4xl` and the installed package is `xlsx_mcp`; `import kitchensink4xl` fails.
 
 First launch through uvx downloads and builds the environment and can take 20
 to 30 seconds before the server answers; every launch after that starts in
