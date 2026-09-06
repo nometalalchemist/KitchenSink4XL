@@ -175,9 +175,11 @@ body.live .feeder .cond{stroke:var(--live);opacity:.95}
 .specs-strip{display:flex;justify-content:center;gap:0;margin:44px auto 0;
   border:2px solid var(--ink);max-width:760px;background:var(--paper-deep);
   box-shadow:var(--shadow);flex-wrap:wrap}
-.spec{padding:16px 28px;border-right:1px solid var(--rule);flex:1;min-width:150px}
+.spec{padding:16px 18px;border-right:1px solid var(--rule);flex:1;min-width:150px;
+  display:flex;flex-direction:column}
 .spec:last-child{border-right:none}
-.spec .n{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-weight:900;font-size:34px;display:block;overflow-wrap:anywhere}
+.spec .n{font-family:'Fraunces',"Fraunces Fallback",Georgia,serif;font-weight:900;
+  font-size:clamp(27px,2.7vw,34px);display:block;overflow-wrap:anywhere;line-height:1.1}
 /* an unfilled number is meant to look unfilled: red, smaller, and impossible to ship past */
 .spec .n.todo{font-size:14px;color:var(--stamp);letter-spacing:.02em;line-height:1.25;
   padding:8px 0 6px;font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-weight:600}
@@ -224,11 +226,11 @@ body.live .sparkrule .node{box-shadow:0 0 0 1.5px var(--brass),0 0 9px 2px rgba(
    carries no axis, no scale and no tooltip, because these are single measured numbers and
    a page about not faking numbers does not get to draw a trend it does not have. */
 .spec{position:relative}
-.spec .sparkmini{display:block;margin-top:9px;height:16px;position:relative}
-.spec .sparkmini svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.spec .sparkmini{display:block;margin-top:auto;padding-top:11px;height:27px;position:relative}
+.spec .sparkmini svg{position:absolute;left:0;right:0;bottom:0;height:16px;width:100%;display:block}
 .spec .sparkmini .trace{fill:none;stroke:var(--rule);stroke-width:2;stroke-linejoin:round;
   stroke-linecap:round;transition:stroke .5s ease}
-.spec .sparkmini .node{position:absolute;right:0;top:50%;width:6px;height:6px;margin-top:-3px;
+.spec .sparkmini .node{position:absolute;right:0;bottom:5px;width:6px;height:6px;
   border-radius:50%;background:var(--live);opacity:var(--pilot-op);transition:opacity .4s ease}
 body.live .spec .sparkmini .trace{stroke:var(--brass)}
 body.live .spec .sparkmini .node{box-shadow:0 0 7px 1.5px rgba(232,163,30,.6)}
@@ -423,7 +425,7 @@ details.devfold .term{margin-bottom:14px;font-size:13px;padding:16px 18px}
   box-shadow:var(--shadow);padding:15px 20px 15px 44px;font-size:13.5px;line-height:1.6}
 .channel-note:before{content:"\26A1";position:absolute;left:15px;top:14px;font-size:15px;
   color:var(--brass);line-height:1.3}
-.aichannel{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:9px;
+.aichannel{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:10px;
   letter-spacing:.18em;text-transform:uppercase;color:var(--brass);font-weight:600;line-height:1.3}
 .aichannel .tap{flex:1;min-width:24px;height:2px;border-top:2px dashed var(--brass);
   opacity:.8;position:relative}
@@ -442,18 +444,19 @@ body.live .aichannel .tap:before{background:var(--live);box-shadow:0 0 7px 1.5px
 .demo-panel.good .demo-fig:after{right:6px}
 
 /* ---------- the panel meter: the context bill, read off a dial ---------- */
-.meterwrap{display:flex;gap:26px;align-items:center;flex-wrap:wrap;justify-content:center;
+.meterwrap{display:flex;gap:30px;align-items:center;flex-wrap:wrap;justify-content:center;
+  max-width:820px;margin-left:auto;margin-right:auto;
   border:2px solid var(--ink);background:var(--paper-deep);box-shadow:var(--shadow);
   padding:22px 26px;margin-top:26px}
-.meter{width:250px;height:142px;flex:0 0 auto}
+.meter{width:290px;height:165px;flex:0 0 auto}
 .meter .bezel{fill:var(--paper);stroke:var(--ink);stroke-width:2}
 .meter .face{fill:none;stroke:var(--ink-soft);stroke-width:1.5;opacity:.55}
 .meter .tick{stroke:var(--ink-soft);stroke-width:1.5}
 .meter .tick.maj{stroke:var(--ink);stroke-width:2}
-.meter .redline{stroke:var(--stamp);stroke-width:3;stroke-linecap:round}
-.meter .num{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:8px;
+.meter .redline{stroke:var(--stamp);stroke-width:3.5;stroke-linecap:round}
+.meter .num{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:9px;
   fill:var(--ink-soft);letter-spacing:.04em}
-.meter .unit{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:7.5px;
+.meter .unit{font-family:'IBM Plex Mono',"Plex Mono Fallback",monospace;font-size:8.5px;
   fill:var(--ink-soft);letter-spacing:.2em}
 .meter .screwhead{fill:var(--paper-deep);stroke:var(--ink-soft);stroke-width:1.2}
 .meter .pivot{fill:var(--ink)}
@@ -520,7 +523,7 @@ body.live .livetag{opacity:1}
 .counter .go{display:inline-block;margin-top:14px;font-size:11px;letter-spacing:.18em;
   text-transform:uppercase;color:var(--brass);font-weight:600}
 
-/* the lamp cameo: the Electrical aisle puts current on the Decor aisle's lamp, once,
+/* the lamp cameo: the Electrical aisle puts current on the Paint aisle's lamp, once,
    when the family strip scrolls into view */
 .icon.energized{animation:cameoFlicker 1.5s ease-in .3s 1}
 @keyframes cameoFlicker{0%{filter:none}
@@ -707,9 +710,9 @@ footer a{color:var(--brass)}
 <section id="inventory">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no2">DEPT. 02</span><h2 data-i18n="h2.inv">The shelves, pack by pack</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
-    <p class="for-lead" data-i18n="inv.lead">The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 11.4k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.</p>
+    <p class="for-lead" data-i18n="inv.lead">The tools are arranged in capability packs, the way a good shop groups what belongs together. Connecting tools to an AI costs some of its working memory, so a session opens with just the everyday core, 40 tools, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.</p>
     <div class="depts">
-      <div class="dept"><h3><span data-i18n="pk1.t">Lite Core</span> <span class="num" data-i18n="pk1.n">PACK 0 · ALWAYS ON</span></h3><p data-i18n="pk1.p">The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the enable_tools switchboard.</p><p class="ex" data-i18n="pk1.e">e.g. read a range and see which values are cached · insert a column and keep the totals pointing right · sort the way Excel sorts, blanks last</p><span class="count" data-i18n="pk1.c">40 TOOLS · ALWAYS ON</span></div>
+      <div class="dept"><h3><span data-i18n="pk1.t">Lite Core</span> <span class="num" data-i18n="pk1.n">PACK 0 · ALWAYS ON</span></h3><p data-i18n="pk1.p">The everyday bench: read cells and ranges with every value labeled, view the workbook as a grid, ask questions like sum-this-column without pulling every row into the AI's memory, write and check formulas, insert and delete rows and columns without breaking what points at them, sort and filter the way Excel does, plus tables, formatting, import and export, backups, and diagnostics.</p><p class="ex" data-i18n="pk1.e">e.g. read a range and see which values are cached · insert a column and keep the totals pointing right · sort the way Excel sorts, blanks last</p><span class="count" data-i18n="pk1.c">40 TOOLS · ALWAYS ON</span></div>
       <div class="dept"><h3><span data-i18n="pk2.t">Design</span> <span class="num" data-i18n="pk2.n">THE FINISH WORK</span></h3><p data-i18n="pk2.p">Named cell styles, a format painter, a style-bloat audit, conditional formatting, data validation, images, charts, the full table lifecycle (columns, totals, resize, banding), and named ranges including LAMBDA definitions and a cleanup pass.</p><p class="ex" data-i18n="pk2.e">e.g. put a colour scale on the variance column · define a LAMBDA the file still opens with · clear out 400 unused styles</p><span class="count" data-i18n="pk2.c">9 TOOLS</span></div>
       <div class="dept"><h3><span data-i18n="pk3.t">Layout plus Inspection</span> <span class="num" data-i18n="pk3.n">OUT THE DOOR</span></h3><p data-i18n="pk3.p">Page layout and print setup, headers and footers, advisory protection, legacy comments, multi-sheet export, and the read-side inspectors: external links, VBA, existing pivot tables, and data connections.</p><p class="ex" data-i18n="pk3.e">e.g. set the print area before it goes to the printer · find out what this workbook is linked to · check whether there is VBA in here</p><span class="count" data-i18n="pk3.c">9 TOOLS</span></div>
       <div class="dept mains"><h3><span data-i18n="pk4.t">COM (the mains)</span> <span class="num" data-i18n="pk4.n">WINDOWS + EXCEL</span></h3><p data-i18n="pk4.p">Drives a private hidden Excel instance, never your open session: real recalculation, real pivot tables, goal seek, PDF export, sheet render to image, format conversion, real encryption, sparklines, true autofit, an opens-clean check, and an honest status report.</p><p class="ex" data-i18n="pk4.e">e.g. recalculate and get the value with the label to prove it · build a pivot table that is actually a pivot table · confirm the file opens with no repair prompt</p><span class="count" data-i18n="pk4.c">11 TOOLS</span></div>
@@ -720,16 +723,16 @@ footer a{color:var(--brass)}
 <section id="compare">
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no3">DEPT. 03</span><h2 data-i18n="h2.cmp">Against the rest of the aisle</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
-    <p class="for-lead" data-i18n="cmp.lead">Feature grids flatter everybody. Here it is instead as the requests an agent actually gets:</p>
+    <p class="for-lead" data-i18n="cmp.lead">Instead of a feature checklist, here are six things people actually ask an AI to do with a spreadsheet, and how it usually goes:</p>
     <div class="ticked"><div class="tablewrap">
       <table class="scenario">
         <tr><th data-i18n="cmp.h1">"Hey, could you…"</th><th class="us">🔌 KitchenSink4XL</th><th data-i18n="cmp.h3">haris-musa (openpyxl)<span class="stars">4,155 GitHub stars&dagger;</span></th><th data-i18n="cmp.h4">Other tools on this shelf*<span class="stars">negokaz 1,021 &middot; sbroenne 655&dagger;</span></th></tr>
         <tr><td data-i18n="cr1.q">"Insert a column in the middle, keep every formula pointing where it should."</td><td class="us yes" data-i18n="cr1.us">✔ formulas, tables, named ranges, charts and cross-sheet links all follow, checked against Excel's own recalculation</td><td class="no" data-i18n="cr1.inc">✘ nothing in the docs says otherwise, and openpyxl, the library underneath, states plainly that it does not maintain formulas, tables or charts when rows and columns move</td><td class="part" data-i18n="cr1.oth">Excel does the shifting itself, on Windows, with the workbook closed and the application running</td></tr>
-        <tr><td data-i18n="cr2.q">"Is this total current, or left over from the last save?"</td><td class="us yes" data-i18n="cr2.us">✔ every value labeled calculated, cached or absent, and the stale cells named by address</td><td class="no" data-i18n="cr2.inc">✘ reads return the formula string; there is no way to get even the cached value</td><td class="part" data-i18n="cr2.oth">the COM server recalculates with Excel's own engine, but the value comes back with no freshness marking of any kind</td></tr>
+        <tr><td data-i18n="cr2.q">"Is this total current, or left over from the last save?"</td><td class="us yes" data-i18n="cr2.us">✔ every value labeled calculated, cached or absent, and the stale cells named by address</td><td class="no" data-i18n="cr2.inc">✘ reads return the formula string; there is no way to get even the cached value</td><td class="part" data-i18n="cr2.oth">one competing tool can ask Excel itself to recalculate, but the value comes back with no marking of whether it is fresh or stale</td></tr>
         <tr><td data-i18n="cr3.q">"Sort it the way Excel would sort it, blanks and all."</td><td class="us yes" data-i18n="cr3.us">✔ numbers, then text case-insensitively, then FALSE, TRUE, errors, blanks last, both directions, checked cell for cell against Excel</td><td class="no" data-i18n="cr3.inc">✘ no sort tool</td><td class="part" data-i18n="cr3.oth">Excel's own sort, with the application running</td></tr>
         <tr><td data-i18n="cr4.q">"Write a LAMBDA the file can still open afterward."</td><td class="us yes" data-i18n="cr4.us">✔ modern functions and their declared parameters prefixed correctly; 80 formulas across every documented family opened with no repair prompt</td><td class="nd" data-i18n="cr4.inc">n/d, and no Excel MCP server surveyed documents the modern functions either way, as support or as a limitation</td><td class="nd">n/d</td></tr>
-        <tr><td data-i18n="cr5.q">"Read the big workbook without torching my context window."</td><td class="us yes" data-i18n="cr5.us">✔ compact reads, a grid view, and server-side query and aggregation so the rows stay on the server</td><td class="no" data-i18n="cr5.inc">✘ no pagination and no token budgeting anywhere in the docs; with no end cell given it reads the whole used range</td><td class="part" data-i18n="cr5.oth">the Go server pages reads by cell count, 4,000 cells at a time by default</td></tr>
-        <tr><td data-i18n="cr6.q">"Recalculate it for real and prove it."</td><td class="us yes" data-i18n="cr6.us">✔ a private hidden Excel does the arithmetic and the result comes back labeled calculated, never mixed in with cached values</td><td class="no" data-i18n="cr6.inc">✘ no recalculation tool, and the documentation never raises the subject</td><td class="part" data-i18n="cr6.oth">real recalculation on the COM server, which asks for Windows, an installed Excel, an interactive desktop and the workbook closed first</td></tr>
+        <tr><td data-i18n="cr5.q">"Read the big workbook without torching my context window."</td><td class="us yes" data-i18n="cr5.us">✔ compact reads, a grid view, and server-side query and aggregation so the rows stay on the server</td><td class="no" data-i18n="cr5.inc">✘ no way to read a little at a time; ask without an end point and it reads everything, straight into the AI's memory</td><td class="part" data-i18n="cr5.oth">the Go server pages reads by cell count, 4,000 cells at a time by default</td></tr>
+        <tr><td data-i18n="cr6.q">"Recalculate it for real and prove it."</td><td class="us yes" data-i18n="cr6.us">✔ a private hidden Excel does the arithmetic and the result comes back labeled calculated, never mixed in with cached values</td><td class="no" data-i18n="cr6.inc">✘ no recalculation tool, and the documentation never raises the subject</td><td class="part" data-i18n="cr6.oth">real recalculation by driving Excel directly, which needs Windows, an installed Excel, a logged-in desktop, and the workbook closed first</td></tr>
       </table>
     </div></div>
     <p class="foot-note" data-i18n="cmp.note">Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf: negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.</p>
@@ -757,37 +760,37 @@ footer a{color:var(--brass)}
         <circle class="screwhead" cx="14" cy="14" r="4.5"/><circle class="screwhead" cx="236" cy="14" r="4.5"/>
         <circle class="screwhead" cx="14" cy="128" r="4.5"/><circle class="screwhead" cx="236" cy="128" r="4.5"/>
         <path class="face" d="M52.3,71.0 A84,84 0 0 1 197.7,71.0"/>
-        <line class="tick maj" x1="52.3" y1="71.0" x2="60.0" y2="75.5"/>
+        <line class="tick maj" x1="52.3" y1="71.0" x2="60.9" y2="76.0"/>
         <line class="tick" x1="57.0" y1="63.6" x2="61.1" y2="66.6"/>
         <line class="tick" x1="62.6" y1="56.8" x2="66.3" y2="60.1"/>
         <line class="tick" x1="68.8" y1="50.6" x2="72.1" y2="54.3"/>
         <line class="tick" x1="75.6" y1="45.0" x2="78.6" y2="49.1"/>
-        <line class="tick maj" x1="83.0" y1="40.3" x2="87.5" y2="48.0"/>
+        <line class="tick maj" x1="83.0" y1="40.3" x2="88.0" y2="48.9"/>
         <line class="tick" x1="90.8" y1="36.3" x2="92.9" y2="40.8"/>
         <line class="tick" x1="99.0" y1="33.1" x2="100.6" y2="37.9"/>
         <line class="tick" x1="107.5" y1="30.8" x2="108.6" y2="35.7"/>
         <line class="tick" x1="116.2" y1="29.5" x2="116.7" y2="34.4"/>
-        <line class="tick maj" x1="125.0" y1="29.0" x2="125.0" y2="38.0"/>
+        <line class="tick maj" x1="125.0" y1="29.0" x2="125.0" y2="39.0"/>
         <line class="tick" x1="133.8" y1="29.5" x2="133.3" y2="34.4"/>
         <line class="tick" x1="142.5" y1="30.8" x2="141.4" y2="35.7"/>
         <line class="tick" x1="151.0" y1="33.1" x2="149.4" y2="37.9"/>
         <line class="tick" x1="159.2" y1="36.3" x2="157.1" y2="40.8"/>
-        <line class="tick maj" x1="167.0" y1="40.3" x2="162.5" y2="48.0"/>
+        <line class="tick maj" x1="167.0" y1="40.3" x2="162.0" y2="48.9"/>
         <line class="tick" x1="174.4" y1="45.0" x2="171.4" y2="49.1"/>
         <line class="tick" x1="181.2" y1="50.6" x2="177.9" y2="54.3"/>
         <line class="tick" x1="187.4" y1="56.8" x2="183.7" y2="60.1"/>
         <line class="tick" x1="193.0" y1="63.6" x2="188.9" y2="66.6"/>
-        <line class="tick maj" x1="197.7" y1="71.0" x2="190.0" y2="75.5"/>
-        <text class="num" x="68.7" y="83.5" text-anchor="middle">0</text>
-        <text class="num" x="92.5" y="59.7" text-anchor="middle">5</text>
-        <text class="num" x="125.0" y="51.0" text-anchor="middle">10</text>
-        <text class="num" x="157.5" y="59.7" text-anchor="middle">15</text>
-        <text class="num" x="181.3" y="83.5" text-anchor="middle">20</text>
-        <line class="redline" x1="196.9" y1="69.5" x2="189.2" y2="74.1"/>
-        <text class="unit" x="125" y="52" text-anchor="middle" data-i18n="bill.h3">Tokens</text>
-        <text class="unit" x="125" y="64" text-anchor="middle">&#215;1000</text>
-        <g class="needle"><line x1="125" y1="113" x2="125" y2="47"/></g>
+        <line class="tick maj" x1="197.7" y1="71.0" x2="189.1" y2="76.0"/>
+        <text class="num" x="70.4" y="84.7" text-anchor="middle">0</text>
+        <text class="num" x="93.5" y="61.6" text-anchor="middle">5</text>
+        <text class="num" x="125.0" y="53.2" text-anchor="middle">10</text>
+        <text class="num" x="156.5" y="61.6" text-anchor="middle">15</text>
+        <text class="num" x="179.6" y="84.7" text-anchor="middle">20</text>
+        <line class="redline" x1="200.3" y1="67.4" x2="187.4" y2="75.2"/>
+        <g class="needle"><line x1="125" y1="113" x2="125" y2="38"/></g>
         <circle class="pivot" cx="125" cy="113" r="5"/>
+        <text class="unit" x="121" y="133" text-anchor="end" data-i18n="bill.h3">Tokens</text>
+        <text class="unit" x="125" y="133" text-anchor="start">&#215;1000</text>
       </svg>
       <div class="meter-read">
         <div class="row"><span class="pip"></span><span class="lab" data-i18n="bill.r1">Lite core</span><span class="fig">11.4k</span></div>
@@ -846,14 +849,14 @@ footer a{color:var(--brass)}
     <div class="sec-head"><span class="no" data-i18n="no6">DEPT. 06</span><h2 data-i18n="h2.svc">Customer service</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
     <div class="maturity">
       <h3 data-i18n="mat.t">Young, and tested like it isn't</h3>
-      <p data-i18n="mat.p">Every gate this shop runs is green: adversarial rounds through the raw protocol, ground-truth checks against Excel's own recalculation, zero corruptions across the corpus. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the service counter and tell us what broke.</p>
+      <p data-i18n="mat.p">Before release this server was tested the hard way: months of deliberate attack rounds trying to corrupt files, sneak past the safety checks, and catch it lying, plus every kind of edit checked against Excel's own math. All of it came back clean. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the customer service counter and tell us what broke.</p>
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD AND POWERPOINT SINKS</span>
     <div class="service-grid">
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=bug_report.yml">
         <span class="icon">🔧</span>
         <h3 data-i18n="svc1.t">Found a number you can't trust?</h3>
-        <p data-i18n="svc1.p">A value labeled wrong, a refusal that made no sense, a save that touched something it shouldn't have. File it at the repair counter: the form asks exactly what a fix needs. Never paste real spreadsheet data; describe the shape of the workbook instead.</p>
+        <p data-i18n="svc1.p">A value labeled wrong, an error message that made no sense, a save that touched something it shouldn't have. File it at the counter: the form asks exactly what a fix needs. Never paste real spreadsheet data; describe the shape of the workbook instead.</p>
         <span class="go" data-i18n="svc1.g">File a bug report →</span>
       </a>
       <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=feature_request.yml">
@@ -878,7 +881,7 @@ footer a{color:var(--brass)}
     <div class="guarantee">
       <span class="seal">🛡️</span>
       <h3 data-i18n="g.t">Engineered Not to Corrupt</h3>
-      <p data-i18n="g.p1">Atomic saves. Automatic backups before every change. And one extra wire, because this is a spreadsheet: before a release ships, every kind of edit is checked against Excel's own math. The wiring gets inspected before the power goes on.</p>
+      <p data-i18n="g.p1">Saves either complete perfectly or change nothing, never half. Automatic backups before every change. And one extra wire, because this is a spreadsheet: before a release ships, every kind of edit is checked against Excel's own math. The wiring gets inspected before the power goes on.</p>
       <p style="margin-top:14px;font-size:11px;opacity:.75" data-i18n="g.p2">Provided as-is, without warranty of any kind, per the license; the engineering above is simply how seriously your workbooks are taken. Keep backups. (It makes them for you.)</p>
     </div>
   </div>
@@ -897,8 +900,8 @@ footer a{color:var(--brass)}
       <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
         <span class="icon" id="lampCameo">💡</span>
         <h3>KitchenSink4PPT</h3>
-        <p data-i18n="fam2.p">The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
-        <span class="go" data-i18n="fam2.g">Visit the decor aisle →</span>
+        <p data-i18n="fam2.p">The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
+        <span class="go" data-i18n="fam2.g">Visit the paint aisle →</span>
       </a>
       <a class="counter" href="https://nometalalchemist.github.io/">
         <span class="icon">🏪</span>
@@ -1013,7 +1016,7 @@ if (drawables.length && "IntersectionObserver" in window){
   for (var e2 = 0; e2 < drawables.length; e2++) dio.observe(drawables[e2]);
 }
 
-/* ---------- 4. the lamp cameo: current reaches the decor aisle, once ---------- */
+/* ---------- 4. the lamp cameo: current reaches the paint aisle, once ---------- */
 var lamp = document.getElementById("lampCameo");
 if (lamp && "IntersectionObserver" in window){
   var seen = false;
@@ -1095,9 +1098,9 @@ en: {
 "tale.p2": "Most tools do the cheap version: move the cells, save the file, hope. The damage never shows up when the edit runs. It shows up three days later, in a meeting, in the one total that quietly stopped including its last row.",
 "tale.p3": "This server moves everything that should move, and checks the result against what Excel itself would have done. When an edit cannot be done safely, it says no out loud instead of guessing quietly. A refusal costs you a minute. A quiet guess costs you the deal.",
 "h2.inv": "The shelves, pack by pack",
-"inv.lead": "The stock is arranged in capability packs, the way a good shop groups what belongs together. A session opens on the lite core, 40 tools at about 11.4k tokens, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.",
+"inv.lead": "The tools are arranged in capability packs, the way a good shop groups what belongs together. Connecting tools to an AI costs some of its working memory, so a session opens with just the everyday core, 40 tools, and switches on the pack a job needs with one call. All 69 tools are on the floor today: 40 in the core, 29 across the three packs.",
 "pk1.t": "Lite Core", "pk1.n": "PACK 0 · ALWAYS ON",
-"pk1.p": "The everyday bench: an anchored grid view of the workbook, labeled reads of cells and ranges, server-side query and aggregation, formula write and audit, structural row and column edits that carry their references, sort and filter with Excel's own ranking, tables, formatting, import and export, backups, diagnostics, and the enable_tools switchboard.",
+"pk1.p": "The everyday bench: read cells and ranges with every value labeled, view the workbook as a grid, ask questions like sum-this-column without pulling every row into the AI's memory, write and check formulas, insert and delete rows and columns without breaking what points at them, sort and filter the way Excel does, plus tables, formatting, import and export, backups, and diagnostics.",
 "pk1.e": "e.g. read a range and see which values are cached · insert a column and keep the totals pointing right · sort the way Excel sorts, blanks last",
 "pk1.c": "40 TOOLS · ALWAYS ON",
 "pk2.t": "Design", "pk2.n": "THE FINISH WORK",
@@ -1113,7 +1116,7 @@ en: {
 "pk4.e": "e.g. recalculate and get the value with the label to prove it · build a pivot table that is actually a pivot table · confirm the file opens with no repair prompt",
 "pk4.c": "11 TOOLS",
 "h2.cmp": "Against the rest of the aisle",
-"cmp.lead": "Feature grids flatter everybody. Here it is instead as the requests an agent actually gets:",
+"cmp.lead": "Instead of a feature checklist, here are six things people actually ask an AI to do with a spreadsheet, and how it usually goes:",
 "cmp.h1": "\"Hey, could you…\"",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub stars&dagger;</span>",
 "cmp.h4": "Other tools on this shelf*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1124,7 +1127,7 @@ en: {
 "cr2.q": "\"Is this total current, or left over from the last save?\"",
 "cr2.us": "✔ every value labeled calculated, cached or absent, and the stale cells named by address",
 "cr2.inc": "✘ reads return the formula string; there is no way to get even the cached value",
-"cr2.oth": "the COM server recalculates with Excel's own engine, but the value comes back with no freshness marking of any kind",
+"cr2.oth": "one competing tool can ask Excel itself to recalculate, but the value comes back with no marking of whether it is fresh or stale",
 "cr3.q": "\"Sort it the way Excel would sort it, blanks and all.\"",
 "cr3.us": "✔ numbers, then text case-insensitively, then FALSE, TRUE, errors, blanks last, both directions, checked cell for cell against Excel",
 "cr3.inc": "✘ no sort tool",
@@ -1134,12 +1137,12 @@ en: {
 "cr4.inc": "n/d, and no Excel MCP server surveyed documents the modern functions either way, as support or as a limitation",
 "cr5.q": "\"Read the big workbook without torching my context window.\"",
 "cr5.us": "✔ compact reads, a grid view, and server-side query and aggregation so the rows stay on the server",
-"cr5.inc": "✘ no pagination and no token budgeting anywhere in the docs; with no end cell given it reads the whole used range",
+"cr5.inc": "✘ no way to read a little at a time; ask without an end point and it reads everything, straight into the AI's memory",
 "cr5.oth": "the Go server pages reads by cell count, 4,000 cells at a time by default",
 "cr6.q": "\"Recalculate it for real and prove it.\"",
 "cr6.us": "✔ a private hidden Excel does the arithmetic and the result comes back labeled calculated, never mixed in with cached values",
 "cr6.inc": "✘ no recalculation tool, and the documentation never raises the subject",
-"cr6.oth": "real recalculation on the COM server, which asks for Windows, an installed Excel, an interactive desktop and the workbook closed first",
+"cr6.oth": "real recalculation by driving Excel directly, which needs Windows, an installed Excel, a logged-in desktop, and the workbook closed first",
 "cmp.note": "Capability survey as of 2026-09-04, compiled from public repositories, documentation, and issue trackers. n/d: not documented in the sources surveyed, which is not a claimed absence. The most popular Excel MCP server is haris-musa/excel-mcp-server, 25 tools on openpyxl, last released 2026-04-12; its own open issues #94 and #118 ask for computed values instead of formula text. openpyxl's documentation states that it does not manage dependencies such as formulae, tables and charts when rows or columns are inserted or deleted. * Other tools on this shelf: negokaz/excel-mcp-server (Go, seven tools, paginated reads, live editing on Windows), sbroenne/mcp-server-excel (C#, 31 tools over 326 operations driving the real Excel application, the capability ceiling, but Windows with Excel and exclusive access to the file, and no file-based tier). Two newer servers, PSU3D0/agent-spreadsheet and logisky/logisheets-mcp, embed real calculation engines and are worth watching. Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in rather than an MCP server. &dagger; Star counts read from the GitHub API on 2026-09-04, shown for context: stars say how long a shelf has been in view, not what is on it. Test and stress evidence is in the specs strip up top. Corrections welcome: open an issue.",
 "h2.eff": "The context bill",
 "eff.lead": "Most MCP servers move into your AI's context like a hoarder: everything, up front, whether the job needs it or not. This one starts light and only unpacks a shelf when the work calls for it. Here is the bill, measured:",
@@ -1171,10 +1174,10 @@ en: {
 "inst.note": "Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.",
 "h2.svc": "Customer service",
 "mat.t": "Young, and tested like it isn't",
-"mat.p": "Every gate this shop runs is green: adversarial rounds through the raw protocol, ground-truth checks against Excel's own recalculation, zero corruptions across the corpus. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the service counter and tell us what broke.",
+"mat.p": "Before release this server was tested the hard way: months of deliberate attack rounds trying to corrupt files, sneak past the safety checks, and catch it lying, plus every kind of edit checked against Excel's own math. All of it came back clean. What it has not had yet is a long life in strangers' workbooks, and spreadsheets earn trust in the field, not in the lab. If Excel is where you live, you are the laboratory this server needs: bring your ugliest workbook to the customer service counter and tell us what broke.",
 "svc.ticket": "NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD AND POWERPOINT SINKS",
 "svc1.t": "Found a number you can't trust?",
-"svc1.p": "A value labeled wrong, a refusal that made no sense, a save that touched something it shouldn't have. File it at the repair counter: the form asks exactly what a fix needs. Never paste real spreadsheet data; describe the shape of the workbook instead.",
+"svc1.p": "A value labeled wrong, an error message that made no sense, a save that touched something it shouldn't have. File it at the counter: the form asks exactly what a fix needs. Never paste real spreadsheet data; describe the shape of the workbook instead.",
 "svc1.g": "File a bug report →",
 "svc2.t": "Missing an attachment?",
 "svc2.p": "A spreadsheet capability the sink should also have. Describe the real task behind it and it goes on the workbench.",
@@ -1184,13 +1187,13 @@ en: {
 "svc3.g": "Arrange a license →",
 "svc.note": "Reports are public GitHub issues (a free GitHub account is needed to file one). Every report lands in the maintainer's inbox.",
 "g.t": "Engineered Not to Corrupt",
-"g.p1": "Atomic saves. Automatic backups before every change. And one extra wire, because this is a spreadsheet: before a release ships, every kind of edit is checked against Excel's own math. The wiring gets inspected before the power goes on.",
+"g.p1": "Saves either complete perfectly or change nothing, never half. Automatic backups before every change. And one extra wire, because this is a spreadsheet: before a release ships, every kind of edit is checked against Excel's own math. The wiring gets inspected before the power goes on.",
 "g.p2": "Provided as-is, without warranty of any kind, per the license; the engineering above is simply how seriously your workbooks are taken. Keep backups. (It makes them for you.)",
 "h2.fam": "The other aisles",
 "fam1.p": "The original fixture: everything plus the kitchen sink for Microsoft Word. 219 operations across 108 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.",
 "fam1.g": "Visit the plumbing aisle →",
-"fam2.p": "The decor aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
-"fam2.g": "Visit the decor aisle →",
+"fam2.p": "The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 138 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.",
+"fam2.g": "Visit the paint aisle →",
 "fam3.t": "The storefront",
 "fam3.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
 "fam3.g": "Browse the store →",
@@ -1256,9 +1259,9 @@ ko: {
 "tale.p2": "대부분의 도구는 싼 방법을 씁니다. 셀을 옮기고, 파일을 저장하고, 잘되기를 바랍니다. 피해는 편집하는 순간에는 결코 드러나지 않습니다. 사흘 뒤 회의에서, 마지막 행을 조용히 빼먹기 시작한 그 합계 하나로 드러납니다.",
 "tale.p3": "이 서버는 따라 움직여야 하는 것을 전부 움직이고, 그 결과를 Excel이라면 어떻게 했을지와 대조해 확인합니다. 안전하게 처리할 수 없는 편집이면 조용히 짐작하는 대신 큰 소리로 거절합니다. 거절은 1분을 씁니다. 조용한 짐작은 거래를 날립니다.",
 "h2.inv": "선반 둘러보기, 팩별로",
-"inv.lead": "좋은 가게가 어울리는 물건끼리 묶어 두듯, 재고는 기능 팩으로 정리되어 있습니다. 세션은 라이트 코어 도구 40종, 약 11.4k 토큰으로 시작하고, 필요한 팩은 호출 한 번으로 켭니다. 오늘 매장에 나와 있는 도구는 69종 전부입니다. 코어에 40종, 세 개의 팩에 29종입니다.",
+"inv.lead": "도구는 좋은 가게가 어울리는 물건을 한데 모아 두듯 기능 묶음으로 정리되어 있습니다. 도구를 AI에 연결하면 AI의 작업 기억을 얼마간 쓰게 되므로, 세션은 매일 쓰는 핵심 40종만 열어 두고 필요한 묶음은 한 번의 호출로 켭니다. 오늘 매장에 나와 있는 도구는 69종 전부입니다. 핵심에 40종, 세 묶음에 걸쳐 29종.",
 "pk1.t": "라이트 코어", "pk1.n": "팩 0 · 상시 켜짐",
-"pk1.p": "매일 쓰는 작업대입니다. 앵커가 붙은 통합 문서 그리드 뷰, 라벨이 붙은 셀과 범위 읽기, 서버 측 쿼리와 집계, 수식 작성과 감사, 참조까지 함께 옮기는 행·열 구조 편집, Excel과 같은 순서의 정렬과 필터, 표, 서식, 가져오기와 내보내기, 백업, 진단, 그리고 enable_tools 배전반이 들어 있습니다.",
+"pk1.p": "매일 쓰는 작업대입니다. 모든 값에 라벨이 붙은 셀과 범위 읽기, 통합 문서를 격자로 보기, 모든 행을 AI의 기억으로 끌어오지 않고 이 열을 합해 달라 같은 질문 던지기, 수식 쓰기와 점검, 가리키는 것을 깨뜨리지 않는 행과 열 삽입 및 삭제, Excel과 같은 방식의 정렬과 필터, 그리고 표, 서식, 가져오기와 내보내기, 백업, 진단.",
 "pk1.e": "예: 범위를 읽고 어떤 값이 캐시된 값인지 확인 · 열을 넣어도 합계가 제자리를 가리키게 유지 · Excel과 똑같이, 빈 칸은 맨 뒤로 정렬",
 "pk1.c": "도구 40종 · 상시 켜짐",
 "pk2.t": "디자인", "pk2.n": "마감 작업",
@@ -1274,7 +1277,7 @@ ko: {
 "pk4.e": "예: 재계산하고 그 값을 라벨로 증명받기 · 진짜 피벗 테이블 만들기 · 복구 메시지 없이 열리는지 확인",
 "pk4.c": "도구 11종",
 "h2.cmp": "같은 통로의 다른 물건과 비교",
-"cmp.lead": "기능 표는 누구나 좋아 보이게 만듭니다. 그래서 대신, 에이전트가 실제로 받는 요청으로 정리했습니다.",
+"cmp.lead": "기능 점검표 대신, 사람들이 실제로 AI에게 스프레드시트로 시키는 일 여섯 가지와 그 일이 보통 어떻게 되는지를 실었습니다:",
 "cmp.h1": "“저기, 혹시…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 스타 4,155개&dagger;</span>",
 "cmp.h4": "이 선반의 다른 도구들*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1285,7 +1288,7 @@ ko: {
 "cr2.q": "“이 합계 지금 값이야, 아니면 마지막 저장 때 남은 값이야?”",
 "cr2.us": "✔ 모든 값에 계산됨·캐시됨·없음 라벨이 붙고, 오래된 셀은 주소로 지목합니다",
 "cr2.inc": "✘ 읽으면 수식 문자열이 돌아옵니다. 캐시된 값조차 가져올 방법이 없습니다",
-"cr2.oth": "COM 서버는 Excel 자신의 엔진으로 재계산하지만, 돌아오는 값에는 최신 여부 표시가 전혀 없습니다",
+"cr2.oth": "경쟁 도구 하나는 Excel에 직접 재계산을 시킬 수 있지만, 돌아온 값에는 그것이 최신인지 오래된 것인지 표시가 전혀 없습니다",
 "cr3.q": "“Excel이 정렬하는 방식 그대로, 빈 칸까지 똑같이 정렬해 줘.”",
 "cr3.us": "✔ 숫자, 대소문자를 무시한 텍스트, FALSE, TRUE, 오류, 마지막에 빈 칸 순서로, 오름차순과 내림차순 모두 Excel과 셀 단위로 대조했습니다",
 "cr3.inc": "✘ 정렬 도구가 없습니다",
@@ -1295,12 +1298,12 @@ ko: {
 "cr4.inc": "n/d. 조사한 어떤 Excel MCP 서버도 최신 함수 지원 여부를, 지원으로든 제약으로든 문서화하지 않았습니다",
 "cr5.q": "“큰 통합 문서를 컨텍스트 창을 태워 먹지 않고 읽어 줘.”",
 "cr5.us": "✔ 간결한 읽기, 그리드 뷰, 그리고 서버 측 쿼리와 집계로 행은 서버에 남겨 둡니다",
-"cr5.inc": "✘ 문서 어디에도 페이지 나눔이나 토큰 예산이 없습니다. 끝 셀을 주지 않으면 사용 범위 전체를 읽습니다",
+"cr5.inc": "✘ 조금씩 나눠 읽을 방법이 없습니다. 끝 지점을 주지 않고 요청하면 전부를 읽어 AI의 기억으로 곧장 넣습니다",
 "cr5.oth": "Go 서버는 셀 수 기준으로 나눠 읽으며, 기본값은 한 번에 4,000셀입니다",
 "cr6.q": "“진짜로 재계산해서 증명해 줘.”",
 "cr6.us": "✔ 숨겨진 별도 Excel이 계산하고, 결과는 계산됨 라벨을 달고 돌아오며 캐시된 값과 절대 섞이지 않습니다",
 "cr6.inc": "✘ 재계산 도구가 없고, 문서에서 이 주제를 아예 다루지 않습니다",
-"cr6.oth": "COM 서버는 진짜 재계산을 합니다. 단, Windows와 설치된 Excel, 대화형 데스크톱, 그리고 통합 문서를 먼저 닫아 두어야 합니다",
+"cr6.oth": "Excel을 직접 몰아 실제로 재계산합니다. 다만 Windows와 설치된 Excel, 로그인된 바탕 화면, 그리고 먼저 닫아 둔 통합 문서가 필요합니다",
 "cmp.note": "2026-09-04 기준 기능 조사이며, 공개 저장소와 문서, 이슈 트래커를 근거로 정리했습니다. n/d는 조사한 자료에 문서화되어 있지 않다는 뜻이며, 없다고 단정하는 표시가 아닙니다. 가장 인기 있는 Excel MCP 서버는 haris-musa/excel-mcp-server로, openpyxl 기반 도구 25종이며 마지막 릴리스는 2026-04-12입니다. 그 저장소의 공개 이슈 #94와 #118은 수식 문자열 대신 계산된 값을 달라고 요청하고 있습니다. openpyxl 문서는 행이나 열을 삽입하거나 삭제할 때 수식, 표, 차트 같은 의존 관계를 관리하지 않는다고 밝히고 있습니다. * 이 선반의 다른 도구들: negokaz/excel-mcp-server (Go, 도구 7종, 나눠 읽기, Windows에서 실시간 편집), sbroenne/mcp-server-excel (C#, 실제 Excel 애플리케이션을 구동하는 연산 326개를 감싼 도구 31종, 기능의 천장이지만 Windows와 설치된 Excel, 파일 단독 점유가 필요하고 파일 기반 계층이 없음). 실제 계산 엔진을 품은 신생 서버 두 곳, PSU3D0/agent-spreadsheet와 logisky/logisheets-mcp도 지켜볼 만합니다. Microsoft는 Excel MCP 서버를 내놓지 않았고, Claude for Excel은 MCP 서버가 아니라 Office 추가 기능입니다. &dagger; 스타 수는 2026-09-04에 GitHub API로 읽었으며 참고용입니다. 스타는 그 선반이 얼마나 오래 눈에 띄었는지를 말해 줄 뿐, 그 위에 무엇이 있는지는 말해 주지 않습니다. 테스트와 스트레스 근거는 위 사양 표시줄에 있습니다. 정정 환영합니다. 이슈를 열어 주세요.",
 "h2.eff": "컨텍스트 청구서",
 "eff.lead": "대부분의 MCP 서버는 저장 강박증 환자처럼 AI의 컨텍스트로 이사해 옵니다. 필요하든 말든 전부, 미리 말이죠. 이 서버는 가볍게 시작하고 일이 부를 때만 선반을 하나씩 풉니다. 청구서는 이렇습니다. 측정한 값입니다.",
@@ -1332,10 +1335,10 @@ ko: {
 "inst.note": "이 서버의 대부분은 Excel 설치가 전혀 필요 없고 어느 컴퓨터에서나 돌아갑니다. Excel에게 직접 일을 시키는 부분만 Excel이 설치된 Windows를 요구하며, 그때도 자기만의 숨겨진 사본을 열기 때문에 화면에 띄워 둔 통합 문서는 건드리지 않습니다.",
 "h2.svc": "고객 서비스",
 "mat.t": "젊지만, 시험은 젊지 않았습니다",
-"mat.p": "이 작업장이 돌리는 관문은 전부 초록불입니다. 원시 프로토콜을 통한 적대적 라운드, Excel 자신의 재계산과 대조한 실측 검증, 코퍼스 전체에서 손상 0건. 아직 없는 것은 낯선 이들의 통합 문서 속에서 보낸 긴 시간이고, 스프레드시트의 신뢰는 실험실이 아니라 현장에서 쌓입니다. Excel이 일터인 분이라면, 이 서버에 필요한 실험실이 바로 당신입니다. 가장 험한 통합 문서를 서비스 창구로 가져와 무엇이 깨졌는지 알려 주세요.",
+"mat.p": "출시 전에 이 서버는 어려운 길로 시험했습니다. 파일을 망가뜨리고, 안전 검사를 몰래 지나치고, 거짓말하는 순간을 잡아내려는 의도적인 공격 라운드를 몇 달 동안 돌렸고, 모든 종류의 편집을 Excel 자체의 계산과 대조했습니다. 전부 깨끗하게 돌아왔습니다. 아직 없는 것은 남의 통합 문서 속에서 보낸 긴 시간이고, 스프레드시트는 실험실이 아니라 현장에서 신뢰를 얻습니다. Excel이 당신이 사는 곳이라면, 당신이 바로 이 서버에 필요한 실험실입니다. 가장 지저분한 통합 문서를 고객 서비스 창구로 가져와 무엇이 망가졌는지 알려 주세요.",
 "svc.ticket": "지금 접수 중 · 번호표를 뽑으세요 · WORD와 POWERPOINT 싱크대와 같은 창구",
 "svc1.t": "믿기 어려운 숫자가 나왔습니까?",
-"svc1.p": "값에 잘못된 라벨이 붙었거나, 납득할 수 없는 거부가 돌아왔거나, 저장이 건드리지 말아야 할 곳까지 건드렸다면 수리 창구에 접수해 주세요. 양식이 수정에 필요한 것만 정확히 묻습니다. 실제 스프레드시트 데이터는 절대 붙여 넣지 마시고, 대신 통합 문서의 구조를 설명해 주세요.",
+"svc1.p": "잘못 표시된 값, 말이 되지 않는 오류 메시지, 건드리지 말아야 할 것을 건드린 저장. 창구에 접수해 주세요. 양식은 고치는 데 필요한 것만 정확히 묻습니다. 실제 스프레드시트 데이터는 절대 붙여 넣지 마시고, 대신 통합 문서의 구조를 설명해 주세요.",
 "svc1.g": "버그 신고하기 →",
 "svc2.t": "부속이 빠졌습니까?",
 "svc2.p": "이 싱크대에도 있어야 할 스프레드시트 기능이 있다면, 그 뒤에 있는 실제 업무를 설명해 주세요. 작업대에 올려 두겠습니다.",
@@ -1345,13 +1348,13 @@ ko: {
 "svc3.g": "라이선스 문의 →",
 "svc.note": "접수는 공개 GitHub 이슈로 처리됩니다(등록하려면 무료 GitHub 계정이 필요합니다). 모든 접수는 관리자의 받은편지함으로 들어갑니다.",
 "g.t": "손상시키지 않도록 설계",
-"g.p1": "원자적 저장. 변경 전 자동 백업. 그리고 스프레드시트이기 때문에 배선 하나가 더 있습니다. 릴리스가 나가기 전에 모든 종류의 편집을 Excel 자신의 계산과 대조해 확인합니다. 전원을 넣기 전에 배선을 점검하는 것입니다.",
+"g.p1": "저장은 완벽하게 끝나거나 아무것도 바꾸지 않거나 둘 중 하나이며, 절반만 되는 일은 없습니다. 모든 변경 전에 자동으로 백업을 만듭니다. 그리고 이것은 스프레드시트이므로 선이 하나 더 있습니다. 릴리스가 나가기 전에 모든 종류의 편집을 Excel 자체의 계산과 대조합니다. 전원을 넣기 전에 배선을 점검하는 셈입니다.",
 "g.p2": "라이선스에 따라 어떠한 보증도 없이 있는 그대로 제공됩니다. 위의 엔지니어링은 당신의 통합 문서를 얼마나 진지하게 다루는지를 보여 줄 뿐입니다. 백업을 남겨 두세요. (이 서버가 대신 만들어 둡니다.)",
 "h2.fam": "다른 통로들",
 "fam1.p": "원조 기구: Microsoft Word 도구라면 없는 게 없습니다. 도구 108종에 걸친 219개 연산, 열려 있는 문서의 실시간 편집, 인용, 병합까지 이해하는 표 수술, 변경 내용 추적, 그리고 손상시키지 않도록 설계되었습니다.",
 "fam1.g": "배관 통로 둘러보기 →",
-"fam2.p": "데코 통로: Microsoft PowerPoint 도구라면 없는 게 없습니다. 도구 138종, 그리고 연결선이 도형에 붙은 채로 들어오는 다이어그램이라, 상자를 옮기면 화살표가 따라옵니다.",
-"fam2.g": "데코 통로 둘러보기 →",
+"fam2.p": "페인트 통로: Microsoft PowerPoint 도구라면 없는 게 없습니다. 도구 138종, 그리고 연결선이 도형에 붙은 채로 들어오는 다이어그램이라, 상자를 옮기면 화살표가 따라옵니다.",
+"fam2.g": "페인트 통로 둘러보기 →",
 "fam3.t": "본점",
 "fam3.p": "철물점 전체를 한 페이지에: 모든 KitchenSink 서버와 그 기구, 그 창구, 그리고 우연히 비어 있는 것이 아닌 선반 한둘까지.",
 "fam3.g": "매장 둘러보기 →",
@@ -1417,9 +1420,9 @@ ja: {
 "tale.p2": "たいていのツールは安いやり方で済ませます。セルを動かし、ファイルを保存し、あとは祈る。被害は編集した瞬間には決して出てきません。三日後の会議で、最終行をそっと外し始めていた合計ひとつになって出てきます。",
 "tale.p3": "このサーバーは動くべきものをすべて動かし、その結果を Excel ならどうしたはずかと突き合わせて確かめます。安全に処理できない編集は、黙って当て推量せず、はっきり断ります。断られて失うのは一分です。黙った当て推量で失うのは取引です。",
 "h2.inv": "棚めぐり、パック別",
-"inv.lead": "よい店が相性のよいものをまとめて置くように、在庫は機能パックに整理されています。セッションはライトコアの 40 ツール、約 11.4k トークンで始まり、仕事に必要なパックを呼び出し一回で入れます。今日そろっているのは 69 ツールすべて。コアに 40、三つのパックに 29 です。",
+"inv.lead": "道具は、よい店が似合うものをまとめて並べるように、機能のパックごとに整理されています。道具をAIにつなぐとAIの作業記憶をいくらか使うので、セッションは日常の中核40種だけで開き、仕事に必要なパックは一度の呼び出しで入れます。今日は69種すべてが売り場に出ています。中核に40種、三つのパックに29種。",
 "pk1.t": "ライトコア", "pk1.n": "パック0 · 常時オン",
-"pk1.p": "毎日の作業台です。アンカー付きのブックのグリッドビュー、ラベル付きのセルと範囲の読み取り、サーバー側のクエリと集計、数式の書き込みと監査、参照ごと連れていく行と列の構造編集、Excel と同じ並び順の並べ替えとフィルター、テーブル、書式、取り込みと書き出し、バックアップ、診断、そして enable_tools の配電盤が入っています。",
+"pk1.p": "毎日の作業台です。すべての値にラベルが付いたセルと範囲の読み取り、ブックをグリッドとして見ること、行をすべてAIの記憶に引き込まずにこの列を合計してといった問いを投げること、数式の書き込みと点検、参照を壊さない行と列の挿入と削除、Excelと同じやり方の並べ替えと絞り込み、それに表、書式、取り込みと書き出し、バックアップ、診断。",
 "pk1.e": "例: 範囲を読んでどの値がキャッシュか確かめる · 列を入れても合計が正しい先を指したままにする · Excel と同じく空白を最後にして並べ替える",
 "pk1.c": "40 ツール · 常時オン",
 "pk2.t": "デザイン", "pk2.n": "仕上げの工程",
@@ -1435,7 +1438,7 @@ ja: {
 "pk4.e": "例: 再計算してラベル付きの値を受け取る · 本当にピボットテーブルであるピボットテーブルを作る · 修復メッセージなしで開くことを確認する",
 "pk4.c": "11 ツール",
 "h2.cmp": "売り場のほかの品と比べて",
-"cmp.lead": "機能表は誰のことも良く見せます。そこで代わりに、エージェントが実際に受け取る頼みごとで並べました。",
+"cmp.lead": "機能の一覧表ではなく、人が実際にAIに表計算でやらせる六つのことと、それがたいていどうなるかを並べます。",
 "cmp.h1": "「ねえ、ちょっと…」",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub スター 4,155&dagger;</span>",
 "cmp.h4": "この棚のほかの道具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1446,7 +1449,7 @@ ja: {
 "cr2.q": "「この合計、いまの値? それとも前回保存の残り?」",
 "cr2.us": "✔ すべての値に計算済み・キャッシュ・無しのラベルが付き、古いセルはアドレスで名指しします",
 "cr2.inc": "✘ 読み取ると数式の文字列が返ります。キャッシュされた値すら取り出せません",
-"cr2.oth": "COM のサーバーは Excel 自身のエンジンで再計算しますが、返ってくる値に新しさの表示は一切ありません",
+"cr2.oth": "競合の一つはExcel自身に再計算をさせられますが、返ってきた値には、それが最新か古いかの表示がまったくありません",
 "cr3.q": "「Excel と同じ並び順で、空白のことまで同じにして。」",
 "cr3.us": "✔ 数値、大文字小文字を無視した文字列、FALSE、TRUE、エラー、最後に空白の順で、昇順も降順も Excel とセル単位で突き合わせ済みです",
 "cr3.inc": "✘ 並べ替えのツールがありません",
@@ -1456,12 +1459,12 @@ ja: {
 "cr4.inc": "n/d。調べたどの Excel MCP サーバーも、新しい関数について対応とも制限とも文書化していません",
 "cr5.q": "「大きなブックを、コンテキストを食い潰さずに読んで。」",
 "cr5.us": "✔ 小さく読む方法、グリッドビュー、そしてサーバー側のクエリと集計で、行はサーバーに置いたままにします",
-"cr5.inc": "✘ 文書のどこにもページ分割もトークン配慮もありません。終端セルを指定しなければ使用範囲を丸ごと読みます",
+"cr5.inc": "✘ 少しずつ読む手立てがありません。終わりの位置を示さずに頼むと、すべてを読み取ってそのままAIの記憶に流し込みます",
 "cr5.oth": "Go 製サーバーはセル数で分割して読み、既定は一度に 4,000 セルです",
 "cr6.q": "「本当に再計算して、証明して。」",
 "cr6.us": "✔ 隠れた専用の Excel が計算し、結果は計算済みのラベルを付けて返り、キャッシュされた値と混ざることはありません",
 "cr6.inc": "✘ 再計算のツールがなく、文書でもこの話題に触れていません",
-"cr6.oth": "COM のサーバーは本物の再計算をします。ただし Windows、インストール済みの Excel、対話的なデスクトップ、そして先にブックを閉じておくことが必要です",
+"cr6.oth": "Excelを直接動かして本当に再計算します。ただしWindowsと、入っているExcelと、ログイン済みのデスクトップと、先に閉じてあるブックが要ります",
 "cmp.note": "2026-09-04 時点の機能調査で、公開リポジトリ、ドキュメント、イシュートラッカーをもとにまとめました。n/d は調査した資料に記載がないという意味で、無いと断定するものではありません。もっとも人気のある Excel MCP サーバーは haris-musa/excel-mcp-server で、openpyxl 上の 25 ツール、最終リリースは 2026-04-12 です。このリポジトリの公開イシュー #94 と #118 は、数式の文字列ではなく計算済みの値がほしいと求めています。openpyxl の文書は、行や列を挿入または削除するときに数式・テーブル・グラフといった依存関係の面倒は見ないと述べています。* この棚のほかの道具: negokaz/excel-mcp-server (Go、7 ツール、分割読み取り、Windows での実時間編集)、sbroenne/mcp-server-excel (C#、実際の Excel アプリを動かす 326 の操作を包む 31 ツール、機能の天井だが Windows とインストール済み Excel、ファイルの排他利用が要り、ファイルベースの層がない)。本物の計算エンジンを積んだ新顔が二つ、PSU3D0/agent-spreadsheet と logisky/logisheets-mcp も見ておく価値があります。Microsoft は Excel の MCP サーバーを出しておらず、Claude for Excel は MCP サーバーではなく Office のアドインです。&dagger; スター数は 2026-09-04 に GitHub API で取得した参考値です。スターはその棚がどれだけ長く目に入ってきたかを示すだけで、そこに何が載っているかは示しません。テストと負荷の根拠は上の仕様帯にあります。訂正は歓迎です。イシューをどうぞ。",
 "h2.eff": "コンテキストの請求書",
 "eff.lead": "たいていの MCP サーバーは、ため込み屋のように AI のコンテキストへ引っ越してきます。必要かどうかに関係なく、全部、最初から。このサーバーは軽く始めて、仕事が呼んだときだけ棚をひとつ開けます。請求書はこちらです。実測値です。",
@@ -1493,10 +1496,10 @@ ja: {
 "inst.note": "このサーバーの大半は Excel のインストールをまったく必要とせず、どのパソコンでも動きます。Excel に仕事をさせる部分だけが Excel の入った Windows を求め、そのときも自分専用の隠れた一つを開くので、画面に出したままのブックには触れません。",
 "h2.svc": "カスタマーサービス",
 "mat.t": "若いのに、試され方は若くありません",
-"mat.p": "この工房が回している関門はすべて青です。生のプロトコルを通した敵対的ラウンド、Excel 自身の再計算と突き合わせた実測検証、コーパス全体で破損ゼロ。まだ足りないのは、見知らぬ人のブックの中で過ごした長い時間です。表計算の信頼は実験室ではなく現場で育ちます。Excel が仕事場だという方こそ、このサーバーに必要な実験室です。いちばん厄介なブックを窓口へ持ってきて、何が壊れたか教えてください。",
+"mat.p": "公開の前に、このサーバーは難しいほうの道で試しました。ファイルを壊し、安全確認をすり抜け、嘘をついた瞬間を捕まえようとする意図的な攻撃ラウンドを何か月も回し、あらゆる種類の編集をExcel自身の計算と突き合わせました。すべて問題なく戻ってきました。まだ持っていないのは、他人のブックの中で過ごす長い時間です。表計算は実験室ではなく現場で信頼を得ます。Excelがあなたの住む場所なら、あなたこそこのサーバーに必要な実験室です。いちばん汚いブックをカスタマーサービスの窓口へ持ってきて、何が壊れたか教えてください。",
 "svc.ticket": "ただいま受付中 · 番号札をどうぞ · WORD と POWERPOINT の流しと同じ窓口",
 "svc1.t": "信用できない数字が出ましたか?",
-"svc1.p": "値のラベルが違う、筋の通らない拒否が返ってきた、保存が触るべきでないところまで触った。修理窓口に届けてください。書式が、直すのに必要なことだけを尋ねます。実際のスプレッドシートのデータは決して貼らず、代わりにブックの形を説明してください。",
+"svc1.p": "誤ったラベルが付いた値、意味の通らないエラーメッセージ、触るべきでないものに触れた保存。窓口に出してください。用紙は、直すのに要ることだけを尋ねます。実際の表計算データは決して貼り付けず、代わりにブックの形を説明してください。",
 "svc1.g": "バグを報告する →",
 "svc2.t": "部品が足りませんか?",
 "svc2.p": "この流しにもあるべきスプレッドシートの機能があれば、その裏にある実際の仕事を教えてください。作業台に載せます。",
@@ -1506,13 +1509,13 @@ ja: {
 "svc3.g": "ライセンスを相談する →",
 "svc.note": "受付は公開の GitHub イシューです(登録には無料の GitHub アカウントが必要です)。届いたものはすべて管理者の受信箱に入ります。",
 "g.t": "壊さないための設計",
-"g.p1": "不可分な保存。変更のたびに自動バックアップ。そして表計算なので、もう一本の配線があります。リリース前に、あらゆる種類の編集を Excel 自身の計算と突き合わせて確かめます。電気を通す前に、配線を点検するのです。",
+"g.p1": "保存は完全に終わるか、何も変えないかのどちらかで、途中で止まることはありません。すべての変更の前に自動でバックアップを取ります。そしてこれは表計算なので、もう一本の線があります。リリースを出す前に、あらゆる種類の編集をExcel自身の計算と突き合わせるのです。電気を入れる前に配線を点検する、というわけです。",
 "g.p2": "ライセンスに従い、いかなる保証もなく現状のまま提供されます。上の作り込みは、あなたのブックをどれだけ真剣に扱っているかを示すだけです。バックアップは残してください。(このサーバーが代わりに作ります。)",
 "h2.fam": "ほかの売り場",
 "fam1.p": "元祖の器具: Microsoft Word のためのものならなんでも入っています。108 ツールにわたる 219 操作、開いている文書の実時間編集、引用、結合まで理解するテーブル手術、変更履歴、そして壊さないための設計。",
 "fam1.g": "配管の売り場へ →",
-"fam2.p": "内装の売り場: Microsoft PowerPoint のためのものならなんでも入っています。138 ツール、そして図はコネクタが図形に貼り付いたまま届くので、箱を動かせば矢印が追いかけます。",
-"fam2.g": "内装の売り場へ →",
+"fam2.p": "塗料の売り場: Microsoft PowerPoint のためのものならなんでも入っています。138 ツール、そして図はコネクタが図形に貼り付いたまま届くので、箱を動かせば矢印が追いかけます。",
+"fam2.g": "塗料の売り場へ →",
 "fam3.t": "本店",
 "fam3.p": "金物店まるごと一ページに: すべての KitchenSink サーバーと、その器具と、その窓口。それと、偶然空いているわけではない棚がいくつか。",
 "fam3.g": "店内を見る →",
@@ -1578,9 +1581,9 @@ zh: {
 "tale.p2": "多数工具走便宜路子: 挪单元格,存文件,然后指望没事。损伤从来不在编辑当下出现。它出现在三天后的会上,出现在那一个悄悄不再把最后一行算进去的合计里。",
 "tale.p3": "这台服务器把该动的全都动了,再拿结果去对照 Excel 自己会怎么做。遇到不能安全完成的编辑,它会明说不行,而不是闷头猜。被拒绝,损失一分钟。闷头一猜,损失一单生意。",
 "h2.inv": "逐架看货,按包分",
-"inv.lead": "好铺子会把相配的东西摆在一起,这里的存货也按能力包归置。会话从精简内核起步,40 件工具、约 11.4k token,遇到需要的包一次调用就打开。今天全部 69 件都在架上: 内核 40 件,三个包里 29 件。",
+"inv.lead": "工具是按功能包整理的,就像一家像样的店会把该放一起的东西归到一处。把工具接到AI上要占掉它一部分工作记忆,所以每次会话只先开常用核心的40件,需要哪个包,一次调用就能打开。今天69件工具全都在场:核心40件,三个包里29件。",
 "pk1.t": "精简内核", "pk1.n": "包 0 · 常开",
-"pk1.p": "每天要用的工作台: 带锚点的工作簿网格视图、带标注的单元格与区域读取、服务端查询与聚合、公式写入与审查、连引用一起搬走的行列结构编辑、与 Excel 同序的排序与筛选、表格、格式、导入导出、备份、诊断,以及 enable_tools 这块配电盘。",
+"pk1.p": "每天用的工作台:读单元格和区域,每个值都带标注;把工作簿当成网格来看;问出把这一列加起来这类问题,而不必把每一行都塞进AI的记忆;写公式、查公式;插入和删除行列而不弄断指向它们的东西;按Excel的规矩排序和筛选;另外还有表格、格式、导入导出、备份和诊断。",
 "pk1.e": "例: 读一段区域,看清哪些值是缓存的 · 插一列,合计仍指向该指的地方 · 按 Excel 的规矩排序,空白排最后",
 "pk1.c": "40 件工具 · 常开",
 "pk2.t": "设计", "pk2.n": "收尾工序",
@@ -1596,7 +1599,7 @@ zh: {
 "pk4.e": "例: 重算之后连标注一起拿到手 · 做一个真的是数据透视表的数据透视表 · 确认文件打开时不弹修复提示",
 "pk4.c": "11 件工具",
 "h2.cmp": "跟同一通道的其他货比一比",
-"cmp.lead": "功能表格谁都夸得动听。所以这里换成智能体真正会收到的请求。",
+"cmp.lead": "这里不列功能清单,而是六件人们真的会让AI在表格上做的事,以及通常会是什么结果:",
 "cmp.h1": "“嘿,能不能…”",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">GitHub 星标 4,155&dagger;</span>",
 "cmp.h4": "这个货架上的其他工具*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1607,7 +1610,7 @@ zh: {
 "cr2.q": "“这个合计是现在的,还是上次保存留下的?”",
 "cr2.us": "✔ 每个值都标注为已计算、缓存或缺失,过期的单元格按地址点名",
 "cr2.inc": "✘ 读出来是公式字符串,连缓存值都拿不到",
-"cr2.oth": "那台 COM 服务器用 Excel 自己的引擎重算,但回来的值不带任何新鲜度标记",
+"cr2.oth": "有一个竞争工具可以让Excel自己去重算,但拿回来的值上没有任何标注说明它是新的还是旧的",
 "cr3.q": "“按 Excel 的排法排,空白也一样。”",
 "cr3.us": "✔ 数字、不分大小写的文本、FALSE、TRUE、错误值,空白排最后,升序降序都逐格对过 Excel",
 "cr3.inc": "✘ 没有排序工具",
@@ -1617,12 +1620,12 @@ zh: {
 "cr4.inc": "n/d。所查的任何一台 Excel MCP 服务器都没有把新函数写进文档,既没说支持,也没说不支持",
 "cr5.q": "“读那个大工作簿,别把我的上下文烧光。”",
 "cr5.us": "✔ 精简读取、网格视图,加上服务端查询与聚合,让行留在服务器这边",
-"cr5.inc": "✘ 文档里既没有分页也没有 token 预算; 不给结束单元格,它就把整个已用区域读完",
+"cr5.inc": "✘ 没法一点一点地读;不给结束位置就发问,它会把全部读出来,直接倒进AI的记忆里",
 "cr5.oth": "那台 Go 服务器按单元格数分页读取,默认一次 4,000 格",
 "cr6.q": "“真的重算一遍,并且拿出证据。”",
 "cr6.us": "✔ 由一个隐藏的专用 Excel 来算,结果带着已计算的标注回来,绝不和缓存值混在一起",
 "cr6.inc": "✘ 没有重算工具,文档里也从未提起这件事",
-"cr6.oth": "那台 COM 服务器能真重算,但要 Windows、装好的 Excel、可交互的桌面,还得先把工作簿关掉",
+"cr6.oth": "直接驱动Excel做真正的重算,不过要有Windows、装好的Excel、一个已登录的桌面,还得先把工作簿关掉",
 "cmp.note": "能力调研截至 2026-09-04,取自公开仓库、文档与问题追踪。n/d 表示所查资料中没有记载,并非断言其缺失。最受欢迎的 Excel MCP 服务器是 haris-musa/excel-mcp-server,基于 openpyxl 的 25 件工具,最后一次发布是 2026-04-12。该仓库自己的公开 issue #94 和 #118 就在要求返回算出来的值,而不是公式文本。openpyxl 的文档写明: 插入或删除行列时,它不管理公式、表格、图表这类依赖关系。* 这个货架上的其他工具: negokaz/excel-mcp-server (Go,七件工具,分页读取,Windows 下可实时编辑)、sbroenne/mcp-server-excel (C#,31 件工具封装 326 项操作,驱动真正的 Excel 应用,是能力天花板,但要 Windows 加已装 Excel 并独占文件,而且没有文件层)。另有两台内置真计算引擎的新服务器值得留意: PSU3D0/agent-spreadsheet 与 logisky/logisheets-mcp。Microsoft 没有推出 Excel MCP 服务器,Claude for Excel 是 Office 加载项,不是 MCP 服务器。&dagger; 星标数于 2026-09-04 通过 GitHub API 读取,仅供参考: 星标说明这个货架被看了多久,不说明上面摆的是什么。测试与压力方面的凭据在页首的规格条里。欢迎指正,请开 issue。",
 "h2.eff": "上下文账单",
 "eff.lead": "多数 MCP 服务器像囤积症患者一样搬进你 AI 的上下文: 不管这活儿用不用得上,先全搬进来。这一台起步很轻,只有活儿找上门才拆开一格货架。账单在这里,是量出来的。",
@@ -1654,10 +1657,10 @@ zh: {
 "inst.note": "这台服务器的大部分完全不需要装 Excel,在任何电脑上都能跑。只有请 Excel 亲自干活的那部分需要装有 Excel 的 Windows,而且它会另开一个自己的隐藏副本,你屏幕上开着的那个工作簿不会被碰。",
 "h2.svc": "客户服务",
 "mat.t": "年纪轻,可试得一点都不轻",
-"mat.p": "这家铺子跑的每一道关都是绿灯: 直接走原始协议的对抗轮次、对照 Excel 自己重算结果的实测校验、整个语料库零损坏。还缺的是在陌生人的工作簿里过上一段长日子,而表格的信任是在现场攒的,不是在实验室里攒的。如果 Excel 就是你过日子的地方,那你正是这台服务器需要的实验室: 把你最难看的工作簿带到服务柜台,告诉我们哪里坏了。",
+"mat.p": "发布之前,这个服务器是走难路试出来的:好几个月的蓄意攻击轮次,专门去弄坏文件、绕过安全检查、抓它说谎,再加上每一种编辑都拿Excel自己的算法核对过。结果全都是干净的。它还缺的,是在别人的工作簿里过上一段长日子;表格的信任是在现场挣来的,不是在实验室里。如果Excel就是你过日子的地方,你就是这个服务器需要的实验室:把你最难看的那个工作簿带到客户服务柜台来,告诉我们哪里坏了。",
 "svc.ticket": "正在叫号 · 请取号 · 与 WORD 和 POWERPOINT 水槽同一服务台",
 "svc1.t": "拿到一个信不过的数?",
-"svc1.p": "某个值标错了,某次拒绝毫无道理,某回保存动了不该动的地方。到维修柜台报一单: 表单问的正是修复所需的那些。切勿粘贴真实的表格数据,请改为描述工作簿的结构。",
+"svc1.p": "标注错了的值、看不懂的报错信息、动了不该动的东西的一次保存。都拿到柜台来:表单问的正是修复所需要的东西。千万别贴真实的表格数据,请改成描述工作簿的结构。",
 "svc1.g": "提交缺陷报告 →",
 "svc2.t": "缺个配件?",
 "svc2.p": "有某项电子表格能力这台水槽也该有。说说它背后真实的活儿,它就会被摆上工作台。",
@@ -1667,13 +1670,13 @@ zh: {
 "svc3.g": "洽谈许可 →",
 "svc.note": "报单都是公开的 GitHub issue(提交需要一个免费的 GitHub 账号)。每一单都会进到维护者的收件箱。",
 "g.t": "为“不损坏”而设计",
-"g.p1": "原子式保存。每次改动前自动备份。还有多出来的一根线,因为这是表格: 每次发布之前,各类编辑都要拿去和 Excel 自己的算法核对。通电之前,先验线路。",
+"g.p1": "保存要么完整做完,要么什么都不改,绝不会做一半。每次改动之前都会自动备份。还多接了一根线,因为这是表格:每次发版之前,每一种编辑都要拿Excel自己的算法核对一遍。通电之前先验线路。",
 "g.p2": "依许可证按现状提供,不含任何形式的保证; 上面这些工程只是表明你的工作簿被认真对待到什么程度。请留好备份。(它会替你做。)",
 "h2.fam": "其他通道",
 "fam1.p": "最早那件器具: 为 Microsoft Word 备齐一切。108 件工具上的 219 项操作,可直接编辑打开着的文档,引文,懂合并单元格的表格手术,修订标记,为“不损坏”而设计。",
 "fam1.g": "去水暖通道 →",
-"fam2.p": "装饰通道: 为 Microsoft PowerPoint 备齐一切。138 件工具,图表进来时就是原生图形,连接线粘在图形上,所以框一挪,箭头就跟着走。",
-"fam2.g": "去装饰通道 →",
+"fam2.p": "油漆通道: 为 Microsoft PowerPoint 备齐一切。138 件工具,图表进来时就是原生图形,连接线粘在图形上,所以框一挪,箭头就跟着走。",
+"fam2.g": "去油漆通道 →",
 "fam3.t": "总店门面",
 "fam3.p": "整家五金店摆在一页上: 每一台 KitchenSink 服务器、它的器具、它的柜台,外加一两个不是碰巧空着的货架。",
 "fam3.g": "逛逛店里 →",
@@ -1739,9 +1742,9 @@ de: {
 "tale.p2": "Die meisten Werkzeuge machen die billige Variante: Zellen verschieben, Datei speichern, hoffen. Der Schaden zeigt sich nie beim Bearbeiten. Er zeigt sich drei Tage später, in einer Besprechung, in der einen Summe, die ihre letzte Zeile still und leise nicht mehr mitzählt.",
 "tale.p3": "Dieser Server bewegt alles mit, was sich mitbewegen muss, und prüft das Ergebnis gegen das, was Excel selbst getan hätte. Lässt sich eine Änderung nicht sicher ausführen, sagt er laut Nein, statt leise zu raten. Eine Absage kostet Sie eine Minute. Ein leises Raten kostet Sie den Auftrag.",
 "h2.inv": "Die Regale, Paket für Paket",
-"inv.lead": "Die Ware ist in Fähigkeitspaketen sortiert, so wie ein guter Laden zusammenstellt, was zusammengehört. Eine Sitzung startet mit dem Lite-Kern, 40 Werkzeuge zu rund 10,8k Token, und schaltet das Paket, das die Aufgabe braucht, mit einem Aufruf dazu. Alle 69 Werkzeuge stehen heute im Laden: 40 im Kern, 29 in den drei Paketen.",
+"inv.lead": "Die Werkzeuge sind in Fähigkeitspaketen angeordnet, so wie ein guter Laden zusammenstellt, was zusammengehört. Werkzeuge an eine KI anzuschließen kostet einen Teil ihres Arbeitsgedächtnisses, deshalb startet eine Sitzung nur mit dem Alltagskern, 40 Werkzeugen, und schaltet das Paket, das ein Auftrag braucht, mit einem einzigen Aufruf zu. Alle 69 Werkzeuge liegen heute im Laden: 40 im Kern, 29 verteilt auf die drei Pakete.",
 "pk1.t": "Lite-Kern", "pk1.n": "PAKET 0 · IMMER AN",
-"pk1.p": "Die Werkbank für jeden Tag: eine verankerte Rasteransicht der Arbeitsmappe, beschriftete Lesevorgänge für Zellen und Bereiche, Abfrage und Aggregation auf dem Server, Formeln schreiben und prüfen, Zeilen und Spalten strukturell ändern samt mitwandernder Bezüge, Sortieren und Filtern in Excels eigener Reihenfolge, Tabellen, Formatierung, Import und Export, Sicherungen, Diagnose und die enable_tools-Schalttafel.",
+"pk1.p": "Die Werkbank für jeden Tag: Zellen und Bereiche lesen, jeder Wert mit Angabe; die Arbeitsmappe als Raster ansehen; Fragen wie summiere diese Spalte stellen, ohne jede Zeile in das Gedächtnis der KI zu ziehen; Formeln schreiben und prüfen; Zeilen und Spalten einfügen und löschen, ohne zu zerbrechen, was auf sie zeigt; sortieren und filtern, wie Excel es tut; dazu Tabellen, Formatierung, Import und Export, Sicherungen und Diagnose.",
 "pk1.e": "z.B. einen Bereich lesen und sehen, welche Werte gespeichert sind · eine Spalte einfügen und die Summen zeigen weiter richtig · sortieren wie Excel, Leerzellen zuletzt",
 "pk1.c": "40 WERKZEUGE · IMMER AN",
 "pk2.t": "Design", "pk2.n": "DIE FEINARBEIT",
@@ -1757,7 +1760,7 @@ de: {
 "pk4.e": "z.B. neu berechnen und den Wert mit der Angabe als Beleg bekommen · eine PivotTable bauen, die auch wirklich eine ist · bestätigen, dass die Datei ohne Reparaturhinweis öffnet",
 "pk4.c": "11 WERKZEUGE",
 "h2.cmp": "Gegen den Rest des Gangs",
-"cmp.lead": "Funktionstabellen schmeicheln jedem. Hier stattdessen die Aufträge, die ein Agent tatsächlich bekommt:",
+"cmp.lead": "Statt einer Funktionsliste stehen hier sechs Dinge, um die Menschen eine KI bei einer Tabelle wirklich bitten, und wie es dabei meistens läuft:",
 "cmp.h1": "„Du, könntest du…“",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 GitHub-Sterne&dagger;</span>",
 "cmp.h4": "Andere Werkzeuge in diesem Regal*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1768,7 +1771,7 @@ de: {
 "cr2.q": "„Ist diese Summe aktuell oder vom letzten Speichern übrig?“",
 "cr2.us": "✔ jeder Wert ausgewiesen als berechnet, gespeichert oder fehlend, und die veralteten Zellen mit Adresse benannt",
 "cr2.inc": "✘ Lesevorgänge liefern die Formel als Text; nicht einmal der gespeicherte Wert ist zu bekommen",
-"cr2.oth": "der COM-Server rechnet mit Excels eigener Maschine neu, aber der Wert kommt ohne jede Kennzeichnung seiner Aktualität zurück",
+"cr2.oth": "Ein konkurrierendes Werkzeug kann Excel selbst zum Neuberechnen auffordern, aber der Wert kommt ohne jede Angabe zurück, ob er frisch oder veraltet ist",
 "cr3.q": "„Sortier das so, wie Excel sortieren würde, samt Leerzellen.“",
 "cr3.us": "✔ Zahlen, dann Text ohne Rücksicht auf Groß- und Kleinschreibung, dann FALSCH, WAHR, Fehlerwerte, Leerzellen zuletzt, in beide Richtungen Zelle für Zelle gegen Excel geprüft",
 "cr3.inc": "✘ kein Sortierwerkzeug",
@@ -1778,12 +1781,12 @@ de: {
 "cr4.inc": "n/d, und kein gesichteter Excel-MCP-Server dokumentiert die modernen Funktionen in irgendeiner Richtung, weder als Unterstützung noch als Einschränkung",
 "cr5.q": "„Lies die große Arbeitsmappe, ohne mein Kontextfenster abzufackeln.“",
 "cr5.us": "✔ kompakte Lesevorgänge, eine Rasteransicht sowie Abfrage und Aggregation auf dem Server, damit die Zeilen dort bleiben",
-"cr5.inc": "✘ in der Dokumentation weder Seitenaufteilung noch Rücksicht auf Token; ohne angegebene Endzelle liest er den ganzen belegten Bereich",
+"cr5.inc": "✘ keine Möglichkeit, häppchenweise zu lesen; fragt man ohne Endpunkt, liest es alles und schiebt es direkt in das Gedächtnis der KI",
 "cr5.oth": "der Go-Server liest seitenweise nach Zellenzahl, standardmäßig 4.000 Zellen auf einmal",
 "cr6.q": "„Rechne das wirklich neu und beweise es.“",
 "cr6.us": "✔ ein verborgenes, eigenes Excel rechnet, und das Ergebnis kommt als berechnet ausgewiesen zurück, nie vermischt mit gespeicherten Werten",
 "cr6.inc": "✘ kein Werkzeug zum Neuberechnen, und die Dokumentation bringt das Thema nie zur Sprache",
-"cr6.oth": "echtes Neuberechnen auf dem COM-Server, der Windows, ein installiertes Excel, einen interaktiven Desktop und eine zuvor geschlossene Arbeitsmappe verlangt",
+"cr6.oth": "echte Neuberechnung, indem Excel direkt gesteuert wird, wofür Windows, ein installiertes Excel, ein angemeldeter Desktop und eine zuvor geschlossene Arbeitsmappe nötig sind",
 "cmp.note": "Fähigkeitsübersicht mit Stand 2026-09-04, zusammengetragen aus öffentlichen Repositorys, Dokumentation und Issue-Trackern. n/d: in den gesichteten Quellen nicht dokumentiert, was keine behauptete Abwesenheit ist. Der beliebteste Excel-MCP-Server ist haris-musa/excel-mcp-server, 25 Werkzeuge auf openpyxl, letzte Veröffentlichung am 2026-04-12. Die offenen Issues #94 und #118 dieses Projekts bitten genau darum, berechnete Werte statt Formeltext zu bekommen. Die Dokumentation von openpyxl hält fest, dass sie Abhängigkeiten wie Formeln, Tabellen und Diagramme beim Einfügen oder Löschen von Zeilen und Spalten nicht verwaltet. * Andere Werkzeuge in diesem Regal: negokaz/excel-mcp-server (Go, sieben Werkzeuge, seitenweises Lesen, Live-Bearbeitung unter Windows), sbroenne/mcp-server-excel (C#, 31 Werkzeuge über 326 Operationen, die die echte Excel-Anwendung steuern, die Obergrenze des Machbaren, aber Windows mit installiertem Excel und alleiniger Zugriff auf die Datei, ohne dateibasierte Ebene). Zwei neuere Server mit echter Rechenmaschine sind einen Blick wert: PSU3D0/agent-spreadsheet und logisky/logisheets-mcp. Microsoft liefert keinen Excel-MCP-Server, und Claude for Excel ist ein Office-Add-in, kein MCP-Server. &dagger; Sternzahlen am 2026-09-04 über die GitHub-API gelesen, zur Einordnung: Sterne sagen, wie lange ein Regal schon zu sehen ist, nicht was darauf steht. Die Belege zu Tests und Stress stehen oben in der Datenleiste. Korrekturen willkommen: Issue aufmachen.",
 "h2.eff": "Die Kontextrechnung",
 "eff.lead": "Die meisten MCP-Server ziehen in den Kontext Ihrer KI wie ein Messie: alles, sofort, ob die Aufgabe es braucht oder nicht. Dieser hier startet leicht und packt ein Regal erst aus, wenn die Arbeit danach ruft. Hier ist die Rechnung, gemessen:",
@@ -1815,10 +1818,10 @@ de: {
 "inst.note": "Das meiste an diesem Server braucht überhaupt kein installiertes Excel und läuft auf jedem Rechner. Nur die Teile, die Excel selbst arbeiten lassen, wollen Windows mit Excel darauf, und sie öffnen dafür eine eigene, verborgene Ausgabe, sodass die Arbeitsmappe auf Ihrem Bildschirm unangetastet bleibt.",
 "h2.svc": "Kundendienst",
 "mat.t": "Jung, und getestet, als wäre es das nicht",
-"mat.p": "Jede Prüfung, die diese Werkstatt fährt, steht auf Grün: adversariale Runden durch das rohe Protokoll, Abgleiche gegen Excels eigene Neuberechnung, null Beschädigungen über den gesamten Bestand. Was noch fehlt, ist ein langes Leben in fremden Arbeitsmappen, und Tabellen verdienen sich Vertrauen im Feld, nicht im Labor. Wenn Excel Ihr Zuhause ist, sind Sie das Labor, das dieser Server braucht: bringen Sie Ihre hässlichste Arbeitsmappe an den Servicetresen und sagen Sie uns, was kaputtging.",
+"mat.p": "Vor der Veröffentlichung wurde dieser Server auf die harte Tour geprüft: monatelange, absichtliche Angriffsrunden, die Dateien beschädigen, an den Sicherheitsprüfungen vorbeischlüpfen und ihn beim Lügen ertappen sollten, dazu jede Art von Bearbeitung gegen Excels eigene Rechnung geprüft. Alles kam sauber zurück. Was ihm noch fehlt, ist ein langes Leben in fremden Arbeitsmappen, und Tabellen verdienen sich Vertrauen im Feld, nicht im Labor. Wenn Excel Ihr Zuhause ist, sind Sie das Labor, das dieser Server braucht: Bringen Sie Ihre hässlichste Arbeitsmappe an den Kundendienstschalter und erzählen Sie uns, was kaputtgegangen ist.",
 "svc.ticket": "JETZT BEDIENUNG · NUMMER ZIEHEN · GLEICHER SCHALTER WIE DIE WORD- UND POWERPOINT-SPÜLEN",
 "svc1.t": "Eine Zahl, der Sie nicht trauen?",
-"svc1.p": "Ein falsch beschrifteter Wert, eine Verweigerung ohne erkennbaren Grund, ein Speichern, das etwas angefasst hat, das es nicht anfassen sollte. Geben Sie es am Reparaturtresen ab: das Formular fragt genau das ab, was eine Behebung braucht. Fügen Sie nie echte Tabellendaten ein; beschreiben Sie stattdessen den Aufbau der Arbeitsmappe.",
+"svc1.p": "Ein falsch ausgezeichneter Wert, eine Fehlermeldung, die keinen Sinn ergab, ein Speichern, das etwas angefasst hat, was es nicht anfassen sollte. Geben Sie es am Schalter ab: Das Formular fragt genau das ab, was eine Behebung braucht. Fügen Sie niemals echte Tabellendaten ein; beschreiben Sie stattdessen den Aufbau der Arbeitsmappe.",
 "svc1.g": "Fehler melden →",
 "svc2.t": "Fehlt ein Anbauteil?",
 "svc2.p": "Eine Tabellen-Fähigkeit, die die Spüle auch haben sollte. Beschreiben Sie die echte Aufgabe dahinter, dann kommt sie auf die Werkbank.",
@@ -1828,13 +1831,13 @@ de: {
 "svc3.g": "Lizenz besprechen →",
 "svc.note": "Meldungen sind öffentliche GitHub-Issues (zum Einreichen genügt ein kostenloses GitHub-Konto). Jede Meldung landet im Postfach des Betreuers.",
 "g.t": "Konstruiert mit dem Ziel, nichts zu beschädigen",
-"g.p1": "Atomare Speichervorgänge. Automatische Sicherungen vor jeder Änderung. Und weil es hier um eine Tabelle geht, eine Leitung mehr: vor jeder Auslieferung wird jede Art von Änderung gegen Excels eigene Rechnung geprüft. Die Verkabelung wird abgenommen, bevor der Strom draufkommt.",
+"g.p1": "Speichern läuft entweder vollständig durch oder ändert gar nichts, nie zur Hälfte. Automatische Sicherungen vor jeder Änderung. Und eine zusätzliche Leitung, weil dies eine Tabelle ist: Bevor eine Version ausgeliefert wird, wird jede Art von Bearbeitung gegen Excels eigene Rechnung geprüft. Die Verkabelung wird abgenommen, bevor der Strom eingeschaltet wird.",
 "g.p2": "Wird gemäß Lizenz ohne jede Gewährleistung so bereitgestellt, wie sie ist; die Technik oben zeigt nur, wie ernst Ihre Arbeitsmappen genommen werden. Behalten Sie Sicherungen. (Er legt sie für Sie an.)",
 "h2.fam": "Die anderen Gänge",
 "fam1.p": "Die Urarmatur: alles und die Spüle dazu für Microsoft Word. 219 Operationen über 108 Werkzeuge, Live-Bearbeitung offener Dokumente, Zitate, Tabellenchirurgie mit Sinn für verbundene Zellen, Änderungsverfolgung, konstruiert mit dem Ziel, nichts zu beschädigen.",
 "fam1.g": "Zum Sanitärgang →",
-"fam2.p": "Der Dekogang: alles und die Spüle dazu für Microsoft PowerPoint. 138 Werkzeuge, und Diagramme kommen als echte Formen an, mit Verbindern, die daran kleben, sodass das Kästchen wandert und die Pfeile folgen.",
-"fam2.g": "Zum Dekogang →",
+"fam2.p": "Der Farbengang: alles und die Spüle dazu für Microsoft PowerPoint. 138 Werkzeuge, und Diagramme kommen als echte Formen an, mit Verbindern, die daran kleben, sodass das Kästchen wandert und die Pfeile folgen.",
+"fam2.g": "Zum Farbengang →",
 "fam3.t": "Das Ladengeschäft",
 "fam3.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, seine Armatur und sein Tresen, dazu ein, zwei Regale, die nicht zufällig leer sind.",
 "fam3.g": "Den Laden durchstöbern →",
@@ -1900,9 +1903,9 @@ fr: {
 "tale.p2": "La plupart des outils font la version bon marché : déplacer les cellules, enregistrer le fichier, espérer. Les dégâts n'apparaissent jamais au moment de la modification. Ils apparaissent trois jours plus tard, en réunion, dans le seul total qui a discrètement cessé d'inclure sa dernière ligne.",
 "tale.p3": "Ce serveur déplace tout ce qui doit suivre, puis compare le résultat à ce qu'Excel aurait fait lui-même. Quand une modification ne peut pas être menée sans risque, il dit non à voix haute au lieu de deviner en silence. Un refus vous coûte une minute. Une supposition silencieuse vous coûte le contrat.",
 "h2.inv": "Les rayonnages, pack par pack",
-"inv.lead": "Le stock est rangé en packs de capacités, comme une bonne quincaillerie regroupe ce qui va ensemble. Une session démarre sur le noyau allégé, 40 outils pour environ 10,8k tokens, et allume le pack dont le travail a besoin en un appel. Les 69 outils sont en rayon aujourd'hui : 40 dans le noyau, 29 répartis dans les trois packs.",
+"inv.lead": "Les outils sont rangés par paquets de capacités, comme un bon magasin regroupe ce qui va ensemble. Brancher des outils sur une IA consomme une partie de sa mémoire de travail, alors une session s'ouvre avec le seul noyau du quotidien, 40 outils, et allume d'un seul appel le paquet dont le travail a besoin. Les 69 outils sont en rayon aujourd'hui : 40 dans le noyau, 29 répartis sur les trois paquets.",
 "pk1.t": "Noyau allégé", "pk1.n": "PACK 0 · TOUJOURS ACTIF",
-"pk1.p": "L'établi de tous les jours : une vue en grille ancrée du classeur, des lectures de cellules et de plages avec leurs mentions, requêtes et agrégations côté serveur, écriture et audit de formules, modifications structurelles de lignes et de colonnes qui emmènent leurs références, tri et filtre selon l'ordre d'Excel, tableaux, mise en forme, import et export, sauvegardes, diagnostic, et le tableau électrique enable_tools.",
+"pk1.p": "L'établi de tous les jours : lire des cellules et des plages avec chaque valeur étiquetée, voir le classeur sous forme de grille, poser des questions du genre fais la somme de cette colonne sans tirer chaque ligne dans la mémoire de l'IA, écrire et vérifier des formules, insérer et supprimer des lignes et des colonnes sans casser ce qui pointe dessus, trier et filtrer comme le fait Excel, plus les tableaux, la mise en forme, l'import et l'export, les sauvegardes et les diagnostics.",
 "pk1.e": "p.ex. lire une plage et voir quelles valeurs sont en cache · insérer une colonne sans que les totaux perdent leur cible · trier comme Excel, cellules vides en dernier",
 "pk1.c": "40 OUTILS · TOUJOURS ACTIFS",
 "pk2.t": "Design", "pk2.n": "LES FINITIONS",
@@ -1918,7 +1921,7 @@ fr: {
 "pk4.e": "p.ex. recalculer et obtenir la valeur avec la mention qui le prouve · construire un tableau croisé dynamique qui en est vraiment un · confirmer que le fichier s'ouvre sans message de réparation",
 "pk4.c": "11 OUTILS",
 "h2.cmp": "Face au reste du rayon",
-"cmp.lead": "Les tableaux de fonctionnalités flattent tout le monde. Voici plutôt les demandes qu'un agent reçoit vraiment :",
+"cmp.lead": "Plutôt qu'une liste de fonctions, voici six choses que les gens demandent vraiment à une IA de faire sur un tableur, et comment cela se passe en général :",
 "cmp.h1": "« Dis, tu pourrais… »",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 étoiles GitHub&dagger;</span>",
 "cmp.h4": "Les autres outils de cette étagère*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -1929,7 +1932,7 @@ fr: {
 "cr2.q": "« Ce total, il est à jour ou il reste de la dernière sauvegarde ? »",
 "cr2.us": "✔ chaque valeur porte sa mention, calculée, en cache ou absente, et les cellules périmées sont nommées par leur adresse",
 "cr2.inc": "✘ les lectures renvoient la formule sous forme de texte ; impossible d'obtenir ne serait-ce que la valeur en cache",
-"cr2.oth": "le serveur COM recalcule avec le moteur d'Excel lui-même, mais la valeur revient sans la moindre mention de sa fraîcheur",
+"cr2.oth": "un outil concurrent sait demander à Excel lui-même de recalculer, mais la valeur revient sans aucune indication précisant si elle est fraîche ou périmée",
 "cr3.q": "« Trie ça comme Excel le trierait, cellules vides comprises. »",
 "cr3.us": "✔ nombres, puis texte sans tenir compte de la casse, puis FAUX, VRAI, valeurs d'erreur, cellules vides en dernier, dans les deux sens, comparé cellule par cellule à Excel",
 "cr3.inc": "✘ aucun outil de tri",
@@ -1939,12 +1942,12 @@ fr: {
 "cr4.inc": "n/d, et aucun serveur MCP Excel consulté ne documente les fonctions modernes, ni comme prise en charge ni comme limitation",
 "cr5.q": "« Lis le gros classeur sans cramer ma fenêtre de contexte. »",
 "cr5.us": "✔ lectures compactes, vue en grille, plus requêtes et agrégations côté serveur pour que les lignes y restent",
-"cr5.inc": "✘ ni pagination ni souci des tokens nulle part dans la documentation ; sans cellule de fin, il lit toute la plage utilisée",
+"cr5.inc": "✘ aucun moyen de lire petit à petit ; demandez sans point final et il lit tout, directement dans la mémoire de l'IA",
 "cr5.oth": "le serveur en Go pagine les lectures au nombre de cellules, 4 000 à la fois par défaut",
 "cr6.q": "« Recalcule pour de vrai et prouve-le. »",
 "cr6.us": "✔ un Excel privé et masqué fait le calcul, et le résultat revient avec la mention calculé, jamais mélangé aux valeurs en cache",
 "cr6.inc": "✘ aucun outil de recalcul, et la documentation n'aborde jamais le sujet",
-"cr6.oth": "recalcul réel sur le serveur COM, qui exige Windows, un Excel installé, un bureau interactif et le classeur fermé au préalable",
+"cr6.oth": "un vrai recalcul en pilotant Excel directement, ce qui exige Windows, un Excel installé, une session de bureau ouverte et le classeur fermé au préalable",
 "cmp.note": "Relevé des capacités au 2026-09-04, établi à partir des dépôts publics, de la documentation et des suivis de tickets. n/d : non documenté dans les sources consultées, ce qui n'est pas une absence affirmée. Le serveur MCP Excel le plus populaire est haris-musa/excel-mcp-server, 25 outils sur openpyxl, dernière version le 2026-04-12. Ses propres tickets ouverts #94 et #118 demandent justement des valeurs calculées plutôt que du texte de formule. La documentation d'openpyxl précise qu'elle ne gère pas les dépendances telles que formules, tableaux et graphiques lors de l'insertion ou de la suppression de lignes ou de colonnes. * Les autres outils de cette étagère : negokaz/excel-mcp-server (Go, sept outils, lectures paginées, édition en direct sous Windows), sbroenne/mcp-server-excel (C#, 31 outils pour 326 opérations qui pilotent la véritable application Excel, le plafond de capacités, mais Windows avec Excel installé et accès exclusif au fichier, sans couche fichier). Deux serveurs plus récents embarquent un vrai moteur de calcul et méritent l'attention : PSU3D0/agent-spreadsheet et logisky/logisheets-mcp. Microsoft ne propose aucun serveur MCP Excel, et Claude for Excel est un complément Office, pas un serveur MCP. &dagger; Nombres d'étoiles lus via l'API GitHub le 2026-09-04, à titre indicatif : les étoiles disent depuis combien de temps un rayon est visible, pas ce qui est posé dessus. Les preuves de tests et d'endurance sont dans le bandeau de caractéristiques en haut. Corrections bienvenues : ouvrez un ticket.",
 "h2.eff": "La facture de contexte",
 "eff.lead": "La plupart des serveurs MCP emménagent dans le contexte de votre IA comme un accumulateur compulsif : tout, d'emblée, que la tâche en ait besoin ou non. Celui-ci démarre léger et ne déballe une étagère que lorsque le travail l'appelle. Voici la facture, mesurée :",
@@ -1976,10 +1979,10 @@ fr: {
 "inst.note": "L'essentiel de ce serveur n'a besoin d'aucun Excel installé et tourne sur n'importe quel ordinateur. Seules les parties qui font travailler Excel réclament Windows avec Excel dessus, et elles ouvrent leur propre exemplaire masqué, si bien que le classeur affiché à votre écran n'est jamais touché.",
 "h2.svc": "Service client",
 "mat.t": "Jeune, et testé comme s'il ne l'était pas",
-"mat.p": "Chaque contrôle que tient cet atelier est au vert : rondes adverses à travers le protocole brut, vérifications de référence contre le recalcul d'Excel lui-même, zéro corruption sur tout le corpus. Ce qui manque encore, c'est une longue vie dans les classeurs d'inconnus, et un tableur gagne la confiance sur le terrain, pas au laboratoire. Si Excel est l'endroit où vous vivez, vous êtes le laboratoire dont ce serveur a besoin : apportez votre classeur le plus affreux au comptoir de service et dites-nous ce qui a cassé.",
+"mat.p": "Avant sa sortie, ce serveur a été éprouvé par le chemin difficile : des mois de rondes d'attaque délibérées cherchant à corrompre des fichiers, à passer sous les contrôles de sécurité et à le prendre en flagrant délit de mensonge, plus chaque type de modification vérifié contre les calculs d'Excel lui-même. Tout est revenu propre. Ce qui lui manque encore, c'est une longue vie dans les classeurs des autres, et un tableur gagne sa confiance sur le terrain, pas en laboratoire. Si Excel est l'endroit où vous vivez, vous êtes le laboratoire dont ce serveur a besoin : apportez votre classeur le plus vilain au comptoir du service client et dites-nous ce qui a cassé.",
 "svc.ticket": "ON VOUS SERT · PRENEZ UN NUMÉRO · MÊME COMPTOIR QUE LES ÉVIERS WORD ET POWERPOINT",
 "svc1.t": "Un chiffre auquel vous ne pouvez pas vous fier ?",
-"svc1.p": "Une valeur mal étiquetée, un refus sans logique, un enregistrement qui a touché ce qu'il n'aurait pas dû. Déposez-le au comptoir de réparation : le formulaire demande exactement ce qu'il faut pour corriger. Ne collez jamais de vraies données de tableur ; décrivez plutôt la structure du classeur.",
+"svc1.p": "Une valeur mal étiquetée, un message d'erreur qui n'avait aucun sens, un enregistrement qui a touché ce qu'il ne devait pas. Déposez-le au comptoir : le formulaire demande exactement ce qu'il faut pour corriger. Ne collez jamais de vraies données de tableur ; décrivez plutôt la forme du classeur.",
 "svc1.g": "Signaler un bogue →",
 "svc2.t": "Un accessoire manquant ?",
 "svc2.p": "Une capacité tableur que l'évier devrait avoir lui aussi. Décrivez la tâche réelle qui se cache derrière et elle rejoint l'établi.",
@@ -1989,13 +1992,13 @@ fr: {
 "svc3.g": "Discuter d'une licence →",
 "svc.note": "Les rapports sont des tickets GitHub publics (un compte GitHub gratuit suffit pour en déposer un). Chaque rapport arrive dans la boîte du mainteneur.",
 "g.t": "Conçu pour ne pas corrompre",
-"g.p1": "Enregistrements atomiques. Sauvegardes automatiques avant chaque changement. Et un fil de plus, parce qu'il s'agit d'un tableur : avant chaque livraison, chaque type de modification est confronté aux calculs d'Excel lui-même. Le câblage passe au contrôle avant qu'on mette le courant.",
+"g.p1": "Les enregistrements aboutissent parfaitement ou ne changent rien du tout, jamais à moitié. Sauvegardes automatiques avant chaque modification. Et un fil de plus, parce qu'il s'agit d'un tableur : avant qu'une version ne sorte, chaque type de modification est vérifié contre les calculs d'Excel lui-même. Le câblage passe au contrôle avant qu'on mette le courant.",
 "g.p2": "Fourni tel quel, sans garantie d'aucune sorte, conformément à la licence ; l'ingénierie ci-dessus montre simplement le sérieux avec lequel vos classeurs sont traités. Gardez des sauvegardes. (Il les fait pour vous.)",
 "h2.fam": "Les autres rayons",
 "fam1.p": "La robinetterie d'origine : tout et l'évier avec, pour Microsoft Word. 219 opérations réparties sur 108 outils, édition en direct des documents ouverts, citations, chirurgie de tableaux consciente des fusions, suivi des modifications, conçu pour ne pas corrompre.",
 "fam1.g": "Visiter le rayon plomberie →",
-"fam2.p": "Le rayon décoration : tout et l'évier avec, pour Microsoft PowerPoint. 138 outils, et des schémas qui arrivent en formes natives avec des connecteurs collés dessus, si bien que la boîte se déplace et les flèches suivent.",
-"fam2.g": "Visiter le rayon décoration →",
+"fam2.p": "Le rayon peinture : tout et l'évier avec, pour Microsoft PowerPoint. 138 outils, et des schémas qui arrivent en formes natives avec des connecteurs collés dessus, si bien que la boîte se déplace et les flèches suivent.",
+"fam2.g": "Visiter le rayon peinture →",
 "fam3.t": "La devanture",
 "fam3.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, sa robinetterie et son comptoir, plus une ou deux étagères qui ne sont pas vides par hasard.",
 "fam3.g": "Parcourir la boutique →",
@@ -2061,9 +2064,9 @@ es: {
 "tale.p2": "La mayoría de las herramientas hacen la versión barata: mover las celdas, guardar el archivo, cruzar los dedos. El daño nunca aparece cuando se hace la edición. Aparece tres días después, en una reunión, en ese único total que dejó de incluir calladamente su última fila.",
 "tale.p3": "Este servidor mueve todo lo que debe moverse y compara el resultado con lo que habría hecho el propio Excel. Cuando una edición no puede hacerse con seguridad, dice que no en voz alta en lugar de adivinar en silencio. Una negativa le cuesta un minuto. Una suposición callada le cuesta el trato.",
 "h2.inv": "Los estantes, paquete a paquete",
-"inv.lead": "Las existencias están ordenadas en paquetes de capacidades, como una buena ferretería agrupa lo que va junto. Una sesión arranca con el núcleo ligero, 40 herramientas y unos 10,8k tokens, y enciende con una llamada el paquete que pida el trabajo. Las 69 herramientas están hoy en el estante: 40 en el núcleo y 29 repartidas en los tres paquetes.",
+"inv.lead": "Las herramientas están ordenadas en paquetes de capacidades, igual que una buena tienda agrupa lo que va junto. Conectar herramientas a una IA le cuesta parte de su memoria de trabajo, así que una sesión abre solo con el núcleo de diario, 40 herramientas, y enciende con una sola llamada el paquete que el trabajo pida. Hoy están en la tienda las 69 herramientas: 40 en el núcleo y 29 repartidas entre los tres paquetes.",
 "pk1.t": "Núcleo ligero", "pk1.n": "PAQUETE 0 · SIEMPRE ACTIVO",
-"pk1.p": "El banco de trabajo de cada día: una vista de cuadrícula anclada del libro, lecturas etiquetadas de celdas y rangos, consulta y agregación en el servidor, escritura y auditoría de fórmulas, ediciones estructurales de filas y columnas que se llevan sus referencias, ordenar y filtrar con el criterio de Excel, tablas, formato, importación y exportación, copias de seguridad, diagnóstico y el cuadro eléctrico enable_tools.",
+"pk1.p": "El banco de todos los días: leer celdas y rangos con cada valor etiquetado, ver el libro como una cuadrícula, hacer preguntas del tipo suma esta columna sin arrastrar cada fila a la memoria de la IA, escribir y revisar fórmulas, insertar y eliminar filas y columnas sin romper lo que apunta a ellas, ordenar y filtrar como lo hace Excel, además de tablas, formato, importación y exportación, copias de seguridad y diagnósticos.",
 "pk1.e": "p.ej. leer un rango y ver qué valores están en caché · insertar una columna sin que los totales pierdan su destino · ordenar como ordena Excel, con las vacías al final",
 "pk1.c": "40 HERRAMIENTAS · SIEMPRE ACTIVAS",
 "pk2.t": "Diseño", "pk2.n": "LOS ACABADOS",
@@ -2079,7 +2082,7 @@ es: {
 "pk4.e": "p.ej. recalcular y recibir el valor con la etiqueta que lo demuestra · construir una tabla dinámica que lo sea de verdad · confirmar que el archivo abre sin aviso de reparación",
 "pk4.c": "11 HERRAMIENTAS",
 "h2.cmp": "Frente al resto del pasillo",
-"cmp.lead": "Las tablas de funciones favorecen a todo el mundo. Aquí están, en su lugar, los encargos que un agente recibe de verdad:",
+"cmp.lead": "En lugar de una lista de funciones, aquí van seis cosas que la gente le pide de verdad a una IA con una hoja de cálculo, y cómo suele acabar:",
 "cmp.h1": "«Oye, ¿podrías…?»",
 "cmp.h3": "haris-musa (openpyxl)<span class=\"stars\">4,155 estrellas en GitHub&dagger;</span>",
 "cmp.h4": "Otras herramientas de este estante*<span class=\"stars\">negokaz 1,021 &middot; sbroenne 655&dagger;</span>",
@@ -2090,7 +2093,7 @@ es: {
 "cr2.q": "«¿Este total es actual o es lo que quedó del último guardado?»",
 "cr2.us": "✔ cada valor etiquetado como calculado, en caché o ausente, y las celdas caducadas nombradas por su dirección",
 "cr2.inc": "✘ las lecturas devuelven la fórmula como texto; no hay manera de obtener ni siquiera el valor en caché",
-"cr2.oth": "el servidor COM recalcula con el motor del propio Excel, pero el valor vuelve sin ninguna marca de actualidad",
+"cr2.oth": "una herramienta rival sí puede pedirle a Excel que recalcule, pero el valor vuelve sin ninguna marca de si está fresco o caducado",
 "cr3.q": "«Ordénalo como lo ordenaría Excel, celdas vacías incluidas.»",
 "cr3.us": "✔ números, luego texto sin distinguir mayúsculas, luego FALSO, VERDADERO, errores y vacías al final, en ambos sentidos, comparado celda a celda con Excel",
 "cr3.inc": "✘ no hay herramienta de ordenación",
@@ -2100,12 +2103,12 @@ es: {
 "cr4.inc": "n/d, y ningún servidor MCP de Excel consultado documenta las funciones modernas en ningún sentido, ni como soporte ni como limitación",
 "cr5.q": "«Lee el libro grande sin quemarme la ventana de contexto.»",
 "cr5.us": "✔ lecturas compactas, una vista de cuadrícula y consulta y agregación en el servidor para que las filas se queden allí",
-"cr5.inc": "✘ ni paginación ni cuidado con los tokens en toda la documentación; sin celda final indicada lee todo el rango usado",
+"cr5.inc": "✘ no hay forma de leer poco a poco; pida sin punto final y lo lee todo, derecho a la memoria de la IA",
 "cr5.oth": "el servidor en Go pagina las lecturas por número de celdas, 4.000 cada vez por omisión",
 "cr6.q": "«Recalcúlalo de verdad y demuéstralo.»",
 "cr6.us": "✔ un Excel propio y oculto hace la aritmética y el resultado vuelve etiquetado como calculado, nunca mezclado con valores en caché",
 "cr6.inc": "✘ no hay herramienta de recálculo, y la documentación no toca el asunto en ningún momento",
-"cr6.oth": "recálculo real en el servidor COM, que pide Windows, un Excel instalado, un escritorio interactivo y el libro cerrado antes",
+"cr6.oth": "recálculo de verdad manejando Excel directamente, lo que pide Windows, un Excel instalado, un escritorio con sesión iniciada y el libro cerrado antes",
 "cmp.note": "Estudio de capacidades a fecha de 2026-09-04, elaborado a partir de repositorios públicos, documentación y gestores de incidencias. n/d: no documentado en las fuentes consultadas, lo que no equivale a afirmar su ausencia. El servidor MCP de Excel más popular es haris-musa/excel-mcp-server, 25 herramientas sobre openpyxl, última versión el 2026-04-12; sus propias incidencias abiertas #94 y #118 piden valores calculados en lugar de texto de fórmula. La documentación de openpyxl indica que no gestiona dependencias como fórmulas, tablas y gráficos al insertar o eliminar filas o columnas. * Otras herramientas de este estante: negokaz/excel-mcp-server (Go, siete herramientas, lecturas paginadas, edición en vivo en Windows), sbroenne/mcp-server-excel (C#, 31 herramientas sobre 326 operaciones que manejan la aplicación real de Excel, el techo de capacidades, pero con Windows, Excel instalado y acceso exclusivo al archivo, y sin capa basada en archivo). Dos servidores más recientes llevan dentro un motor de cálculo de verdad y conviene seguirlos: PSU3D0/agent-spreadsheet y logisky/logisheets-mcp. Microsoft no publica ningún servidor MCP de Excel, y Claude for Excel es un complemento de Office, no un servidor MCP. &dagger; Recuento de estrellas leído con la API de GitHub el 2026-09-04, a título orientativo: las estrellas dicen cuánto tiempo lleva un estante a la vista, no lo que hay encima. Las pruebas y el estrés están en la franja de datos de arriba. Se agradecen las correcciones: abra una incidencia.",
 "h2.eff": "La factura de contexto",
 "eff.lead": "La mayoría de los servidores MCP se mudan al contexto de su IA como un acumulador: todo, de entrada, lo necesite el trabajo o no. Este arranca ligero y solo desembala un estante cuando la tarea lo pide. Aquí está la factura, medida:",
@@ -2137,10 +2140,10 @@ es: {
 "inst.note": "La mayor parte de este servidor no necesita Excel instalado y funciona en cualquier ordenador. Solo las partes que le piden trabajo a Excel quieren Windows con Excel encima, y abren su propia copia oculta, así que el libro que tiene en pantalla no se toca nunca.",
 "h2.svc": "Atención al cliente",
 "mat.t": "Joven, y probado como si no lo fuera",
-"mat.p": "Todos los controles que pasa este taller están en verde: rondas adversarias a través del protocolo en crudo, comprobaciones contra el recálculo del propio Excel, cero corrupciones en todo el corpus. Lo que aún no ha tenido es una vida larga dentro de libros ajenos, y las hojas de cálculo se ganan la confianza en el campo, no en el laboratorio. Si Excel es donde usted vive, usted es el laboratorio que este servidor necesita: traiga su libro más feo al mostrador de servicio y cuéntenos qué se rompió.",
+"mat.p": "Antes de publicarlo, este servidor se probó por el camino difícil: meses de rondas de ataque deliberadas para corromper archivos, colarse por delante de los controles de seguridad y pillarlo mintiendo, además de cada tipo de edición contrastado con las cuentas del propio Excel. Todo volvió limpio. Lo que aún no ha tenido es una vida larga dentro de libros ajenos, y las hojas de cálculo se ganan la confianza en el campo, no en el laboratorio. Si Excel es donde usted vive, usted es el laboratorio que este servidor necesita: traiga su libro más feo al mostrador de atención al cliente y cuéntenos qué se rompió.",
 "svc.ticket": "AHORA ATENDIENDO · TOME UN NÚMERO · EL MISMO MOSTRADOR QUE LOS FREGADEROS DE WORD Y POWERPOINT",
 "svc1.t": "¿Un número del que no se fía?",
-"svc1.p": "Un valor mal etiquetado, un rechazo sin sentido, un guardado que tocó algo que no debía. Preséntelo en el mostrador de reparaciones: el formulario pregunta justo lo que hace falta para arreglarlo. Nunca pegue datos reales de hoja de cálculo; describa en su lugar la estructura del libro.",
+"svc1.p": "Un valor mal etiquetado, un mensaje de error sin sentido, un guardado que tocó algo que no debía. Preséntelo en el mostrador: el formulario pregunta justo lo que hace falta para arreglarlo. Nunca pegue datos reales de hoja de cálculo; describa en su lugar la estructura del libro.",
 "svc1.g": "Informar de un fallo →",
 "svc2.t": "¿Falta un accesorio?",
 "svc2.p": "Una capacidad de hoja de cálculo que el fregadero también debería tener. Describa la tarea real que hay detrás y pasa al banco de trabajo.",
@@ -2150,13 +2153,13 @@ es: {
 "svc3.g": "Gestionar una licencia →",
 "svc.note": "Los partes son issues públicos de GitHub (hace falta una cuenta gratuita de GitHub para presentarlos). Cada parte llega a la bandeja del mantenedor.",
 "g.t": "Diseñado para no corromper",
-"g.p1": "Guardados atómicos. Copias de seguridad automáticas antes de cada cambio. Y un cable más, porque esto es una hoja de cálculo: antes de publicar una versión, cada tipo de edición se compara con las cuentas del propio Excel. El cableado pasa inspección antes de dar corriente.",
+"g.p1": "Los guardados o se completan del todo o no cambian nada, nunca a medias. Copias de seguridad automáticas antes de cada cambio. Y un cable de más, porque esto es una hoja de cálculo: antes de publicar una versión, cada tipo de edición se contrasta con las cuentas del propio Excel. El cableado pasa inspección antes de dar corriente.",
 "g.p2": "Se ofrece tal cual, sin garantía de ningún tipo, según la licencia; la ingeniería anterior solo muestra con cuánta seriedad se tratan sus libros. Conserve copias de seguridad. (Él las hace por usted.)",
 "h2.fam": "Los otros pasillos",
 "fam1.p": "El accesorio original: todo y el fregadero incluido, para Microsoft Word. 219 operaciones en 108 herramientas, edición en vivo de documentos abiertos, citas, cirugía de tablas consciente de las combinaciones, control de cambios, diseñado para no corromper.",
 "fam1.g": "Visite el pasillo de fontanería →",
-"fam2.p": "El pasillo de decoración: todo y el fregadero incluido, para Microsoft PowerPoint. 138 herramientas, y diagramas que llegan como formas nativas con conectores pegados a ellas, así que la caja se mueve y las flechas la siguen.",
-"fam2.g": "Visite el pasillo de decoración →",
+"fam2.p": "El pasillo de pintura: todo y el fregadero incluido, para Microsoft PowerPoint. 138 herramientas, y diagramas que llegan como formas nativas con conectores pegados a ellas, así que la caja se mueve y las flechas la siguen.",
+"fam2.g": "Visite el pasillo de pintura →",
 "fam3.t": "La tienda",
 "fam3.p": "Toda la ferretería en una página: cada servidor KitchenSink, su accesorio y su mostrador, más un estante o dos que no están vacíos por casualidad.",
 "fam3.g": "Recorrer la tienda →",
