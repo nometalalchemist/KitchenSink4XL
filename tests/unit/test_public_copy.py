@@ -226,6 +226,27 @@ def test_no_em_dashes_in_public_copy(path: Path):
     )
 
 
+def test_documented_module_entry_point_resolves():
+    """The README's `python -m` line must name a module that can be run.
+
+    The install gauntlet found the guessable names all wrong: the
+    distribution is kitchensink4xl, the package is xlsx_mcp, and
+    `import kitchensink4xl` fails. README now points at
+    `python -m xlsx_mcp.server`, so that module has to stay runnable, and it
+    has to reach the same entry point the console scripts do.
+    """
+    import importlib.util
+
+    assert "python -m xlsx_mcp.server" in (
+        (ROOT / "README.md").read_text(encoding="utf-8")
+    ), "README no longer documents the module entry point"
+    assert importlib.util.find_spec("xlsx_mcp.server") is not None
+    from xlsx_mcp import __main__ as pkg_main
+    from xlsx_mcp.server import main as server_main
+
+    assert pkg_main.main is server_main
+
+
 def test_mcp_name_marker_survives():
     first = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()[0]
     assert first == (
