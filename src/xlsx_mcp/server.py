@@ -36,6 +36,7 @@ from __future__ import annotations
 import functools
 import inspect as _inspect
 import json as _json
+import os as _os
 import platform as _platform
 import sys as _sys
 from typing import Any
@@ -51,6 +52,7 @@ from . import __version__
 from . import envelope as _envelope
 from . import packs as _packs
 from .core import update_check as _upd
+from .core.errors import XlMcpError as _XlMcpError
 from .ops import annotations as _annotations
 from .ops import backups as _backups
 from .ops import cells as _cells
@@ -1743,13 +1745,39 @@ def _startup_disabled_names() -> set[str]:
     }
 
 
+def _bad_mode_message() -> str:
+    """The one line a bad KS4XL_MODE prints before the process exits.
+
+    The vocabulary is read out of packs.py rather than spelled here, so a
+    re-cut of the pack menu cannot leave this sentence naming packs that no
+    longer exist.
+    """
+    vocabulary = ", ".join(["lite", "full", _packs.EVERYTHING, *_packs.pack_names()])
+    return (
+        f'KS4XL_MODE="{_os.environ.get("KS4XL_MODE", "")}" is not a '
+        f"recognized mode. Valid values: {vocabulary}, or a comma-separated "
+        "list of pack names. The server did not start."
+    )
+
+
 def main() -> None:
     # KS4XL_MODE startup surface: bookkeeping first (a typo in the env fails
     # loudly BEFORE serving), then ONE global visibility transform hiding
     # every tool not enabled at startup. Session rules laid down by
     # enable_tools/disable_tools override this transform. Applied here, not
     # at import, so tests and measure_surface always see the full registry.
-    _packs.apply_startup_mode()
+    # A typo used to exit with a twelve-line traceback wrapping a genuinely
+    # good message, which Desktop renders as "server failed to start" with
+    # the useful sentence buried under a file path the user does not
+    # recognize. Same loudness, same refusal to serve, one readable line.
+    # The policy pin is validated first, exactly as apply_startup_mode does
+    # it, so a KS4XL_PACK_POLICY typo keeps its own separate refusal.
+    _packs.pack_policy()
+    try:
+        _packs.apply_startup_mode()
+    except _XlMcpError:
+        _sys.stderr.write(_bad_mode_message() + "\n")
+        raise SystemExit(2)
     _PENDING_VISIBILITY.clear()  # startup flips ride the global transform
     disabled = _startup_disabled_names()
     if disabled:

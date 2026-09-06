@@ -233,6 +233,49 @@ def test_mode_typo_fails_loudly(restore_enabled, monkeypatch):
         packs.apply_startup_mode()
 
 
+def test_bad_mode_message_reads_its_vocabulary_from_the_parser(monkeypatch):
+    """The refusal line must name the packs that exist, not a frozen list.
+
+    Spelling the vocabulary into the sentence is how a pack re-cut leaves a
+    message advertising packs the server no longer has; the 2026-09-04 re-cut
+    retired four names and would have done exactly that.
+    """
+    monkeypatch.setenv("KS4XL_MODE", "bogusPack")
+    msg = server._bad_mode_message()
+    assert msg.startswith('KS4XL_MODE="bogusPack" is not a recognized mode.')
+    assert msg.endswith("The server did not start.")
+    for token in ["lite", "full", packs.EVERYTHING, *packs.pack_names()]:
+        assert token in msg, f"{token} missing from the refusal line"
+    for retired in ("objects", "tables-names"):
+        assert retired not in msg
+
+
+def test_mode_typo_exits_two_with_one_line_and_no_traceback():
+    """Gauntlet F7: loud is right, a stack trace is not.
+
+    Desktop shows "server failed to start" and buries the useful sentence
+    under a file path the user does not recognize, so main() catches the
+    startup refusal, writes one line, and exits 2. Run as a real process
+    because the exit code and the absence of a traceback are the claim.
+    """
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "KS4XL_MODE": "bogusPack"}
+    proc = subprocess.run(
+        [sys.executable, "-X", "utf8", "-m", "xlsx_mcp.server"],
+        capture_output=True, text=True, timeout=60, env=env,
+    )
+    assert proc.returncode == 2, proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert proc.stderr.strip().splitlines() == [
+        'KS4XL_MODE="bogusPack" is not a recognized mode. Valid values: '
+        "lite, full, everything, design, io, com, or a comma-separated list "
+        "of pack names. The server did not start."
+    ]
+
+
 def test_mode_stale_pack_names_fail_loudly(restore_enabled, monkeypatch):
     """The pre-re-cut pack names are gone; an env still using them fails
     LOUDLY at startup instead of silently serving less than asked."""
