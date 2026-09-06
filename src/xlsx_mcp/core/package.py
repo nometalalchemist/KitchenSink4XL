@@ -519,8 +519,20 @@ class WorkbookPackage:
                 warnings.extend(self._extension_warnings())
             return warnings
         drop_keys = list(rep.lossy_keys)  # SEV_DROPS
+        # The generic degrade sentence says a family is "re-serialized
+        # through openpyxl's model", which is the truth about charts and
+        # pivots and a lie about document properties: those are not
+        # re-serialized at all, they are rewritten from an empty template
+        # and the authored fields go. A hazard whose note says something
+        # different gets its own line rather than being folded into a
+        # sentence that misdescribes it.
+        self_describing = {_hazard.DOC_PROPERTIES_KEY}
         degradable = [h.label for h in rep.hazards
-                      if h.severity == _hazard.SEV_DEGRADES]
+                      if h.severity == _hazard.SEV_DEGRADES
+                      and h.key not in self_describing]
+        degrade_notes = [f"{h.label}: {h.note}" for h in rep.hazards
+                         if h.severity == _hazard.SEV_DEGRADES
+                         and h.key in self_describing]
         degrade_keys = [h.key for h in rep.hazards
                         if h.severity == _hazard.SEV_DEGRADES]
         conditional = [h for h in rep.hazards
@@ -603,6 +615,7 @@ class WorkbookPackage:
             if not allow_loss:
                 self._refuse_extension_loss()
             warnings.extend(self._extension_warnings())
+        warnings.extend(degrade_notes)
         if degradable:
             warnings.append(
                 ", ".join(degradable) + " are re-serialized through openpyxl's "

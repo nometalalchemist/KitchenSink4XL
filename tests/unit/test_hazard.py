@@ -255,3 +255,121 @@ def test_fidelity_harness_confirms_known_drops():
         r = by_name["clean.xlsx"]
         assert r.hazard_clean is True
         assert not r.fragile_dropped
+
+
+# ------------------------------------------------------------------------
+# The 1.1 fidelity benchmark's silent-loss column. Five rows were reported;
+# reading the files rather than diffing their part names left three real
+# ones, and the two that fell away are guarded here too, because a later
+# reading of the same benchmark would otherwise "fix" them back into
+# refusals that cost users working edits.
+
+
+def _reader(parts: dict[str, bytes]):
+    def read(name: str) -> bytes:
+        return parts[name]
+    return read
+
+
+_SHEET = ('<?xml version="1.0"?><worksheet xmlns="http://schemas.openxml'
+          'formats.org/spreadsheetml/2006/main"><sheetData/>{body}'
+          '</worksheet>')
+
+
+def _scan_sheet(body: str):
+    xml = _SHEET.format(body=body).encode("utf-8")
+    names = ["xl/workbook.xml", "xl/worksheets/sheet1.xml"]
+    return hazard.scan_names(
+        names, part_reader=_reader({"xl/worksheets/sheet1.xml": xml,
+                                    "xl/workbook.xml": b"<workbook/>"}))
+
+
+def test_allow_edit_ranges_are_a_lossy_hazard():
+    """A protected sheet's editable exceptions. openpyxl models the
+    sheetProtection element and not the ranges it excepts, so the sheet
+    comes back protected with the exceptions gone: cells a user could edit
+    before the save cannot be edited after it, and nothing said so."""
+    r = _scan_sheet('<protectedRanges><protectedRange sqref="A2:B2" '
+                    'name="EditableBlock"/></protectedRanges>')
+    assert hazard.PROTECTED_RANGES_KEY in r.lossy_keys
+    assert r.would_lose is True
+
+
+def test_autofilter_sort_state_is_a_lossy_hazard():
+    """Excel writes sortState beside autoFilter; openpyxl's reader looks for
+    it inside autoFilter and therefore never sees it."""
+    r = _scan_sheet('<autoFilter ref="A1:C6"/><sortState ref="A2:C4">'
+                    '<sortCondition ref="C2:C6"/></sortState>')
+    assert hazard.SORT_STATE_KEY in r.lossy_keys
+
+
+def test_a_namespace_prefixed_element_is_found_too():
+    """Excel writes the plain namespace, but a file that has been through
+    another producer may carry a prefix. Matching only '<sortState' would
+    read that file as clean."""
+    r = _scan_sheet('<x:sortState xmlns:x="http://schemas.openxmlformats.org'
+                    '/spreadsheetml/2006/main" ref="A2:C4"/>')
+    assert hazard.SORT_STATE_KEY in r.lossy_keys
+
+
+def test_a_sheet_with_neither_stays_clean():
+    assert _scan_sheet("").clean is True
+
+
+def test_authored_document_properties_degrade_and_say_which():
+    """openpyxl emits a fresh app.xml every save. Company and Manager are
+    authored fields and go with it; the core properties do not."""
+    app = (b'<Properties><Application>Microsoft Excel</Application>'
+           b'<Manager>ProbeMgr</Manager><Company>ProbeCo</Company>'
+           b'</Properties>')
+    r = hazard.scan_names(
+        ["xl/workbook.xml", "docProps/app.xml", "docProps/core.xml"],
+        part_reader=_reader({"docProps/app.xml": app,
+                             "xl/workbook.xml": b"<workbook/>"}))
+    hit = next(h for h in r.hazards if h.key == hazard.DOC_PROPERTIES_KEY)
+    assert hit.severity == hazard.SEV_DEGRADES, (
+        "metadata must not refuse a mutation; it warns and proceeds")
+    assert "Company" in hit.label and "Manager" in hit.label
+    assert r.would_lose is False
+
+
+def test_an_empty_company_element_is_not_a_loss():
+    """Excel writes <Company/> on most installs. Flagging that would put a
+    hazard on nearly every workbook in existence to protect nothing."""
+    app = (b'<Properties><Company></Company><Manager/>'
+           b'<Application>Microsoft Excel</Application></Properties>')
+    r = hazard.scan_names(
+        ["xl/workbook.xml", "docProps/app.xml"],
+        part_reader=_reader({"docProps/app.xml": app,
+                             "xl/workbook.xml": b"<workbook/>"}))
+    assert r.clean is True
+
+
+def test_printer_settings_stay_unflagged_by_policy():
+    """Re-measured for 1.1: the benchmark listed print setup as a silent
+    degradation, and everything a user authored (orientation, print area,
+    print titles, all six header and footer slots) came back identical. The
+    casualty is the device blob. Flagging it would refuse mutations on
+    nearly every workbook that has ever been printed."""
+    r = hazard.scan_names(["xl/workbook.xml", "xl/worksheets/sheet1.xml",
+                           "xl/printerSettings/printerSettings1.bin"])
+    assert r.clean is True
+
+
+def test_legacy_comment_parts_are_not_a_loss():
+    """The benchmark's comments row is a part-name artifact: Excel names
+    them xl/comments1.xml and vmlDrawing1.vml, openpyxl rewrites them as
+    xl/comments/comment1.xml and commentsDrawing1.vml. Both notes, both
+    authors and both note-box sizes survive (measured). Flagging this is
+    the exact regression the geriatric round's M-1 fixed."""
+    vml = (b'<xml xmlns:v="urn:schemas-microsoft-com:vml" '
+           b'xmlns:x="urn:schemas-microsoft-com:office:excel">'
+           b'<v:shape type="#_x0000_t202"><x:ClientData ObjectType="Note">'
+           b'<x:Row>0</x:Row></x:ClientData></v:shape></xml>')
+    names = ["xl/workbook.xml", "xl/comments1.xml",
+             "xl/drawings/vmlDrawing1.vml"]
+    r = hazard.scan_names(names, part_reader=_reader({
+        "xl/drawings/vmlDrawing1.vml": vml,
+        "xl/comments1.xml": b"<comments/>",
+        "xl/workbook.xml": b"<workbook/>"}))
+    assert r.clean is True, [h.key for h in r.hazards]

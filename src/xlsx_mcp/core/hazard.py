@@ -26,6 +26,23 @@ Two deliberate NON-flags, verified empirically (re-audit round-trips):
   mutations on nearly every workbook that ever printed, for a loss that is
   cosmetic (page-setup device settings; the pageSetup element itself
   survives). It stays unflagged by policy and is treated as a routine drop.
+  RE-VERIFIED against the 1.1 fidelity benchmark's printsetup probe, which
+  listed print setup as a silent degradation: orientation, print area, print
+  titles, fit-to-height and all six header and footer slots came back
+  identical, and the only casualties were printerSettings1.bin and its
+  relationship. The benchmark's separate claim that header/footer slots are
+  reshuffled did not reproduce. The policy stands, on a measurement rather
+  than on the original reasoning alone.
+
+- LEGACY COMMENTS ARE NOT A LOSS, and the same benchmark row says they are.
+  Excel names the parts xl/comments1.xml and xl/drawings/vmlDrawing1.vml;
+  openpyxl models the notes and rewrites them as xl/comments/comment1.xml
+  and xl/drawings/commentsDrawing1.vml. A part-name diff sees two parts
+  leave and calls it a drop. Reading the file instead: both notes, both
+  authors, both note-box dimensions came back identical. This is the same
+  finding as the geriatric round's M-1, from the other direction, and it is
+  why _refine_comment_vml demotes content-verified comment-only anchors
+  rather than refusing on them.
 
 IN-PART HAZARDS (the former known limit, now closed). Some fragile content
 does not live in a part of its own: x14 conditional formatting (every modern
@@ -394,6 +411,29 @@ def _refine_comment_vml(
 #: member name (see _never and _detect_in_part_extensions).
 IN_PART_EXT_KEY = "in_part_extensions"
 
+#: Three more classes that live inside a part which survives, found by the
+#: 1.1 fidelity benchmark. Same shape as IN_PART_EXT_KEY: no member name to
+#: match on, so _never is the matcher and a content reader finds them.
+PROTECTED_RANGES_KEY = "protected_ranges"
+SORT_STATE_KEY = "sort_state"
+DOC_PROPERTIES_KEY = "doc_properties"
+
+#: The worksheet elements openpyxl neither reads nor writes, as (local name,
+#: hazard key). Both are plain CT_Worksheet children, NOT extLst content, so
+#: the extLst walk above does not see them. The x14 protected-range extension
+#: is a different element that the extLst walk does cover.
+_IN_PART_WORKSHEET_ELEMENTS: tuple[tuple[bytes, str], ...] = (
+    (b"protectedRange", PROTECTED_RANGES_KEY),
+    (b"sortState", SORT_STATE_KEY),
+)
+
+#: docProps/app.xml fields a human authored, which openpyxl's writer does not
+#: carry across (it emits a fresh ExtendedProperties every save). An EMPTY
+#: element is not a loss and does not flag: Excel writes <Company/> on most
+#: installs, and flagging that would put a hazard on nearly every workbook.
+_APP_PROPERTY_TAGS: tuple[str, ...] = ("Company", "Manager")
+_APP_PART = "docprops/app.xml"
+
 #: Worksheet extLst URIs and what each one carries, mirroring
 #: openpyxl.xml.constants.EXT_TYPES so these labels line up with the
 #: "... extension is not supported and will be removed" warnings the package
@@ -501,6 +541,75 @@ def _detect_in_part_extensions(
     )
 
 
+def _detect_in_part_worksheet_elements(
+    found: dict[str, "Hazard"], names: Iterable[str],
+    part_reader: Callable[[str], bytes] | None,
+) -> None:
+    """Add a hazard for each worksheet element openpyxl silently discards.
+
+    The extLst walk above answers a different question: it asks what is in
+    the extension block. <protectedRanges> and <sortState> are ordinary
+    CT_Worksheet children written by Excel in the plain namespace, so they
+    are invisible to that walk, and openpyxl's reader has no handler for
+    either. The 1.1 fidelity benchmark measured both going out with the
+    save on a file that reported clean.
+
+    A byte scan is enough. Both names are distinctive, neither appears in
+    an attribute value or a shared string that reaches this part, and a
+    false positive costs a needless refusal rather than lost content, which
+    is the direction this table errs in by policy.
+    """
+    if part_reader is None:
+        return
+    hits: dict[str, list[str]] = {}
+    for name in names:
+        if not _is_worksheet_part(name):
+            continue
+        try:
+            data = part_reader(name)
+        except Exception:  # noqa: BLE001
+            continue
+        for needle, key in _IN_PART_WORKSHEET_ELEMENTS:
+            if b"<" + needle in data or b":" + needle in data:
+                hits.setdefault(key, []).append(name)
+    for key, parts in hits.items():
+        spec = _SPEC_BY_KEY[key]
+        found[key] = Hazard(spec.key, spec.label, spec.severity,
+                            spec.survives_openpyxl, spec.note, parts)
+
+
+def _detect_doc_properties(
+    found: dict[str, "Hazard"], names: Iterable[str],
+    part_reader: Callable[[str], bytes] | None,
+) -> None:
+    """Add the document-properties hazard when app.xml carries authored text.
+
+    Only non-empty fields count. openpyxl rewrites app.xml unconditionally,
+    but rewriting <Company/> into nothing loses nothing, and this file's
+    whole discipline is that a hazard means content actually goes missing.
+    """
+    if part_reader is None:
+        return
+    part = next((n for n in names if _normalized(n).lower() == _APP_PART),
+                None)
+    if part is None:
+        return
+    try:
+        data = part_reader(part)
+    except Exception:  # noqa: BLE001
+        return
+    text = data.decode("utf-8", "replace")
+    carried = [tag for tag in _APP_PROPERTY_TAGS
+               if re.search(rf"<{tag}>\s*\S[^<]*</{tag}>", text)]
+    if not carried:
+        return
+    spec = _SPEC_BY_KEY[DOC_PROPERTIES_KEY]
+    found[DOC_PROPERTIES_KEY] = Hazard(
+        spec.key, f"{spec.label}: {', '.join(carried)}", spec.severity,
+        spec.survives_openpyxl, spec.note, [part],
+    )
+
+
 # The knowledge table. survives_openpyxl is the CLAIM the fidelity harness
 # checks. Ordered most-to-least destructive for readable reports.
 HAZARD_SPECS: tuple[HazardSpec, ...] = (
@@ -599,6 +708,34 @@ HAZARD_SPECS: tuple[HazardSpec, ...] = (
         "warns that each is unsupported, and writes none of them back, so the "
         "rules are gone from a file that looks untouched. Detected by reading "
         "the worksheet, not by a part name.",
+        _never,
+    ),
+    HazardSpec(
+        PROTECTED_RANGES_KEY, "allow-edit ranges", SEV_DROPS, False,
+        "a protected sheet's <protectedRanges> block names the ranges that "
+        "stay editable, each with its own name and optional password. "
+        "openpyxl has no model for it and writes none of it back, so the "
+        "sheet returns protected with its exceptions gone and cells that "
+        "were editable no longer are. The sheetProtection element itself "
+        "survives, which is what makes the loss quiet.",
+        _never,
+    ),
+    HazardSpec(
+        SORT_STATE_KEY, "autofilter sort state", SEV_DROPS, False,
+        "a worksheet's <sortState> records the sort the user applied under "
+        "an autofilter: which column, which direction, over which range. "
+        "Excel writes it beside the autoFilter element, openpyxl's reader "
+        "looks for it only INSIDE that element, so it is read by nobody and "
+        "written by nobody. The filter survives and the sort it was sorted "
+        "by does not.",
+        _never,
+    ),
+    HazardSpec(
+        DOC_PROPERTIES_KEY, "document properties", SEV_DEGRADES, False,
+        "docProps/app.xml is rewritten from an empty template on every save, "
+        "so the authored fields it carries are cleared. The core properties "
+        "in docProps/core.xml (title, subject, creator, keywords, category, "
+        "description) survive.",
         _never,
     ),
     HazardSpec(
@@ -895,6 +1032,8 @@ def scan_names(names: Iterable[str], path: str = "<names>", *,
     _refine_drawings(found, nameset, reader)
     demoted_vml = _refine_comment_vml(found, nameset, reader)
     _detect_in_part_extensions(found, names, reader)
+    _detect_in_part_worksheet_elements(found, names, reader)
+    _detect_doc_properties(found, names, reader)
     ordered = [found[s.key] for s in HAZARD_SPECS if s.key in found]
     return HazardReport(path=path, parts=names, hazards=ordered,
                         comment_anchor_vml=demoted_vml)
@@ -1105,6 +1244,7 @@ def _raw_safe(report: HazardReport) -> bool:
 __all__ = [
     "HazardReport", "Hazard", "HazardSpec", "HAZARD_SPECS",
     "EXT_DROP_LABELS", "IN_PART_EXT_KEY",
+    "PROTECTED_RANGES_KEY", "SORT_STATE_KEY", "DOC_PROPERTIES_KEY",
     "loss_costs", "refusal_routes", "ROUTE_ALLOW_LOSS", "ROUTE_LEAVE_ALONE",
     "ole_container_kind", "ole_refusal_text", "refuse_ole_container",
     "OLE_KIND_BIFF", "OLE_KIND_ENCRYPTED", "OLE_KIND_UNKNOWN",
