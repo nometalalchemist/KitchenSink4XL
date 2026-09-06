@@ -408,8 +408,9 @@ details.devfold:before{content:attr(data-plate);position:absolute;top:-11px;left
 details.devfold summary{cursor:pointer;padding:16px 20px;font-size:11.5px;letter-spacing:.2em;
   text-transform:uppercase;color:var(--ink);font-weight:600;list-style:none}
 details.devfold summary::-webkit-details-marker{display:none}
-details.devfold summary:before{content:"\25B8 ";color:var(--brass)}
-details.devfold[open] summary:before{content:"\25BE "}
+details.devfold summary:before{content:"\25B8";color:var(--brass);
+  display:inline-block;margin-right:9px}
+details.devfold[open] summary:before{content:"\25BE"}
 details.devfold[open] summary{border-bottom:1px dashed var(--rule)}
 details.devfold summary:hover{color:var(--brass)}
 details.devfold summary:focus-visible{outline:2px dashed var(--brass);outline-offset:-4px}
