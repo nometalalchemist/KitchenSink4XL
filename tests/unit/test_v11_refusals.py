@@ -183,7 +183,10 @@ def test_a_read_only_file_is_not_diagnosed_as_open_in_excel(tmp_path):
         msg = str(exc.value)
         assert "read-only" in msg
         assert "open in Excel" not in msg
-        assert "closing Excel will not help" in msg
+        assert "No program is holding it" in msg, (
+            "the refusal must say nobody has the file open; the old "
+            "message sent users to close a program they never opened")
+        assert "attribute" in msg
     finally:
         os.chmod(p, _stat.S_IWRITE)
     # and the same file writes once the attribute is cleared
@@ -229,12 +232,16 @@ def test_the_hazard_refusal_stops_naming_a_route_com_cannot_take(tmp_path):
     detail = getattr(exc.value, "detail", {}) or {}
 
     assert "enable COM" not in msg and "enable the COM" not in msg
-    assert "not a route" in msg.lower(), msg
+    assert "com pack" not in msg.lower(), msg
+    # the two routes that exist, both of which can actually be taken
+    assert "allow_loss=true" in msg, msg
+    assert "in Excel itself" in msg, msg
     for route in detail.get("routes", []):
         assert "com pack" not in route.lower(), route
     # the exact costs, per class, are stated rather than named
     assert detail.get("losses"), "the refusal no longer states the losses"
-    assert "allow_loss:true" in msg
+    assert "A future release adds preservation" in msg, (
+        "preservation is the real fix and the refusal says so")
     # and the allow_loss route still works, which is what makes it an exit
     out = cells_ops.set_cell(str(p), "A1", 1, allow_loss=True)
     assert out["changed"]
@@ -266,8 +273,13 @@ def test_render_sheet_refuses_by_name_when_the_session_has_no_clipboard(
         comtier.com_render_sheet(p, str(tmp_path / "out.png"))
     msg = str(exc.value)
     assert "clipboard" in msg
-    assert "CopyPicture" in msg
-    assert "com_export_pdf" in msg, "the refusal names no working route"
+    assert "session does not have one" in msg, (
+        "the refusal must name the SESSION as the cause; the old one "
+        "was Excel's raw CopyPicture error, which named nothing")
+    assert "service accounts" in msg, "the refusal names no cause"
+    assert "export the range as values" in msg, (
+        "the refusal names no working route; exporting values is the "
+        "one that does not touch the clipboard")
 
 
 def test_the_clipboard_probe_never_raises():

@@ -264,15 +264,13 @@ until first use pay close to zero until a tool is actually called.
   lists, restores, and prunes them. Exclude that folder from cloud sync tools:
   the slots churn on every edit and sync clients can hold locks that slow
   saves down.
-  {MAIN_THREAD_COPY:V1-16-readme} <!-- facts: the slots hold only what this
-  server itself changed. An edit made in Excel, or by any other program, is
-  never captured, so `prev` restores the state before the last SERVER
-  mutation, not the state before the last edit to the file. -->
-- Filter-hidden rows: {MAIN_THREAD_COPY:V1-12-readme} <!-- facts:
-  query_range, export_range, and the aggregates read every row in the range,
-  including rows an autofilter is hiding. Excel's own SUBTOTAL ignores hidden
-  rows; these do not. Filter first with `where` if hidden rows should be out
-  of the answer. -->
+  The backup slots hold what this server changed, and only that. An edit made
+  in Excel or any other program is never captured, so `prev` restores the state
+  before the last change made here, not before the last change made anywhere.
+- Filter-hidden rows: `query_range`, `export_range`, and the aggregates read
+  every row in the range, including rows an autofilter is hiding. Excel's own
+  SUBTOTAL skips hidden rows; these functions do not, and a filtered sheet can
+  therefore sum differently here than in Excel's own status bar.
 - Saves are atomic and validated; a failed operation leaves the original
   byte-identical.
 - A round-trip hazard scan runs before a mutating save. Parts the writer

@@ -759,14 +759,11 @@ def com_render_sheet(path: str, output: str, sheet: str | None = None,
         # Named cause, and no workaround offered, because there is none:
         # CopyPicture is Excel's only range-to-bitmap route.
         raise XlMcpError(
-            "this Windows session will not let any program open the "
-            "clipboard, and Excel's only route from a range to an image "
-            "(Range.CopyPicture) goes through it, so the render cannot run "
-            "here. This is the session, not the workbook and not Excel: "
-            "service accounts, locked workstations, and sessions with no "
-            "desktop all refuse the clipboard the same way. Run the render "
-            "from an interactive desktop session, or use com_export_pdf, "
-            "which does not touch the clipboard")
+            "rendering this range needs the Windows clipboard, and this "
+            "session does not have one (service accounts and locked or "
+            "disconnected sessions often do not). Run it from an ordinary "
+            "logged-in desktop session, or export the range as values "
+            "instead")
     out, out_info = _out_path(output, "com_render_sheet output",
                               overwrite=overwrite, source=p)
     if not out.lower().endswith(".png"):

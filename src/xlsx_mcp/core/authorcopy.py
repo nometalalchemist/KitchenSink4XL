@@ -32,54 +32,25 @@ GATE_VERSION = (1, 1, 0)
 #: slot -> (state, where it lives, what it has to say).
 #: state is "pending" (no text written) or "review" (text written, wording
 #: not yet ruled on).
-SLOTS: dict[str, tuple[str, str, str]] = {
-    "V1-16-readme": (
-        "pending", "README.md, Safety model",
-        "The backup slots hold only what this server itself changed. An "
-        "edit made in Excel, or by any other program, is never captured, "
-        "so prev restores the state before the last SERVER mutation, not "
-        "the state before the last edit to the file.",
-    ),
-    "V1-12-readme": (
-        "pending", "README.md, Safety model",
-        "query_range, export_range, and the aggregates read every row in "
-        "the range, including rows an autofilter is hiding. Excel's own "
-        "SUBTOTAL ignores hidden rows; these do not.",
-    ),
-    "V1-5-release-notes": (
-        "pending", "the 1.1 release notes",
-        "The release note itself. Facts are in the build report.",
-    ),
-    "readonly-attribute-refusal": (
-        "review", "core/package.py, the save-path lock refusal",
-        "What a user sees when the target file carries the read-only "
-        "attribute rather than being held open by Excel. The old message "
-        "sent them to close a program they never opened.",
-    ),
-    "no-clipboard-refusal": (
-        "review", "ops/comtier.py, com_render_sheet",
-        "What a user in a service account or a locked session sees when "
-        "Excel's only range-to-bitmap route needs a clipboard the session "
-        "does not have. The old message was Excel's raw CopyPicture error.",
-    ),
-    "hazard-route-refusal": (
-        "review", "core/hazard.py, the HAZARD_REFUSED routes",
-        "The routes a refused mutation offers. The com pack cannot write "
-        "cells, so naming it as the remedy for a refused cell write sent "
-        "the caller to a tool that does not exist.",
-    ),
-    "text-rotation-refusal": (
-        "review", "ops/format.py, _checked_rotation",
-        "Replaces openpyxl's 182-value dump with the range. Wording only; "
-        "the range itself is Excel's.",
-    ),
-    "long-name-refusal": (
-        "review", "core/safesave.py, the byte-limited save path",
-        "What a user sees when a workbook name is legal on Windows but "
-        "over the filesystem's byte limit once the save suffix is "
-        "appended.",
-    ),
-}
+#:
+#: EMPTY AT 1.1.0. All eight slots were settled with the author's own
+#: sentences before the version was stamped, which is exactly what the gate
+#: below is for. The inventory is kept (rather than the file deleted)
+#: because the next release will have its own slots, and the machinery that
+#: catches a forgotten one is worth more than the twenty lines it costs.
+#: Where the eight went, for anyone tracing a sentence back:
+#:   V1-16-readme, V1-12-readme  -> README.md, Safety model
+#:   V1-5-release-notes          -> the 1.1.0 GitHub release body
+#:   readonly-attribute-refusal  -> core/package.py, read_only_refusal
+#:   no-clipboard-refusal        -> ops/comtier.py, com_render_sheet
+#:   hazard-route-refusal        -> core/package.py's HazardRefused text and
+#:                                  core/hazard.py's two route strings
+#:   text-rotation-refusal       -> ops/format.py, _checked_rotation
+#:   long-name-refusal           -> core/outguard.py, guard_out_file (the
+#:                                  caller's own name is checked there;
+#:                                  safesave only bounds names this server
+#:                                  builds, and bounding is not refusing)
+SLOTS: dict[str, tuple[str, str, str]] = {}
 
 PENDING = tuple(s for s, (state, _w, _f) in SLOTS.items()
                 if state == "pending")

@@ -1209,8 +1209,8 @@ def route(
 
 #: The route strings, kept as data so the refusal text, the .detail payload,
 #: and the tests all read the same list.
-ROUTE_ALLOW_LOSS = "allow_loss:true (backed up first; the losses below are permanent in the saved file)"
-ROUTE_LEAVE_ALONE = "leave this workbook to Excel: copy_workbook branches it byte-for-byte, and reads never touch it"
+ROUTE_ALLOW_LOSS = "allow_loss=true: proceed while accepting exactly that loss (backed up first; the loss is permanent in the saved file)"
+ROUTE_LEAVE_ALONE = "make this edit in Excel itself, which preserves everything; copy_workbook branches the file byte-for-byte if you want a working copy"
 
 
 def loss_costs(keys) -> list[str]:

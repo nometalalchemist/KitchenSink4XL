@@ -51,8 +51,8 @@ def _checked_rotation(value):
     if 0 <= value <= 180 or value == _ROTATION_STACKED:
         return value
     raise XlMcpError(
-        f"text_rotation must be 0 to 180 degrees, or {_ROTATION_STACKED} for "
-        f"vertically stacked text; got {value}")
+        f"text_rotation accepts 0 to 180, or {_ROTATION_STACKED} for vertical "
+        f"stacked text. {value} is outside that range.")
 
 
 _BORDER_STYLES = {"thin", "medium", "thick", "dashed", "dotted", "double",

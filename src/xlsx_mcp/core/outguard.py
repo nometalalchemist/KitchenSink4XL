@@ -34,7 +34,13 @@ import shutil
 from pathlib import Path
 
 from .errors import XlMcpError
-from .safesave import BACKUP_DIR_NAME, bound_name, canonical_key
+from .safesave import (
+    BACKUP_DIR_NAME,
+    MAX_NAME_CHARS,
+    bound_name,
+    canonical_key,
+    name_fits,
+)
 from .sandbox import check_path
 
 #: Extensions that mean "this path is (or is meant to be) a workbook".
@@ -137,6 +143,19 @@ def guard_out_file(target: str, *, source: str | None = None,
             f"out target {op} names the reserved Windows device {device}, "
             f"not a file. A write to it reports success and stores nothing, "
             f"so the {what} would be silently lost. Pass a real file path.")
+
+    # A name the CALLER chose is not bounded (bound_name is for names this
+    # server builds), but it is checked. Windows counts characters and ext4
+    # counts bytes, so a name of 100 Korean characters is comfortable here
+    # and unwritable on the Linux box the same tree is mounted on, and
+    # unwritable inside a zip. Refusing beats writing a file whose name
+    # travels badly, and beats silently renaming what the caller asked for.
+    if len(tp.name) <= MAX_NAME_CHARS and not name_fits(tp.name):
+        raise XlMcpError(
+            f"out target {tp.name}: this name is legal on Windows but "
+            "exceeds 255 bytes in UTF-8, which breaks on other systems and "
+            "inside zip archives. Shorten it to stay portable; non-ASCII "
+            "characters count as multiple bytes.")
 
     if not workbook_target and tp.suffix.lower() in WORKBOOK_EXTS:
         raise XlMcpError(

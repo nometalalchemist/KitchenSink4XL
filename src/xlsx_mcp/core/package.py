@@ -78,12 +78,11 @@ def held_refusal(path: str) -> str:
 
 def read_only_refusal(path: str) -> str:
     """The file itself is marked read-only. Nothing has it open."""
-    return (f"{Path(path).name} is marked read-only, so no program can write "
-            "to it. Nothing has it open, and closing Excel will not help: "
-            "clear the read-only attribute on the file (Properties, or "
-            "attrib -r on Windows, chmod +w elsewhere) and retry. Files "
-            "copied off read-only media, restored from cloud storage, or "
-            "pulled from a locked share arrive this way")
+    return (f"{Path(path).name}: this file's read-only attribute is set, so "
+            "saving to it would fail. No program is holding it; the attribute "
+            "is a property of the file itself. Clear it (right-click, "
+            "Properties, untick Read-only) and try again, or save a copy "
+            "elsewhere with copy_workbook")
 
 
 class WorkbookPackage:
@@ -567,20 +566,12 @@ class WorkbookPackage:
                      for p in h.parts]
             costs = _hazard.loss_costs(drop_keys)
             exc = HazardRefused(
-                "this workbook holds " + ", ".join(labels)
-                + " that a file-based (openpyxl) save drops silently. "
-                "Refusing the mutation rather than destroy them. Exactly "
-                "what is lost if you proceed: " + "; ".join(costs)
-                + ". Two routes, and they are the only two: pass "
-                "allow_loss:true to accept those losses (the workbook is "
-                "backed up first, and the losses are permanent in the saved "
-                "file), or leave this workbook alone at the file tier. The "
-                "com pack is NOT a route for this: it drives Excel for "
-                "recalculation, pivots, goal seek, PDF export, rendering, "
-                "conversion, and encryption, and none of its tools writes a "
-                "cell, a format, or a row. Reads never touch the workbook, "
-                "and copy_workbook branches it byte-for-byte if you want a "
-                "working copy.")
+                "This edit would drop content the file writer cannot "
+                "preserve yet: " + "; ".join(costs)
+                + ". Two honest routes: pass allow_loss=true to proceed "
+                "while accepting exactly that loss, or make this edit in "
+                "Excel itself, which preserves everything. A future release "
+                "adds preservation for this content.")
             exc.detail = {"parts": parts, "labels": labels,
                           "losses": costs,
                           "routes": _hazard.refusal_routes()}

@@ -406,7 +406,9 @@ def test_x14_extension_loss_refuses(tmp_path):
         pkg.save()
     msg = str(exc.value)
     assert "x14 conditional formatting" in msg   # names the rules at risk
-    assert "allow_loss" in msg and "com" in msg.lower()   # names both outs
+    # names both outs, and the second one is Excel now: the com pack writes
+    # no cells, so it was never an out for a refused cell write.
+    assert "allow_loss=true" in msg and "in Excel itself" in msg
     assert src.read_bytes() == before            # refusal touched nothing
 
 
