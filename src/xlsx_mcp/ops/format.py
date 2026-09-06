@@ -161,22 +161,148 @@ def format_cells(path: str, location: Any, number_format: str | None = None,
     return result
 
 
+#: Outline levels Excel supports: 1 through 7, plus 0 meaning ungrouped.
+MAX_OUTLINE_LEVEL = 7
+
+
+def _outline_spans(specs, *, axis: str) -> list[tuple[int, int, int, bool]]:
+    """Normalize group specs to (start, end, level, collapsed).
+
+    A span is {start, end} with an optional level (default 1) and collapsed
+    (default false). Rows take numbers; columns take letters or numbers, and
+    both are resolved to indices before anything is written."""
+    from openpyxl.utils import column_index_from_string
+
+    def index(value, what: str) -> int:
+        if isinstance(value, bool):
+            raise XlMcpError(f"{what} must be a {axis} reference, not a bool")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and axis == "column":
+            try:
+                return column_index_from_string(value.strip().upper())
+            except Exception:
+                raise XlMcpError(
+                    f"{what}: {value!r} is not a column letter") from None
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value)
+        raise XlMcpError(
+            f"{what} must be a {'row number' if axis == 'row' else 'column '
+            'letter or number'}; got {value!r}")
+
+    out = []
+    for spec in specs:
+        if not isinstance(spec, dict) or "start" not in spec:
+            raise XlMcpError(
+                f"each {axis} group is {{start, end}} with optional level "
+                f"(1-{MAX_OUTLINE_LEVEL}) and collapsed; got {spec!r}")
+        start = index(spec["start"], "start")
+        end = index(spec.get("end", spec["start"]), "end")
+        if end < start:
+            start, end = end, start
+        level = spec.get("level", 1)
+        if isinstance(level, bool) or not isinstance(level, int) \
+                or not 1 <= level <= MAX_OUTLINE_LEVEL:
+            raise XlMcpError(
+                f"level must be 1 to {MAX_OUTLINE_LEVEL} (Excel's outline "
+                f"depth); got {level!r}")
+        out.append((start, end, level, bool(spec.get("collapsed", False))))
+    return out
+
+
+def sheet_outline(ws) -> dict | None:
+    """The sheet's row and column groups, or None when it has none.
+
+    Read side of the grouping surface. Contiguous runs at the same outline
+    level are reported as one span, which is how a person sees them in
+    Excel: the bracket in the margin, not the per-row attribute underneath
+    it. A sheet with no grouping returns None so the ordinary workbook pays
+    nothing for this."""
+    from openpyxl.utils import column_index_from_string, get_column_letter
+
+    def spans(dims, *, ranged: bool):
+        """Per-index (level, hidden), coalesced into contiguous spans.
+
+        Rows are stored one dimension per row. COLUMNS are not: openpyxl
+        keeps one ColumnDimension spanning min..max, keyed by the first
+        letter, so reading column_dimensions['C'] on a B:C group creates a
+        fresh empty dimension and reports level 0. The min/max attributes
+        are the truth for columns and must be walked, not the keys."""
+        levels: dict[int, tuple[int, bool]] = {}
+        for key, dim in dims.items():
+            lvl = int(getattr(dim, "outlineLevel", 0) or 0)
+            if not lvl:
+                continue
+            hidden = bool(getattr(dim, "hidden", False))
+            if ranged:
+                lo = int(getattr(dim, "min", 0) or 0)
+                hi = int(getattr(dim, "max", 0) or 0)
+                if not lo or not hi:
+                    lo = hi = (key if isinstance(key, int)
+                               else column_index_from_string(str(key)))
+            else:
+                lo = hi = int(key)
+            for idx in range(lo, hi + 1):
+                levels[idx] = (lvl, hidden)
+        out: list[dict] = []
+        for idx in sorted(levels):
+            lvl, hidden = levels[idx]
+            if out and out[-1]["level"] == lvl and out[-1]["_end"] == idx - 1:
+                out[-1]["_end"] = idx
+                out[-1]["collapsed"] = out[-1]["collapsed"] and hidden
+            else:
+                out.append({"level": lvl, "_start": idx, "_end": idx,
+                            "collapsed": hidden})
+        return out
+
+    rows = spans(ws.row_dimensions, ranged=False)
+    cols = spans(ws.column_dimensions, ranged=True)
+    if not rows and not cols:
+        return None
+    out: dict[str, Any] = {}
+    if rows:
+        out["row_groups"] = [
+            {"start": s["_start"], "end": s["_end"], "level": s["level"],
+             "collapsed": s["collapsed"]} for s in rows]
+    if cols:
+        out["column_groups"] = [
+            {"start": get_column_letter(s["_start"]),
+             "end": get_column_letter(s["_end"]), "level": s["level"],
+             "collapsed": s["collapsed"]} for s in cols]
+    props = getattr(ws, "sheet_properties", None)
+    outline_pr = getattr(props, "outlinePr", None) if props else None
+    if outline_pr is not None:
+        out["summary_below"] = bool(
+            getattr(outline_pr, "summaryBelow", True))
+        out["summary_right"] = bool(
+            getattr(outline_pr, "summaryRight", True))
+    return out
+
+
 def set_dimensions(path: str, sheet: str | None = None,
                    column_widths: dict | None = None,
                    row_heights: dict | None = None,
                    autofit_columns: list | None = None,
                    hide_columns: list | None = None,
                    hide_rows: list | None = None,
+                   group_rows: list | None = None,
+                   group_columns: list | None = None,
+                   ungroup_rows: list | None = None,
+                   ungroup_columns: list | None = None,
+                   outline_summary: dict | None = None,
                    allow_loss: bool = False, backup: bool = True,
                    verify_com: bool | None = None) -> dict:
-    """Set column widths and row heights, hide rows/columns, and service an
-    autofit request as a best-effort width approximation (true autofit needs
-    Excel via the com pack). One backup + one verified save."""
+    """Set column widths and row heights, hide rows/columns, group and
+    ungroup them into outline levels, and service an autofit request as a
+    best-effort width approximation (true autofit needs Excel via the com
+    pack). One backup + one verified save."""
     if not any([column_widths, row_heights, autofit_columns, hide_columns,
-                hide_rows]):
+                hide_rows, group_rows, group_columns, ungroup_rows,
+                ungroup_columns, outline_summary]):
         raise XlMcpError(
             "pass at least one of column_widths, row_heights, "
-            "autofit_columns, hide_columns, hide_rows")
+            "autofit_columns, hide_columns, hide_rows, group_rows, "
+            "group_columns, ungroup_rows, ungroup_columns, outline_summary")
     from openpyxl.utils import get_column_letter
     pkg = WorkbookPackage.open(path)
     wb = pkg.workbook
@@ -219,6 +345,66 @@ def set_dimensions(path: str, sheet: str | None = None,
         for key in hide_rows:
             ws.row_dimensions[int(key)].hidden = True
         changed["hidden_rows"] = [int(k) for k in hide_rows]
+
+    # Grouping. openpyxl models the whole thing (dimensions.group sets
+    # outlineLevel on each member and hidden on a collapsed span), so this
+    # is a wiring job, not a new format: the tree simply never called it.
+    # Excel draws the bracket from outlineLevel and decides collapsed state
+    # from the members' hidden flags, so ungroup clears both.
+    if group_rows:
+        spans = _outline_spans(group_rows, axis="row")
+        for start, end, level, collapsed in spans:
+            ws.row_dimensions.group(start, end, outline_level=level,
+                                    hidden=collapsed)
+        changed["grouped_rows"] = [
+            {"start": s, "end": e, "level": lv, "collapsed": c}
+            for s, e, lv, c in spans]
+    if group_columns:
+        spans = _outline_spans(group_columns, axis="column")
+        for start, end, level, collapsed in spans:
+            ws.column_dimensions.group(
+                get_column_letter(start), get_column_letter(end),
+                outline_level=level, hidden=collapsed)
+        changed["grouped_columns"] = [
+            {"start": get_column_letter(s), "end": get_column_letter(e),
+             "level": lv, "collapsed": c} for s, e, lv, c in spans]
+    if ungroup_rows:
+        spans = _outline_spans(ungroup_rows, axis="row")
+        for start, end, _lv, _c in spans:
+            for r in range(start, end + 1):
+                dim = ws.row_dimensions[r]
+                dim.outlineLevel = 0
+                dim.hidden = False
+        changed["ungrouped_rows"] = [{"start": s, "end": e}
+                                     for s, e, _lv, _c in spans]
+    if ungroup_columns:
+        spans = _outline_spans(ungroup_columns, axis="column")
+        for start, end, _lv, _c in spans:
+            # A column group is ONE dimension spanning min..max, keyed by
+            # its first letter, so clearing per-letter would miss it and
+            # silently create empty dimensions instead. Every dimension
+            # whose span intersects the request is cleared.
+            for dim in list(ws.column_dimensions.values()):
+                lo = int(getattr(dim, "min", 0) or 0)
+                hi = int(getattr(dim, "max", 0) or 0)
+                if lo and hi and lo <= end and hi >= start:
+                    dim.outlineLevel = 0
+                    dim.hidden = False
+        changed["ungrouped_columns"] = [
+            {"start": get_column_letter(s), "end": get_column_letter(e)}
+            for s, e, _lv, _c in spans]
+    if outline_summary:
+        unknown = sorted(set(outline_summary) - {"below", "right"})
+        if unknown:
+            raise XlMcpError(
+                f"outline_summary takes below and right; got {unknown}")
+        pr = ws.sheet_properties.outlinePr
+        if "below" in outline_summary:
+            pr.summaryBelow = bool(outline_summary["below"])
+        if "right" in outline_summary:
+            pr.summaryRight = bool(outline_summary["right"])
+        changed["outline_summary"] = {"below": bool(pr.summaryBelow),
+                                      "right": bool(pr.summaryRight)}
 
     pkg._changed["dimensions"] = {"sheet": ws.title, **changed}
     return pkg.save(allow_loss=allow_loss, backup=backup,

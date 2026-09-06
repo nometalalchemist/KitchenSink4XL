@@ -545,20 +545,35 @@ def set_dimensions(path: str, sheet: str | None = None,
                    autofit_columns: _schemas.ColumnNames = None,
                    hide_columns: _schemas.ColumnNames = None,
                    hide_rows: _schemas.RowNumbers = None,
+                   group_rows: _schemas.OutlineSpans = None,
+                   group_columns: _schemas.OutlineSpans = None,
+                   ungroup_rows: _schemas.OutlineSpans = None,
+                   ungroup_columns: _schemas.OutlineSpans = None,
+                   outline_summary: dict | None = None,
                    allow_loss: bool = False, backup: bool = True,
                    verify_com: bool | None = None) -> dict:
-    """Set column widths and row heights, hide rows or columns, and service an
-    autofit request. column_widths maps column letters or indices to widths in
-    Excel character units; row_heights maps row numbers to heights in points;
-    autofit_columns sizes columns to content as a best-effort APPROXIMATION
-    (true autofit needs Excel via the com pack). A hazardous workbook refuses
-    unless allow_loss is true. Auto-backup to .ks4xl-backups; atomic verified
-    save. Refuses while open in Excel."""
+    """Set column widths and row heights, hide rows or columns, group them
+    into collapsible outline levels, and service an autofit request.
+    column_widths maps column letters or indices to widths in Excel character
+    units; row_heights maps row numbers to heights in points; autofit_columns
+    sizes columns to content as a best-effort APPROXIMATION (true autofit
+    needs Excel via the com pack).
+
+    Grouping is Excel's outline: group_rows and group_columns take spans of
+    {start, end, level 1-7, collapsed}, the collapse bracket a budget or
+    financial model is built around; ungroup_rows and ungroup_columns clear
+    a span's level and unhide it; outline_summary {below, right} says which
+    side the total sits on. Read the current outline back from
+    get_workbook_metadata, which reports it per sheet when a sheet has one.
+    A hazardous workbook refuses unless allow_loss is true. Auto-backup to
+    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
     return _format.set_dimensions(
         path, sheet=sheet, column_widths=column_widths, row_heights=row_heights,
         autofit_columns=autofit_columns, hide_columns=hide_columns,
-        hide_rows=hide_rows, allow_loss=allow_loss, backup=backup,
-            verify_com=verify_com)
+        hide_rows=hide_rows, group_rows=group_rows,
+        group_columns=group_columns, ungroup_rows=ungroup_rows,
+        ungroup_columns=ungroup_columns, outline_summary=outline_summary,
+        allow_loss=allow_loss, backup=backup, verify_com=verify_com)
 
 
 # ============================================================ PHASE 3b TOOLS
@@ -684,13 +699,18 @@ def manage_conditional_format(path: str, action: str,
     params: cell_is {operator, formula (a value or [lo, hi]), fill,
     font_color}; formula {formula, fill}; color_scale {colors: 2 or 3 hex
     stops}; data_bar {color, show_value}; icon_set {icon_style, values,
-    show_value, reverse}; top_bottom {rank, percent, bottom, fill}. For
-    delete, location must EXACTLY match the rule's stored range (or one member
-    of it) and an optional index picks one rule of several. The file stores
-    the rule declaratively; Excel evaluates it and paints the cells on open,
-    like the calc story. For the mutating actions: a hazardous workbook
-    refuses unless allow_loss is true; auto-backup to prev/anchor slots in
-    .ks4xl-backups; atomic verified save. Refuses while open in Excel."""
+    show_value, reverse}; top_bottom {rank, percent, bottom, fill}; unique and
+    duplicate {fill, font_color}; above_average {below, equal_average, std_dev
+    1-3, fill, font_color}; time_period {period: today | yesterday | tomorrow
+    | last7Days | thisWeek | lastWeek | nextWeek | thisMonth | lastMonth |
+    nextMonth, fill}; blanks and errors {fill, font_color}. For delete,
+    location must EXACTLY match the rule's stored range (or one member of it)
+    and an optional index picks one rule of several. The file stores the rule
+    declaratively; Excel evaluates it and paints the cells on open, like the
+    calc story, so a time_period rule follows the reader's clock. For the
+    mutating actions: a hazardous workbook refuses unless allow_loss is true;
+    auto-backup to prev/anchor slots in .ks4xl-backups; atomic verified save.
+    Refuses while open in Excel."""
     return _condformat.manage_conditional_format(
         path, action, location=location, cf_type=cf_type, params=params,
         sheet=sheet, index=index, allow_loss=allow_loss, backup=backup,

@@ -24,6 +24,7 @@ from ..core import calc as _calc
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 from ..core.sandbox import check_path
+from . import format as _format
 from . import gridio
 
 WS_ACTIONS = ("add", "delete", "rename", "copy", "reorder", "hide", "unhide")
@@ -187,7 +188,7 @@ def get_workbook_metadata(path: str) -> dict:
                 r0, c0, r1, c1 = bounds
                 used = gridio.a1(r0, c0) + ":" + gridio.a1(r1, c1)
                 dims = {"rows": r1 - r0 + 1, "cols": c1 - c0 + 1}
-            sheets.append({
+            entry = {
                 "name": ws.title,
                 "state": ws.sheet_state,
                 "used_range": used,
@@ -195,7 +196,17 @@ def get_workbook_metadata(path: str) -> dict:
                 "merged_cells": len(list(getattr(
                     ws, "merged_cells", []).ranges)) if getattr(
                     ws, "merged_cells", None) else 0,
-            })
+            }
+            # Row and column grouping, the read side of the outline
+            # surface. Reported only when the sheet actually has groups, so
+            # the ordinary workbook's metadata does not grow a key that is
+            # always empty; a budget outline is invisible to a caller that
+            # only reads values, and a collapsed group hides rows for a
+            # reason that has nothing to do with a filter.
+            outline = _format.sheet_outline(ws)
+            if outline:
+                entry["outline"] = outline
+            sheets.append(entry)
         names = []
         for scope, name, defn in _locate._all_defined_names(wb):
             names.append({"name": name, "scope": scope,

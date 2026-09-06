@@ -191,7 +191,13 @@ def test_menu_matches_registry_and_costs():
 #:           their own required keys ({near} and {text} are not guessable).
 #: The revert to either cheaper setting is a single edit to LOCATION_SCHEMA
 #: in core/schemas.py; nothing else in the tree depends on the shape.
-LITE_TOKEN_CEILING = 21_000
+#:
+#: Then 21,000 -> 21,600 (measured 21,209) for the outline surface:
+#: set_dimensions gained group_rows, group_columns, ungroup_rows,
+#: ungroup_columns and outline_summary, with their span schema, plus the
+#: docstring that names the vocabulary. About 630 tokens for a whole
+#: capability class that had no code at all.
+LITE_TOKEN_CEILING = 21_600
 
 
 def test_pack_bills_cost_aware():

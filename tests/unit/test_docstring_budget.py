@@ -49,6 +49,12 @@ MULTIPLEX = {
     # that must be stated; set_page_layout carries eleven orthogonal
     # settings whose units and exclusions need naming.
     "manage_image", "manage_chart", "set_protection", "set_page_layout",
+    # 1.1: set_dimensions crossed the line when grouping landed. It now
+    # carries ten orthogonal settings across three families (sizing, hiding,
+    # and the outline), and the outline half needs its own vocabulary
+    # stated: spans, levels 1-7, the collapse flag, and which side the
+    # summary row sits on. That is the same shape as set_page_layout.
+    "set_dimensions",
 }
 
 

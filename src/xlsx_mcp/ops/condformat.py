@@ -17,12 +17,30 @@ from __future__ import annotations
 
 from typing import Any
 
+from openpyxl.utils import get_column_letter
+
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
 
 CF_ACTIONS = ("add", "list", "delete")
+#: The six base rule types 1.0 shipped, plus the six it did not. The gap was
+#: never an openpyxl ceiling: formatting/rule.py accepts all twelve, and
+#: uniqueValues, duplicateValues, aboveAverage, timePeriod, containsBlanks
+#: and containsErrors are all buttons a user can point at in Excel's own
+#: Highlight Cells and Top/Bottom menus. Only the x14 extension rules
+#: (negative-fill data bars, custom icon sets) are a real library ceiling,
+#: and those wait for the preservation work, because writing one through the
+#: file tier means writing a worksheet extLst the writer then drops.
 CF_TYPES = ("cell_is", "color_scale", "data_bar", "icon_set", "formula",
-            "top_bottom")
+            "top_bottom", "unique", "duplicate", "above_average",
+            "time_period", "blanks", "errors")
+
+#: Excel's timePeriod vocabulary, verbatim: a rule stores one of these
+#: strings and Excel evaluates it against the system date on open, the same
+#: deal the rest of the conditional-format surface makes.
+_TIME_PERIODS = ("today", "yesterday", "tomorrow", "last7Days", "thisWeek",
+                 "lastWeek", "nextWeek", "thisMonth", "lastMonth",
+                 "nextMonth")
 _OPERATORS = ("greaterThan", "lessThan", "greaterThanOrEqual",
               "lessThanOrEqual", "equal", "notEqual", "between", "notBetween",
               "containsText", "notContains", "beginsWith", "endsWith")
@@ -97,13 +115,68 @@ def _build_rule(cf_type: str, params: dict):
             showValue=params.get("show_value", True),
             reverse=params.get("reverse", False))
 
-    # top_bottom
-    rank = int(params.get("rank", 10))
     from openpyxl.styles.differential import DifferentialStyle
-    rule = Rule(type="top10", rank=rank,
-                percent=bool(params.get("percent", False)),
-                bottom=bool(params.get("bottom", False)))
-    rule.dxf = DifferentialStyle(fill=_fill(params.get("fill")))
+
+    if cf_type == "top_bottom":
+        rank = int(params.get("rank", 10))
+        rule = Rule(type="top10", rank=rank,
+                    percent=bool(params.get("percent", False)),
+                    bottom=bool(params.get("bottom", False)))
+        rule.dxf = DifferentialStyle(fill=_fill(params.get("fill")))
+        return rule
+
+    # The six that take no parameter but a format: Excel decides what
+    # qualifies (a duplicate, a blank, an error, a date in the period), and
+    # this side only says which rule and how to paint it. dxf carries the
+    # font when one is asked for, the same way cell_is does.
+    font = (Font(color=_hex(params["font_color"]))
+            if params.get("font_color") else None)
+    style = DifferentialStyle(fill=_fill(params.get("fill")), font=font)
+
+    if cf_type in ("unique", "duplicate"):
+        rule = Rule(type="uniqueValues" if cf_type == "unique"
+                    else "duplicateValues")
+        rule.dxf = style
+        return rule
+
+    if cf_type == "above_average":
+        # Excel models below-average and the standard-deviation bands as the
+        # same rule with different attributes, so one type covers six of the
+        # menu's entries.
+        below = bool(params.get("below", False))
+        rule = Rule(type="aboveAverage", aboveAverage=not below,
+                    equalAverage=bool(params.get("equal_average", False)))
+        std_dev = params.get("std_dev")
+        if std_dev is not None:
+            if not isinstance(std_dev, int) or isinstance(std_dev, bool) \
+                    or not 1 <= std_dev <= 3:
+                raise XlMcpError(
+                    "std_dev must be 1, 2, or 3 standard deviations, or "
+                    "omitted for a plain average comparison")
+            rule.stdDev = std_dev
+        rule.dxf = style
+        return rule
+
+    if cf_type == "time_period":
+        period = params.get("period")
+        if period not in _TIME_PERIODS:
+            raise XlMcpError(
+                f"time_period needs period, one of {_TIME_PERIODS}; got "
+                f"{period!r}")
+        rule = Rule(type="timePeriod", timePeriod=period)
+        rule.dxf = style
+        return rule
+
+    # blanks / errors. Excel writes containsBlanks and containsErrors with a
+    # formula that reproduces the test, and its own UI does the same, so the
+    # rule is written that way rather than left for a reader to infer.
+    first = str(params.get("first_cell", "A1")).upper()
+    if cf_type == "blanks":
+        rule = Rule(type="containsBlanks",
+                    formula=[f"LEN(TRIM({first}))=0"])
+    else:
+        rule = Rule(type="containsErrors", formula=[f"ISERROR({first})"])
+    rule.dxf = style
     return rule
 
 
@@ -144,7 +217,16 @@ def manage_conditional_format(path: str, action: str, location: Any = None,
             raise XlMcpError(f"cf_type must be one of {CF_TYPES}")
         grid = pkg.resolve(location, default_sheet=sheet)
         ws = pkg.workbook[grid.sheet]
-        rule = _build_rule(cf_type, params or {})
+        # containsBlanks and containsErrors carry a formula written against
+        # the range's TOP-LEFT cell, which Excel then applies relatively
+        # across the rest. Defaulting that to A1 would work only for ranges
+        # that happen to start there, so it comes from the resolved
+        # rectangle unless the caller names a cell.
+        rule_params = dict(params or {})
+        rule_params.setdefault(
+            "first_cell",
+            f"{get_column_letter(grid.min_col)}{grid.min_row}")
+        rule = _build_rule(cf_type, rule_params)
         ws.conditional_formatting.add(grid.a1, rule)
         pkg._changed["conditional_format"] = {
             "added": cf_type, "sheet": ws.title, "range": grid.a1}

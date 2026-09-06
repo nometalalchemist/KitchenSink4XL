@@ -343,6 +343,17 @@ TableValues = Annotated[list | None, WithJsonSchema({
         {"type": "null"}],
 })]
 
+OutlineSpans = _array(
+    {"type": "object",
+     "properties": {
+         "start": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+         "end": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+         "level": {"type": "integer", "minimum": 1, "maximum": 7},
+         "collapsed": {"type": "boolean"}},
+     "required": ["start"]},
+    "Outline spans, {start, end, level 1-7, collapsed}. Rows take numbers, "
+    "columns take letters or numbers.")
+
 ColumnNames = _array({"type": "string"}, "Column letters, e.g. ['A', 'C'].")
 RowNumbers = _array({"type": "integer", "minimum": 1},
                     "1-based row numbers.")
@@ -372,5 +383,6 @@ __all__ = [
     "Predicates", "FilterCriteria", "ColumnList", "OrderBy", "Aggregates",
     "SortKeys", "CellAddresses", "CellWrites", "BatchEdits", "TableValues",
     "ColumnNames", "RowNumbers", "SheetNames", "RangeList", "TableColumns",
+    "OutlineSpans",
     "PAPER_SIZE_SCHEMA", "PaperSize",
 ]
