@@ -68,13 +68,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://nometalalchemist.github.io/KitchenSink4XL/"
-Source = "https://github.com/nometalalchemist/KitchenSink4XL"
-Issues = "https://github.com/nometalalchemist/KitchenSink4XL/issues"
-Changelog = "https://github.com/nometalalchemist/KitchenSink4XL/releases"
-Documentation = "https://github.com/nometalalchemist/KitchenSink4XL#readme"
-"Agent manifest (llms.txt)" = "https://nometalalchemist.github.io/KitchenSink4XL/llms.txt"
-"Commercial license" = "https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml"
+Homepage = "https://kitchensink4.ai"
+Documentation = "https://github.com/KitchenSink4AI/KitchenSink4XL#readme"
+Repository = "https://github.com/KitchenSink4AI/KitchenSink4XL"
+Issues = "https://github.com/KitchenSink4AI/KitchenSink4XL/issues"
+Changelog = "https://github.com/KitchenSink4AI/KitchenSink4XL/releases"
+"Agent manifest (llms.txt)" = "https://github.com/KitchenSink4AI/KitchenSink4XL/blob/main/docs/llms.txt"
+"Commercial license" = "https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml"
 
 [project.scripts]
 xl-mcp = "xlsx_mcp.server:main"

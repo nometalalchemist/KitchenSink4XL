@@ -13,6 +13,8 @@ that never hands your AI a number it cannot back up.** 129 workbook
 operations across 67 tools, a lite core that opens at about 14,500 tokens,
 and a safety core that backs up before every change and verifies every save.
 
+New here? Start with the [Quickstart](docs/QUICKSTART.md).
+
 ## The number that looks right and isn't
 
 Here is the dirty secret of every tool that reads Excel files: a spreadsheet
@@ -304,7 +306,7 @@ before any file is opened.
 
 ## Testing
 
-1,046 tests in `tests/unit`, plus a separate local COM gate battery that drives a
+1,291 tests in `tests/unit`, plus a separate local COM gate battery that drives a
 real Excel. On top of the suite, this release went through the family's
 gauntlet:
 
