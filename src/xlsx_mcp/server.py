@@ -225,6 +225,21 @@ def _tool(pack: str):
 # ------------------------------------------------------- placeholder reader
 
 
+def _update_check_status() -> dict:
+    """The update report, without its cache path.
+
+    THIS is the server's one and only on-demand check: it may ask PyPI, at
+    most once every 24 hours, with a two-second cap. No other tool path can
+    reach the network, nothing runs at startup, and a check that fails or is
+    switched off reports that fact rather than going quiet. state is one of:
+    disabled, update_available, current, unknown. Never raises.
+    """
+    try:
+        return _upd.status()
+    except Exception:
+        return {"state": "unknown", "note": _upd.NOTE_UNKNOWN}
+
+
 @_tool("lite")
 def get_server_info() -> dict:
     """Report the KitchenSink4XL server build: version, the active tool
@@ -249,8 +264,12 @@ def get_server_info() -> dict:
             "verify_com_default": _package.com_verify_default(),
         },
     }
-    # The server's one and only update surface: a cached line, added when a
-    # newer stable release exists. Reads no network and never raises.
+    # The server's one and only update surface, and its one and only path to
+    # the network: an on-demand check, at most once every 24 hours, two-second
+    # cap, off under KS4XL_UPDATE_CHECK=off. Nothing runs at startup, no other
+    # tool can fire it, a failed check reports the failure, and this never
+    # raises.
+    out["update_check"] = _update_check_status()
     notice = _upd.update_notice()
     if notice:
         out["update"] = notice
@@ -1875,12 +1894,8 @@ def main() -> None:
     disabled = _startup_disabled_names()
     if disabled:
         mcp.add_transform(_Visibility(False, names=disabled))
-    # Fire and forget: a daemon thread asks PyPI whether a newer release
-    # exists (at most every 14 days, off entirely under
-    # KS4XL_NO_UPDATE_CHECK). Nothing waits on it, nothing it does can
-    # delay or break serving, and the answer only ever appears as one line
-    # in get_server_info.
-    _upd.start_background_check()
+    # No update check here. It runs ON DEMAND, inside get_server_info, and
+    # nowhere else: startup starts no thread and asks PyPI nothing.
     mcp.run()
 
 
