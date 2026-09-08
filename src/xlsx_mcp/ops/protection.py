@@ -29,7 +29,6 @@ blocked except selecting cells).
 
 from __future__ import annotations
 
-from typing import Any
 
 from ..core.errors import TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage

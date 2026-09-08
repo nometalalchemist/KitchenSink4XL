@@ -177,6 +177,28 @@ def test_pack_tables_match_measurement():
         )
 
 
+def test_llms_txt_pack_costs_match_measurement():
+    """The agent-facing doc's per-pack costs are measured too.
+
+    The headline lite/full figures were guarded from the first release; the
+    pack line under them was not, and it drifted: it published `design 9
+    tools / 6.1k` against a measured 4.1k until the 2026-09-08 trim pass
+    caught it by hand. A figure nobody measures is a figure that goes stale,
+    so this one is measured.
+    """
+    surf = _run("measure_surface.py")
+    rows = dict((p, t) for p, _n, t in
+                re.findall(r"^([a-z][\w-]*)\s+(\d+)\s+~?([\d.]+k)\s*$",
+                           surf, re.M))
+    text = (ROOT / "docs" / "llms.txt").read_text(encoding="utf-8")
+    line = next((ln for ln in text.splitlines() if "Pack costs" in ln), None)
+    assert line, "llms.txt no longer carries a pack-costs line"
+    for pack in ("design", "io", "com"):
+        assert rows[pack] in line, (
+            f"llms.txt pack costs claim something other than the measured "
+            f"{pack} {rows[pack]}: {line!r}")
+
+
 def test_calc_labels_in_llms_txt_are_the_wire_values():
     """The agent-facing doc uses the labels the code actually emits.
 

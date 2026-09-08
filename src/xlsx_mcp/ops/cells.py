@@ -29,6 +29,7 @@ from typing import Any
 
 from ..core import arrays as _arrays
 from ..core import calc as _calc
+from ..core import locate as _locate
 from ..core import refs as _refs
 from ..core.errors import RangeOutOfBounds, TargetNotFound, XlMcpError
 from ..core.package import WorkbookPackage
@@ -75,7 +76,15 @@ def read_range(path: str, location: Any, values: str = "cached",
             "value_mode": values, "values": vals,
         }
         if has_formula and values != "formula":
-            out["labels"] = labels
+            # Grouped by label, listing only the cells that are NOT ordinary;
+            # labels_default says what the unlisted ones carry. Identical
+            # information to the old parallel matrix, which spent 52% of this
+            # payload repeating the word "value" (fat audit, finding 3).
+            sparse = gridio.sparse_labels(
+                labels, min_row=grid.min_row, min_col=grid.min_col)
+            if sparse:
+                out["labels"] = sparse
+                out["labels_default"] = gridio.LABEL_DEFAULT
             note = gridio.absent_note(labels)
             if note:
                 out["warning"] = note
@@ -925,21 +934,52 @@ def get_cells(path: str, cells: list, values: str = "cached",
         if values in ("cached", "both") else None
     try:
         base = formula_wb if formula_wb is not None else cached_wb
-        out = []
+        # Resolve every address FIRST. The honest-label probe is per sheet,
+        # not per cell: reaching read_matrix once per cell re-opened and
+        # re-parsed the whole workbook for each one (501 opens and 5.3 s for
+        # 500 cells, against 2 opens and 31 ms for the equivalent read_range;
+        # fat audit 2026-09-08, finding 2). The labels are unchanged.
+        grids = [_single_cell_grid(base, item, i, sheet, path=path)
+                 for i, item in enumerate(cells)]
+        masks: dict[str, Any] = {}
+        if values == "cached":
+            by_sheet: dict[str, list[tuple[int, int]]] = {}
+            for g in grids:
+                by_sheet.setdefault(g.sheet, []).append((g.min_row, g.min_col))
+            for sheet_name, coords in by_sheet.items():
+                masks[sheet_name] = gridio.formula_mask_cells(
+                    path, sheet_name, coords)
+        sheets = {g.sheet for g in grids}
+        one_sheet = sheets.pop() if len(sheets) == 1 else None
+        rows: list[list[Any]] = []
+        labelled: dict[str, list[str]] = {}
         absent = 0
-        for i, item in enumerate(cells):
-            grid = _single_cell_grid(base, item, i, sheet, path=path)
+        for grid in grids:
             vals, labels, _hf = gridio.read_matrix(
                 grid, mode=values, formula_wb=formula_wb, cached_wb=cached_wb,
-                path=path)
+                path=path,
+                mask=masks[grid.sheet] if values == "cached"
+                else gridio.NO_MASK)
             label = labels[0][0]
-            if label == "absent":
+            if label == _calc.LABEL_ABSENT:
                 absent += 1
-            out.append({
-                "sheet": grid.sheet, "cell": grid.a1,
-                "value": gridio.compact_value(vals[0][0]), "label": label})
+            addr = grid.a1 if one_sheet is not None \
+                else _locate.qualify_a1(grid.sheet, grid.a1)
+            rows.append([addr, gridio.compact_value(vals[0][0])])
+            if label != gridio.LABEL_DEFAULT:
+                labelled.setdefault(label, []).append(addr)
+        # fields names the row shape, so the two cases (all one sheet, or
+        # sheet-qualified addresses) read the same way; the per-cell "sheet"
+        # and "label" keys they replace were 33 characters x N of pure
+        # repetition (fat audit, finding 4).
         result: dict[str, Any] = {
-            "count": len(out), "value_mode": values, "cells": out}
+            "count": len(rows), "value_mode": values,
+            "fields": ["cell", "value"], "cells": rows}
+        if one_sheet is not None:
+            result["sheet"] = one_sheet
+        if labelled:
+            result["labels"] = labelled
+            result["labels_default"] = gridio.LABEL_DEFAULT
         if absent:
             result["warning"] = f"{absent} of them: " + gridio.ABSENT_WARNING
         return result

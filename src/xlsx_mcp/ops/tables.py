@@ -19,7 +19,6 @@ import re
 from typing import Any
 
 from openpyxl.utils import (
-    column_index_from_string,
     get_column_letter,
     range_boundaries,
 )

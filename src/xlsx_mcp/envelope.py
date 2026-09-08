@@ -306,7 +306,13 @@ class RefusalResult(_FmcpToolResult):
     the flag changes."""
 
     def __init__(self, payload: dict):
-        text = _json.dumps(payload, indent=2, ensure_ascii=False)
+        # Compact: the refusal payload is identical, the whitespace is not
+        # information, and a refusal that arrives during a long agent loop is
+        # paid for like any other result (fat audit 2026-09-08, finding 1).
+        # structured_content STAYS here: isError forces the CallToolResult
+        # path regardless, and the mapping protocol below reads it back.
+        text = _json.dumps(payload, ensure_ascii=False,
+                           separators=(",", ":"))
         super().__init__(
             content=text, structured_content=payload, is_error=True
         )

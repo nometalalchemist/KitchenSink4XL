@@ -114,6 +114,28 @@ mcp = FastMCP(
 # ------------------------------------------------------- boundary envelope
 
 
+#: Every result crosses the wire ONCE, compact.
+#:
+#: It used to cross twice: pretty-printed in `content` and again, whole, in
+#: `structuredContent`. The indent alone added +48-80% to array-heavy payloads
+#: and the duplication doubled what was left, so a 200-row read cost 22,666
+#: tokens to deliver 6,479 tokens of payload (fat audit 2026-09-08, finding 1).
+#:
+#: The duplication was not gratuitous: declaring an outputSchema is what
+#: obliges a client to expect structuredContent, and this server declared one
+#: on all 69 tools. Every one of them was the contentless
+#: {"type": "object", "additionalProperties": true} -- 828 tokens of surface
+#: spent buying no validation whatsoever, while committing every response to
+#: being sent twice. So the schema goes (see _tool) and the second copy goes
+#: with it. Nothing about what a caller LEARNS from a result changes: the same
+#: JSON object, same keys, same values, in content[0].text.
+#:
+#: Refusals keep structured_content. They carry isError, which forces the
+#: CallToolResult path anyway, they are small, and RefusalResult's mapping
+#: protocol reads the payload back out of it in-process.
+_COMPACT = (",", ":")
+
+
 class _SuccessEnvelope(_FmcpMiddleware):
     """Section 7.1 success fields at the MCP boundary: object results gain
     ok (and file, when the call named one). In-process calls bypass this
@@ -127,21 +149,22 @@ class _SuccessEnvelope(_FmcpMiddleware):
     async def on_call_tool(self, context, call_next):
         result = await call_next(context)
         sc = getattr(result, "structured_content", None)
-        if isinstance(sc, dict) and "ok" not in sc:
+        if getattr(result, "is_error", False) or not isinstance(sc, dict):
+            return result
+        out: dict[str, Any] = sc
+        if "ok" not in sc:
             args = getattr(context.message, "arguments", None) or {}
-            out: dict[str, Any] = {"ok": True}
+            out = {"ok": True}
             for key in self._FILE_KEYS:
                 value = args.get(key)
                 if isinstance(value, str):
                     out["file"] = value
                     break
             out.update(sc)
-            return _FmcpToolResult(
-                content=_json.dumps(out, indent=2, ensure_ascii=False,
-                                    default=str),
-                structured_content=out,
-            )
-        return result
+        return _FmcpToolResult(
+            content=_json.dumps(out, ensure_ascii=False, default=str,
+                                separators=_COMPACT),
+        )
 
 
 mcp.add_middleware(_SuccessEnvelope())
@@ -180,6 +203,17 @@ def _tool(pack: str):
             annotations={
                 "readOnlyHint": _readonly.read_only_hint(fn.__name__)
             },
+            # No outputSchema. Every tool here returns `dict`, from which
+            # fastmcp derives {"type": "object", "additionalProperties": true}
+            # -- a schema that validates nothing, costs 828 tokens of surface
+            # across 69 tools, and obliges the client to expect a second,
+            # duplicate copy of every result in structuredContent. A schema
+            # that bought real validation would be worth both; this one bought
+            # neither. Declaring none is the honest shape (fat audit
+            # 2026-09-08, finding 1). If a tool ever gains a real output
+            # schema, it gets one HERE, per tool, and pays for its own
+            # structuredContent.
+            output_schema=None,
         )
         mcp.add_tool(tool)
         _packs.register(fn.__name__, None if pack == "lite" else pack, tool)

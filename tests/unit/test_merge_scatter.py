@@ -8,7 +8,12 @@ from __future__ import annotations
 import openpyxl
 import pytest
 
-from xlsx_mcp.core.errors import RangeOutOfBounds, TargetNotFound, XlMcpError
+from conftest import cell_rows
+from xlsx_mcp.core.errors import (
+    RangeOutOfBounds,
+    TargetNotFound,
+    XlMcpError,
+)
 from xlsx_mcp.ops import cells as _cells
 
 
@@ -96,15 +101,16 @@ def test_get_cells_mixed_addresses_and_labels(tmp_path):
     out = _cells.get_cells(
         p, ["A1", {"cell": "B1"}, {"cell": "B2"}], values="both")
     assert out["count"] == 3
-    assert out["cells"][0] == {"sheet": "Data", "cell": "A1",
-                               "value": "h", "label": "value"}
-    assert out["cells"][1]["value"] == 10
+    rows = cell_rows(out)
+    assert rows[0] == {"sheet": "Data", "cell": "A1",
+                       "value": "h", "label": "value"}
+    assert rows[1]["value"] == 10
     # a never-calculated formula is labelled absent, never passed off as blank
-    assert out["cells"][2]["label"] == "absent"
+    assert rows[2]["label"] == "absent"
     assert "absent" in out["warning"]
     # formula mode returns the formula string
     out = _cells.get_cells(p, [{"cell": "B2"}], values="formula")
-    assert out["cells"][0]["value"] == "=A2*2"
+    assert cell_rows(out)[0]["value"] == "=A2*2"
 
 
 def test_get_cells_refusals(tmp_path):

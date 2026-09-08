@@ -23,6 +23,7 @@ import zipfile
 import openpyxl
 import pytest
 
+from conftest import cell_rows, label_at
 from xlsx_mcp.core import calc as core_calc
 from xlsx_mcp.ops import cells, dataio, formulas, sortfilter, structure, tables
 
@@ -250,9 +251,8 @@ def test_neutralized_text_is_never_labelled_a_formula(tmp_path):
     rr = cells.read_range(str(p), "A1:A2", values="both", sheet="S")
     gc = cells.get_cells(str(p), ["A2"], values="both", sheet="S")
     au = formulas.audit_formulas(str(p), sheet="S")
-    assert all(lab == "value" for row in rr.get("labels", [["value"]])
-               for lab in row)
-    assert gc["cells"][0]["label"] == "value"
+    assert rr.get("labels") in (None, {})
+    assert cell_rows(gc)[0]["label"] == "value"
     assert au["formulas"]["count"] == 0
     assert au["missing_cached_values"]["count"] == 0
 
@@ -317,14 +317,14 @@ def _uncalculated(tmp_path, name="stale.xlsx"):
 def test_read_range_default_mode_labels_the_uncalculated_formula(tmp_path):
     p = _uncalculated(tmp_path)
     out = cells.read_range(str(p), "A1:B5", values="cached", sheet="D")
-    assert out["labels"][4][1] == "absent"
+    assert label_at(out, "B5") == "absent"
     assert "warning" in out
 
 
 def test_get_cells_labels_absent(tmp_path):
     p = _uncalculated(tmp_path)
     out = cells.get_cells(str(p), ["B5"], values="cached", sheet="D")
-    assert out["cells"][0]["label"] == "absent"
+    assert cell_rows(out)[0]["label"] == "absent"
     assert "warning" in out
 
 
@@ -394,7 +394,7 @@ def test_a_real_cached_value_is_labelled_cached_not_absent(tmp_path):
     shutil.move(tmp, p)
     out = cells.read_range(str(p), "A1:A2", values="cached", sheet="D")
     assert out["values"][1][0] == 6
-    assert out["labels"][1][0] == "cached"
+    assert label_at(out, "A2") == "cached"
     assert "warning" not in out
 
 
@@ -508,12 +508,13 @@ def test_formula_mode_labels_a_formula_cell_formula_not_absent(tmp_path):
     wb.close()
     formulas.set_formula(str(p), "B1", "=A1*2", sheet="S")
     out = cells.get_cells(str(p), ["A1", "B1"], values="formula", sheet="S")
-    assert [c["label"] for c in out["cells"]] == ["value",
-                                                 core_calc.LABEL_FORMULA]
-    assert out["cells"][1]["value"] == "=A1*2"
+    assert [c["label"] for c in cell_rows(out)] == [
+        "value", core_calc.LABEL_FORMULA]
+    assert cell_rows(out)[1]["value"] == "=A1*2"
     assert "warning" not in out
     both = cells.get_cells(str(p), ["B1"], values="both", sheet="S")
-    assert both["cells"][0]["label"] == "absent"  # unchanged where it is true
+    # unchanged where it is true
+    assert cell_rows(both)[0]["label"] == "absent"
     assert "warning" in both
 
 
@@ -603,7 +604,7 @@ def test_formula_mode_returns_a_string_for_an_array_formula(tmp_path):
     out = cells.read_range(str(p), "A1", values="formula", sheet="S")
     assert out["values"][0][0] == "=SORT(B1:B2)"
     gc = cells.get_cells(str(p), ["A1"], values="formula", sheet="S")
-    assert gc["cells"][0]["value"] == "=SORT(B1:B2)"
+    assert cell_rows(gc)[0]["value"] == "=SORT(B1:B2)"
 
 
 def test_errors_keep_their_original_order_in_a_sort_like_excel(tmp_path):

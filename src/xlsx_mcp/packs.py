@@ -121,15 +121,37 @@ def tool_names() -> dict[str, list[str]]:
 
 
 def approx_tokens(tool: object) -> int:
-    """Rough per-tool client cost: description + JSON schema at ~4 chars per
-    token. Honest enough for the informed-approval report; not a billing
-    meter."""
-    desc = getattr(tool, "description", "") or ""
+    """Rough per-tool client cost at ~4 chars per token. Honest enough for the
+    informed-approval report; not a billing meter.
+
+    Measured off the tool as tools/list actually serializes it, not off a
+    hand-picked pair of fields. It used to sum description + inputSchema only,
+    which silently dropped outputSchema, annotations, _meta, name and title:
+    the published lite/full figures understated the real wire cost by ~16%
+    (fat audit 2026-09-08). A server whose pitch is that it tells you what it
+    costs does not get to publish the flattering subset, so the estimator
+    measures what it publishes.
+
+    Compact separators, because the transport uses them: the default
+    json.dumps spacing is not on the wire and counting it overshot the real
+    69-tool surface by ~1,200 tokens. Verified against a live stdio
+    tools/list, which is the only figure that can settle it.
+    """
     try:
-        schema = json.dumps(getattr(tool, "parameters", {}) or {})
-    except (TypeError, ValueError):
-        schema = ""
-    return round((len(desc) + len(schema)) / 4)
+        payload = tool.to_mcp_tool().model_dump(  # type: ignore[attr-defined]
+            exclude_none=True, by_alias=True, mode="json")
+        return round(len(json.dumps(payload, ensure_ascii=False,
+                                    separators=(",", ":"))) / 4)
+    except Exception:  # noqa: BLE001
+        # Anything that is not a live fastmcp Tool (a stub in a test, a future
+        # fastmcp that renames the method) falls back to the old estimate
+        # rather than breaking the surface report.
+        desc = getattr(tool, "description", "") or ""
+        try:
+            schema = json.dumps(getattr(tool, "parameters", {}) or {})
+        except (TypeError, ValueError):
+            schema = ""
+        return round((len(desc) + len(schema)) / 4)
 
 
 def pack_cost(pack: str) -> int:

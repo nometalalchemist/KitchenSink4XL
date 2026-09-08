@@ -199,7 +199,18 @@ def test_menu_matches_registry_and_costs():
 #: which is a whole capability class that had no code at all. Those are
 #: item-shape schemas on parameters whose shape is not guessable, and they
 #: stay.
-LITE_TOKEN_CEILING = 14_200
+#:
+#: RE-BASED 2026-09-08, same headroom in a different unit. The ceiling was
+#: 14,200 against an estimator that summed description + inputSchema only and
+#: understated the real wire by ~16%. That estimator now measures the whole
+#: tools/list entry (fat audit finding 10), so every figure moved even though
+#: the surface did not: lite reads 14,548 where it read 13,836, while the
+#: surface itself got 610 tokens SMALLER in the same pass (the contentless
+#: outputSchema went away). The author-set headroom was 2.6% over the
+#: measurement; 14,548 x 1.026 is 14,900, so that is the ceiling in the
+#: honest unit. This is a unit conversion, not a relaxation: a lite surface
+#: that grows by more than it could have grown yesterday still goes red.
+LITE_TOKEN_CEILING = 14_900
 
 
 def test_pack_bills_cost_aware():
@@ -366,7 +377,11 @@ def test_toggle_round_trip_and_signpost(restore_enabled):
 
                 res = await c.call_tool(
                     "enable_tools", {"packs": ["design"]})
-                out["enable"] = res.structured_content
+                # Success results cross the wire ONCE, as compact JSON in
+                # content; structuredContent (and the outputSchema that
+                # obliged it) is gone by design.
+                assert res.structured_content is None
+                out["enable"] = json.loads(res.content[0].text)
                 await asyncio.sleep(0.1)
                 out["notes_enable"] = list(notes)
                 out["after_enable"] = {

@@ -62,6 +62,26 @@ FAILS: list[str] = []
 NOTES: list[str] = []
 
 
+
+def _label_at(payload, addr):
+    """The label a read payload carries for one address.
+
+    Reads send labels sparsely (grouped by label, listing only the cells that
+    are not ordinary; anything unlisted carries labels_default). Identical
+    information to the parallel matrix this used to index, at a fraction of
+    the tokens (fat audit 2026-09-08, finding 3).
+    """
+    for label, addrs in (payload.get("labels") or {}).items():
+        if addr in addrs:
+            return label
+    return payload.get("labels_default", "value")
+
+
+def _cell_value_label(payload, i):
+    """(value, label) for the i-th cell of a get_cells payload, whose rows are
+    arrays named by its `fields` list."""
+    row = dict(zip(payload["fields"], payload["cells"][i]))
+    return row["value"], _label_at(payload, row["cell"])
 def check(cond: bool, label: str) -> bool:
     if cond:
         print(f"PASS {label}")
@@ -512,10 +532,10 @@ def item3(scratch: Path) -> None:
     ex = dataio.export_range(str(p), "A1:B5", sheet="D")
     ef = dataio.export_file(str(p), fmt="csv")
     au = formulas.audit_formulas(str(p), sheet="D")
-    check(rr["labels"][4][1] == "absent" and "warning" in rr,
+    check(_label_at(rr, "B5") == "absent" and "warning" in rr,
           "3.1a read_range(both): the uncalculated SUM is labelled 'absent' "
           "with the warning")
-    check(gc["cells"][0]["label"] == "absent" and "warning" in gc,
+    check(_cell_value_label(gc, 0)[1] == "absent" and "warning" in gc,
           "3.1b get_cells: 'absent' label + warning")
     check("warning" in qr and qr.get("uncalculated_cells") == ["B5"],
           "3.1c query_range(aggregate): names the uncalculated cell instead "
@@ -533,7 +553,7 @@ def item3(scratch: Path) -> None:
 
     # ---- 3.2 the DEFAULT read mode (cached) must label too
     rr_c = cells.read_range(str(p), "A1:B5", values="cached", sheet="D")
-    check(rr_c.get("labels") and rr_c["labels"][4][1] == "absent"
+    check(_label_at(rr_c, "B5") == "absent"
           and "warning" in rr_c,
           "3.2 read_range values='cached' (the DEFAULT) labels the absent "
           "formula instead of returning a silent blank")
@@ -545,7 +565,7 @@ def item3(scratch: Path) -> None:
                             aggregate=[{"column": "Amount", "func": "sum"}])
     ex2 = dataio.export_range(str(p), "A1:B5", sheet="D")
     gt2 = tables.get_table(str(p), "Tbl", values="cached")
-    check(rr2["values"][4][1] == 60 and rr2["labels"][4][1] == "cached"
+    check(rr2["values"][4][1] == 60 and _label_at(rr2, "B5") == "cached"
           and "warning" not in rr2,
           "3.3a read_range: after recalculate the value is 60, labelled "
           "'cached', warning gone")
@@ -562,7 +582,7 @@ def item3(scratch: Path) -> None:
     # ---- 3.4 an edit AFTER the recalc invalidates the cache: say so
     cells.set_cell(str(p), "B2", 100, sheet="D")
     rr3 = cells.read_range(str(p), "A1:B5", values="both", sheet="D")
-    check(rr3["labels"][4][1] == "absent" and "warning" in rr3,
+    check(_label_at(rr3, "B5") == "absent" and "warning" in rr3,
           "3.4 an edit drops the caches and every read says 'absent' again "
           "rather than serving the pre-edit number as current")
 
@@ -580,12 +600,11 @@ def item3(scratch: Path) -> None:
     rr4 = cells.read_range(str(p2), "A1:A3", values="both", sheet="S")
     gc4 = cells.get_cells(str(p2), ["A2", "A3"], values="both", sheet="S")
     au4 = formulas.audit_formulas(str(p2), sheet="S")
-    labs4 = rr4.get("labels") or [["value"]]
-    check(all(lab == "value" for row in labs4 for lab in row)
-          and "warning" not in rr4,
+    check(not rr4.get("labels") and "warning" not in rr4,
           f"3.5b read_range treats neutralized text as a VALUE, not a "
           f"formula ({rr4.get('labels')})")
-    check(all(c["label"] == "value" for c in gc4["cells"]),
+    check(all(_cell_value_label(gc4, i)[1] == "value"
+              for i in range(len(gc4["cells"]))),
           "3.5c get_cells labels neutralized text 'value'")
     check(au4["formulas"]["count"] == 0,
           f"3.5d audit_formulas does not report neutralized text as a "
