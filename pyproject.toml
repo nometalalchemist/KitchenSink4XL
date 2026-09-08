@@ -8,7 +8,7 @@ license-files = ["LICENSE", "NOTICE.md"]
 authors = [{ name = "nometalalchemist" }]
 keywords = [
     "mcp", "excel", "xlsx", "ooxml", "spreadsheet", "claude",
-    "model-context-protocol", "openpyxl", "xlsxwriter", "pivot-tables",
+    "model-context-protocol", "openpyxl", "pivot-tables",
     "formulas", "conditional-formatting", "data-validation", "charts",
     "round-trip-safety", "tiered-loading", "recalculation", "lambda",
     "named-ranges", "csv", "office", "com",
@@ -40,7 +40,6 @@ dependencies = [
     # unpinned fastmcp; a minor bump moved the visibility API mid-build).
     "fastmcp>=3.4,<4",
     "openpyxl",
-    "xlsxwriter",
     # Ported-infrastructure deps: lxml backs the raw OOXML surgery escape
     # hatch (DESIGN Section 2.4); regex backs the caller-pattern ReDoS guard
     # (core/_regex.py).

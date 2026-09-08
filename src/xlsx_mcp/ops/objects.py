@@ -33,7 +33,6 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
-from ..core import hazard as _hazard
 from ..core.errors import (
     TargetNotFound,
     ValidationFailed,

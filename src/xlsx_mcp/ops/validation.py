@@ -22,7 +22,6 @@ from __future__ import annotations
 import zipfile
 from typing import Any, Callable
 
-from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import range_boundaries
 
 from ..core import hazard as _hazard

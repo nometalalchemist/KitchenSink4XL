@@ -756,9 +756,9 @@ class TestGatedRefusalEnvelope:
 
         out = asyncio.run(run())
         # the disabled refusal keeps its excellent content AND the shape
-        assert '"code": "NOT_FOUND"' in out["disabled"]
+        assert '"code":"NOT_FOUND"' in out["disabled"]
         assert "enable_tools(packs=['design'])" in out["disabled"]
         assert '"hint"' in out["disabled"]
         # the unknown-tool refusal is enveloped too
-        assert '"code": "NOT_FOUND"' in out["unknown"]
+        assert '"code":"NOT_FOUND"' in out["unknown"]
         assert '"hint"' in out["unknown"]

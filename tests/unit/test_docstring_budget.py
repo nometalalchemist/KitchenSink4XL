@@ -6,11 +6,15 @@ Quality-A discipline):
 - NO EM DASHES anywhere in a tool description. Enforced NOW: the tiny Phase 0
   surface passes it, and it stays green as the engine lands.
 - DOCSTRING BUDGET: every description in 60-130 tokens (chars/4), multiplex
-  tools to ~350. GATED until the real surface exists: flip SURFACE_READY to
-  True (a one-line change) when the Phase 3 families land and the budget
-  becomes enforceable across the whole surface. Until then the budget test
-  SKIPS cleanly rather than erroring, so the gate is wired but not yet
-  binding.
+  tools to ~350. Binding across the whole registered surface since the
+  Phase 3 families landed (SURFACE_READY below).
+
+The MULTIPLEX list is an exemption, so it is audited like one. It now holds
+26 of the 69 registered tools, and those 26 carry 54% of the description
+budget; a planning entry for manage_power_query sat in it for months after
+the tool was dropped (fat audit 2026-09-08, finding 6). Adding a name here
+is a decision to spend up to 220 extra tokens on it, every session it is
+loaded.
 
 MULTIPLEX pre-lists the planned high-traffic / action-parameter tools
 (DESIGN Section 11) so later phases inherit the ~350 cap without touching
@@ -37,7 +41,7 @@ MULTIPLEX = {
     "diagnose_workbook", "manage_worksheet", "manage_backups",
     "manage_table", "manage_name", "manage_comment", "manage_hyperlink",
     "manage_conditional_format", "manage_data_validation",
-    "manage_power_query", "modify_grid_structure", "audit_formulas",
+    "modify_grid_structure", "audit_formulas",
     "com_manage_pivot", "enable_tools", "disable_tools",
     "query_range",
     # Phase 3c: set_merge is an action-parameter tool (merge/unmerge/list);

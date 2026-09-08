@@ -10,6 +10,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
+from conftest import label_at
 from xlsx_mcp.core.errors import RangeOutOfBounds, XlMcpError
 from xlsx_mcp.ops import cells
 
@@ -45,7 +46,7 @@ def test_read_range_cached_and_formula(book):
 
 def test_read_absent_formula_is_labelled(book):
     r = cells.read_range(str(book), {"cell": "B4"}, values="both")
-    assert r["labels"][0][0] == "absent"   # openpyxl wrote no cache
+    assert label_at(r, "B4") == "absent"   # openpyxl wrote no cache
     assert "warning" in r
 
 

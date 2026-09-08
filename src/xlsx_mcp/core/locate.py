@@ -57,7 +57,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from openpyxl.utils import (
-    column_index_from_string,
     coordinate_to_tuple,
     get_column_letter,
     range_boundaries,
@@ -101,6 +100,16 @@ MAX_ROW = 1_048_576
 MAX_COL = 16_384
 MAX_CELL_CHARS = 32_767
 
+
+def qualify_a1(sheet: str, a1: str) -> str:
+    """'Data!B7', quoting the sheet name the way Excel does when it is not a
+    bare identifier. One implementation, so a response that has to say WHICH
+    sheet an address is on spells it the same way the formula bar does."""
+    if re.search(r"[^A-Za-z0-9_]", sheet):
+        sheet = "'" + sheet.replace("'", "''") + "'"
+    return f"{sheet}!{a1}"
+
+
 _MAX_LISTED = 25
 _TABLE_PARTS = ("all", "data", "headers", "totals")
 _MATCH_MODES = ("exact", "contains")
@@ -138,10 +147,7 @@ class ResolvedGrid:
 
     @property
     def sheet_qualified_a1(self) -> str:
-        name = self.sheet
-        if re.search(r"[^A-Za-z0-9_]", name):
-            name = "'" + name.replace("'", "''") + "'"
-        return f"{name}!{self.a1}"
+        return qualify_a1(self.sheet, self.a1)
 
     def as_dict(self) -> dict:
         return {
@@ -791,5 +797,5 @@ def resolve_location(wb, location: Any, *,
 __all__ = [
     "ResolvedGrid", "resolve_location", "true_used_range",
     "SELECTORS", "RESERVED_SELECTORS", "make_anchor", "grid_fingerprint",
-    "MAX_ROW", "MAX_COL", "MAX_CELL_CHARS",
+    "MAX_ROW", "MAX_COL", "MAX_CELL_CHARS", "qualify_a1",
 ]

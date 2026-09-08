@@ -116,11 +116,6 @@ class CellRead:
     label: str
 
 
-def _cell_value(cell, data_only: bool):
-    v = cell.value
-    return v
-
-
 def formula_mask(path: str, grid) -> dict[tuple[int, int], str] | None:
     """Which cells of a rectangle actually hold a formula, and its text.
 
@@ -159,8 +154,72 @@ def formula_mask(path: str, grid) -> dict[tuple[int, int], str] | None:
                 pass
 
 
+def formula_mask_cells(path: str, sheet: str, coords
+                       ) -> dict[tuple[int, int], str] | None:
+    """The same honest-label probe as formula_mask, over a SET of scattered
+    cells on one sheet, in ONE workbook open.
+
+    get_cells used to reach read_matrix (and therefore formula_mask) once per
+    requested cell, which is one full openpyxl parse per cell: 500 cells cost
+    501 opens and 5.3 seconds where the equivalent read_range cost 2 opens and
+    31 ms (fat audit 2026-09-08, finding 2). Every one of those parses re-read
+    the same unchanged file, so the redundancy was pure: the labels the probe
+    produces are identical, only the opens go away.
+
+    Bounded by the requested ROWS rather than by their bounding rectangle, and
+    clamped to the sheet's own last row, so a scatter of A1 and A900000 does
+    not stream the empty space between them.
+
+    Returns None if the probe could not run, matching formula_mask: a read
+    degrades to its old unlabelled behavior rather than failing.
+    """
+    if not coords:
+        return {}
+    import openpyxl
+    wb = None
+    want = set(coords)
+    lo = min(r for r, _c in want)
+    hi = max(r for r, _c in want)
+    try:
+        p = check_path(path, "probe formulas")
+        wb = openpyxl.load_workbook(
+            p, data_only=False, read_only=True,
+            keep_vba=p.lower().endswith(".xlsm"))
+        ws = wb[sheet]
+        last = ws.max_row
+        if isinstance(last, int) and last > 0:
+            hi = min(hi, last)
+        if hi < lo:
+            return {}
+        out: dict[tuple[int, int], str] = {}
+        for row in ws.iter_rows(min_row=lo, max_row=hi):
+            for cell in row:
+                key = (cell.row, cell.column)
+                if key not in want:
+                    continue
+                text = _calc.formula_text_of(cell)
+                if text is not None:
+                    out[key] = text
+        return out
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        if wb is not None:
+            try:
+                wb.close()
+            except Exception:
+                pass
+
+
+#: read_matrix computes its own formula probe unless the caller passes one.
+#: A caller reading MANY rectangles out of one workbook (get_cells) passes a
+#: single probe covering all of them; None is a legitimate value (the probe
+#: ran and could not answer), which is why the default is a sentinel.
+NO_MASK = object()
+
+
 def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None,
-                path: str | None = None
+                path: str | None = None, mask: Any = NO_MASK
                 ) -> tuple[list[list[Any]], list[list[str]], bool]:
     """Return (values, labels, has_formula) for a resolved rectangle.
 
@@ -172,6 +231,9 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None,
     The caller supplies whichever loads the mode needs. In 'cached' mode,
     passing `path` buys the honest label (a streaming formula probe over the
     rectangle); without it the mode falls back to the old blind labelling.
+    `mask` overrides that probe with one the caller already ran (see
+    formula_mask_cells); None is a real value meaning "the probe could not
+    answer", so the default is the NO_MASK sentinel, not None.
     """
     if mode not in VALUE_MODES:
         raise XlMcpError(
@@ -181,8 +243,9 @@ def read_matrix(grid, *, mode: str, formula_wb=None, cached_wb=None,
     has_formula = False
     fws = formula_wb[grid.sheet] if formula_wb is not None else None
     cws = cached_wb[grid.sheet] if cached_wb is not None else None
-    mask = formula_mask(path, grid) \
-        if (mode == "cached" and path is not None) else None
+    if mask is NO_MASK:
+        mask = formula_mask(path, grid) \
+            if (mode == "cached" and path is not None) else None
     for r in range(grid.min_row, grid.max_row + 1):
         vrow: list[Any] = []
         lrow: list[str] = []
@@ -246,6 +309,43 @@ ABSENT_WARNING = (
     "in Excel to populate them before trusting these numbers")
 
 
+#: The label an ordinary cell carries: a literal value, nothing to report.
+#: It is what an address NOT listed in a sparse label set carries, which is
+#: why the wire shape names it in `labels_default` instead of assuming it.
+LABEL_DEFAULT = _calc.LABEL_VALUE
+
+
+def sparse_labels(labels, *, min_row: int = 1, min_col: int = 1,
+                  sheet: str | None = None) -> dict[str, list[str]]:
+    """Group a dense label matrix by label, listing only the addresses whose
+    label is not the default.
+
+    The labelling itself is the honest-calc contract and is untouched; this
+    is its ENCODING. A dense parallel matrix spends one entry per cell to say
+    "value" about cells that are 87% ordinary: on a 200x8 read it was 13,478
+    of the payload's 25,757 characters, 52%, of which 1,400 of 1,608 entries
+    were the literal string "value" (fat audit 2026-09-08, finding 3).
+
+    Grouped-by-label is lossless against the dense form (anything unlisted
+    carries LABEL_DEFAULT) and is never larger: an address costs fewer
+    characters than a quoted label plus its comma, so the worst case, where
+    no cell is ordinary, still comes out ahead.
+
+    `sheet` qualifies every address ('Data!B7') for callers whose cells can
+    span sheets; omitted, the addresses are bare.
+    """
+    out: dict[str, list[str]] = {}
+    for r, row in enumerate(labels):
+        for c, label in enumerate(row):
+            if label == LABEL_DEFAULT:
+                continue
+            addr = a1(min_row + r, min_col + c)
+            if sheet is not None:
+                addr = _locate.qualify_a1(sheet, addr)
+            out.setdefault(label, []).append(addr)
+    return out
+
+
 def absent_note(labels) -> str | None:
     """The absent-cache warning if any label in a matrix says 'absent'."""
     for row in labels:
@@ -266,5 +366,6 @@ def compact_value(v: Any) -> Any:
 __all__ = [
     "MAX_READ_CELLS", "VALUE_MODES", "open_wb", "resolve", "guard_cell_count",
     "a1", "CellRead", "read_matrix", "compact_value", "formula_mask",
-    "absent_note", "ABSENT_WARNING",
+    "formula_mask_cells", "NO_MASK", "absent_note", "ABSENT_WARNING",
+    "sparse_labels", "LABEL_DEFAULT",
 ]
