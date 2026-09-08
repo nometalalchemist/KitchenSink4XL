@@ -5,7 +5,7 @@
 > automatic backup and committed by an atomic verified save. Every value a
 > read returns carries a label saying whether it is current.
 
-Release: v1.0.0
+Release: v1.1.0
 MCP registry name: io.github.nometalalchemist/kitchensink4xl
 Transport: stdio.
 Platform: the file tier is cross-platform and needs no Excel installation.
