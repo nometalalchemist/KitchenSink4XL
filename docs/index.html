@@ -4,17 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
-  PRE-PRODUCTION. Staged on branch site-preprod. Nothing here is published.
-  Before the first deploy: fill every {PLACEHOLDER}, unhide <section id="new">,
-  re-run the numbers, and re-date the comparison survey line.
-
   SHIPPED NUMBERS (re-measured 2026-09-06 for the 1.1.0 release):
     129   distinct operations (.venv/Scripts/python.exe -X utf8 scripts/count_operations.py)
     69    registered tools (.venv/Scripts/python.exe -X utf8 scripts/measure_surface.py)
     1291  tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
     40    lite core tools / ~14.5k tokens; full surface ~24.2k tokens (same script)
     packs: lite 40 (14.5k) + design 9 (4.1k) + io 9 (2.8k) + com 11 (2.8k) = 69 (24.2k)
-  NO PLACEHOLDERS REMAIN. Both were resolved by author ruling for 1.0.0:
+  Both of these were resolved by author ruling for 1.0.0:
     stress calls        882, derived by scripts/count_stress_calls.py from the
                         adversarial journal and recorded in
                         scripts/stress_calls_snapshot.json, which the
