@@ -229,7 +229,7 @@ def _update_check_status() -> dict:
     """The update report, without its cache path.
 
     THIS is the server's one and only on-demand check: it may ask PyPI, at
-    most once every 24 hours, with a two-second cap. No other tool path can
+    most once every seven days, with a two-second cap. No other tool path can
     reach the network, nothing runs at startup, and a check that fails or is
     switched off reports that fact rather than going quiet. state is one of:
     disabled, update_available, current, unknown. Never raises.
@@ -265,7 +265,7 @@ def get_server_info() -> dict:
         },
     }
     # The server's one and only update surface, and its one and only path to
-    # the network: an on-demand check, at most once every 24 hours, two-second
+    # the network: an on-demand check, at most once every seven days, two-second
     # cap, off under KS4XL_UPDATE_CHECK=off. Nothing runs at startup, no other
     # tool can fire it, a failed check reports the failure, and this never
     # raises.
