@@ -224,16 +224,15 @@ Environment variables the server reads:
 | `KS4XL_VERIFY_COM` | `1` makes the deep Excel verification the default for every save |
 | `KS4XL_VALIDATE_COM` | `1` routes `validate`'s structure check through Excel's own verdict |
 | `KS4XL_COM_TIMEOUT` | Bounds how long a COM call may take |
-| `KS4XL_NO_UPDATE_CHECK` | `1` or `true` turns the update check off completely: no network call, no cache file |
+| `KS4XL_UPDATE_CHECK` | `off` turns the update check off completely: no network call, no cache file (the older `KS4XL_NO_UPDATE_CHECK=1` still works) |
 
-The server checks PyPI, the package index it was installed from, at most once
-every 14 days to see whether a newer version exists; the check sends nothing
-but a standard HTTP request for that package's public JSON, and setting
-`KS4XL_NO_UPDATE_CHECK=1` turns it off entirely. It runs on a background
-thread at startup, so it never delays a call, and it fails silently: a timeout
-or an offline machine leaves no error anywhere. When a newer release exists,
-`get_server_info` adds one line saying so. That is the only place it ever
-appears, and the server never downloads or installs anything on its own.
+**Update check.** The server looks for a newer release on PyPI only when you
+call `get_server_info`, never at startup and never on a timer, at most one request
+every seven days, capped at two seconds. The check is a single plain HTTPS
+GET to pypi.org that sends nothing but the request itself. A failed check is
+reported with its reason rather than hidden. Set `KS4XL_UPDATE_CHECK=off` to turn it off
+completely (the older `KS4XL_NO_UPDATE_CHECK=1` still works). The server never
+downloads or installs anything.
 
 </details>
 
