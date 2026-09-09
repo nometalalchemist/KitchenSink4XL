@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: 📖 Documentation
-    url: https://github.com/nometalalchemist/KitchenSink4XL#readme
+    url: https://github.com/KitchenSink4AI/KitchenSink4XL#readme
     about: The README covers installation, the packs, and the safety model.
   - name: 🤖 llms.txt (for agents)
-    url: https://nometalalchemist.github.io/KitchenSink4XL/llms.txt
+    url: https://kitchensink4ai.github.io/KitchenSink4XL/llms.txt
     about: The machine-readable capability manifest, contracts, and error codes.

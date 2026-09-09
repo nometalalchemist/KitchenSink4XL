@@ -2,11 +2,11 @@
 
 # 🔌 KitchenSink4XL
 
-[![Tests](https://github.com/nometalalchemist/KitchenSink4XL/actions/workflows/tests.yml/badge.svg)](https://github.com/nometalalchemist/KitchenSink4XL/actions/workflows/tests.yml)
+[![Tests](https://github.com/KitchenSink4AI/KitchenSink4XL/actions/workflows/tests.yml/badge.svg)](https://github.com/KitchenSink4AI/KitchenSink4XL/actions/workflows/tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/kitchensink4xl)](https://pypi.org/project/kitchensink4xl/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Landing page](https://nometalalchemist.github.io/KitchenSink4XL/) · [llms.txt](https://nometalalchemist.github.io/KitchenSink4XL/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+[Landing page](https://kitchensink4ai.github.io/KitchenSink4XL/) · [llms.txt](https://kitchensink4ai.github.io/KitchenSink4XL/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
 **Everything plus the kitchen sink for Microsoft Excel: the .xlsx MCP server
 that never hands your AI a number it cannot back up.** 129 workbook
@@ -122,7 +122,7 @@ Microsoft ships no Excel MCP server, and Claude for Excel is an Office add-in
 rather than an MCP server. † Star counts read from the GitHub API on
 2026-09-04, shown for context: stars say how long a shelf has been in view,
 not what is on it. Corrections welcome:
-[open an issue](https://github.com/nometalalchemist/KitchenSink4XL/issues).
+[open an issue](https://github.com/KitchenSink4AI/KitchenSink4XL/issues).
 
 ## Requirements
 
@@ -144,7 +144,7 @@ terminal and try again.
 ### Using Claude Desktop? One double-click.
 
 Download `kitchensink4xl.mcpb` from the
-[latest release](https://github.com/nometalalchemist/KitchenSink4XL/releases/latest)
+[latest release](https://github.com/KitchenSink4AI/KitchenSink4XL/releases/latest)
 and double-click it, or drag it into the Claude Desktop window. Desktop adds
 it as an extension and the sink is connected. Nothing to type, nothing to
 configure. One-time requirement: [uv](https://docs.astral.sh/uv/) on your
@@ -193,7 +193,7 @@ clone's virtual environment:
 Windows:
 
 ```
-git clone https://github.com/nometalalchemist/KitchenSink4XL
+git clone https://github.com/KitchenSink4AI/KitchenSink4XL
 cd KitchenSink4XL
 python -m venv .venv
 .venv\Scripts\pip install -e ".[com]"
@@ -203,7 +203,7 @@ claude mcp add xl -s user -- <absolute-path>\.venv\Scripts\xl-mcp.exe
 macOS and Linux:
 
 ```
-git clone https://github.com/nometalalchemist/KitchenSink4XL
+git clone https://github.com/KitchenSink4AI/KitchenSink4XL
 cd KitchenSink4XL
 python3 -m venv .venv
 .venv/bin/pip install -e ".[com]"
@@ -354,12 +354,12 @@ replace your file, and honest labels on every number it hands you. If Excel is
 where you live, bring your ugliest workbook to the service counter and tell us
 what broke.
 
-- 🔧 [Found a dead circuit?](https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=bug_report.yml)
+- 🔧 [Found a dead circuit?](https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=bug_report.yml)
   Something glitched, refused, or came back with the wrong number. Never
   attach a private workbook; rebuild the structure with placeholder data.
   Before filing: ask your AI to run `get_server_info` and paste the output
   here; it is designed to be safe to share.
-- 🔌 [Missing an outlet?](https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=feature_request.yml)
+- 🔌 [Missing an outlet?](https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=feature_request.yml)
   An Excel capability the sink should also have. Describe the real task behind
   it and it goes on the workbench.
 
@@ -405,7 +405,7 @@ makes them for you.)
 
 Companies building it into their own products need a commercial license, with
 terms worked out case by case.
-[Open an issue](https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml)
+[Open an issue](https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml)
 and we will talk it through.
 
 ---

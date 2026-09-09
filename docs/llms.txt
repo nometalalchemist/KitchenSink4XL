@@ -175,18 +175,18 @@ no network call, no cache file).
 
 ## 10. Links
 
-- GitHub: https://github.com/nometalalchemist/KitchenSink4XL
+- GitHub: https://github.com/KitchenSink4AI/KitchenSink4XL
 - PyPI: https://pypi.org/project/kitchensink4xl/
-- Landing page: https://nometalalchemist.github.io/KitchenSink4XL/
-- Family: https://nometalalchemist.github.io/
-- Issues, including licensing: https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose
+- Landing page: https://kitchensink4ai.github.io/KitchenSink4XL/
+- Family: https://kitchensink4ai.github.io/
+- Issues, including licensing: https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose
 
 ## 11. License
 
 AGPL-3.0. Free for individuals and personal use. A company building this into
 a product of its own needs a commercial license, with terms worked out case by
 case, arranged here:
-https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml
+https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml
 
 ## 12. Trademarks
 

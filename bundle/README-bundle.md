@@ -102,7 +102,7 @@ manifest.
 Attach the `.mcpb` as a release asset (do not commit the binary):
 
 ```
-gh release upload vX.Y.Z bundle/kitchensink4xl.mcpb --repo nometalalchemist/KitchenSink4XL
+gh release upload vX.Y.Z bundle/kitchensink4xl.mcpb --repo KitchenSink4AI/KitchenSink4XL
 ```
 
 Because the manifest pins the PyPI version, each release's asset is specific

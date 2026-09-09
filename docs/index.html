@@ -34,7 +34,7 @@
   wiring inspection before power-on. The wall switch in the hero is this aisle's
   fixture (Word owns the faucet, PPT owns the pendant lamp); the bench circuit in
   DEPT. 00 is this aisle's interactive.
-  STOREFRONT: live at https://nometalalchemist.github.io/ (do not edit it from here)
+  STOREFRONT: live at https://kitchensink4ai.github.io/ (do not edit it from here)
 -->
 <title>KitchenSink4XL: Everything plus the kitchen sink for Microsoft Excel</title>
 <meta name="description" content="69-tool MCP server for Microsoft Excel that never hands your AI a number it cannot back up. Every value comes labeled: freshly calculated, remembered from the last save, or missing. Insert or delete rows and columns and everything that should move, moves, checked against Excel's own math. Sessions start light at 40 tools and unpack the rest on request. Engineered not to corrupt.">
@@ -615,15 +615,15 @@ footer a{color:var(--brass)}
 <div class="wrap masthead rev d1">
   <span data-i18n="m.left"><b>ELECTRICAL DEPARTMENT</b> &middot; FINE INSTRUMENTS FOR THE FULLY WIRED WORKBOOK</span>
   <nav class="lang-toggle" id="langToggle" aria-label="Language"></nav>
-  <span><span data-i18n="m.catalog">CATALOG № 69</span> · <a href="https://nometalalchemist.github.io/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/nometalalchemist/KitchenSink4XL">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4xl/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
+  <span><span data-i18n="m.catalog">CATALOG № 69</span> · <a href="https://kitchensink4ai.github.io/" data-i18n="m.family">FAMILY</a> · <a href="#service" data-i18n="m.service">SERVICE</a> · <a href="https://github.com/KitchenSink4AI/KitchenSink4XL">GITHUB</a> · <a href="https://pypi.org/project/kitchensink4xl/">PYPI</a> · <a href="llms.txt">LLMS.TXT</a></span>
 </div>
 
 <div class="switchbar">
   <span class="lbl">THE KITCHENSINK WORKS</span>
-  <a href="https://nometalalchemist.github.io/KitchenSink4Word/">🚰 KitchenSink4Word</a>
-  <a href="https://nometalalchemist.github.io/KitchenSink4PPT/">🖌️ KitchenSink4PPT</a>
+  <a href="https://kitchensink4ai.github.io/KitchenSink4Word/">🚰 KitchenSink4Word</a>
+  <a href="https://kitchensink4ai.github.io/KitchenSink4PPT/">🖌️ KitchenSink4PPT</a>
   <span class="here">🔌 KitchenSink4XL <span data-i18n="sw.here">(you are here)</span></span>
-  <a href="https://nometalalchemist.github.io/">🏪 <span data-i18n="sw.store">The storefront</span></a>
+  <a href="https://kitchensink4ai.github.io/">🏪 <span data-i18n="sw.store">The storefront</span></a>
 </div>
 
 <header class="hero wrap">
@@ -657,7 +657,7 @@ footer a{color:var(--brass)}
   </div>
   <div class="rev d5" style="margin-top:36px">
     <a class="btn primary" href="#install" data-i18n="btn.install">Install the Sink</a>
-    <a class="btn" href="https://github.com/nometalalchemist/KitchenSink4XL" data-i18n="btn.source">Read the Source</a>
+    <a class="btn" href="https://github.com/KitchenSink4AI/KitchenSink4XL" data-i18n="btn.source">Read the Source</a>
   </div>
   <a class="demo-invite rev d5" href="#headline" data-i18n="hero.invite">↓ or start with the part nobody tells you: why the numbers an AI reads out of a spreadsheet might be wrong</a>
 </header>
@@ -882,7 +882,7 @@ footer a{color:var(--brass)}
         <span class="badge" data-i18n="inst.b1">Easiest</span>
         <h3 data-i18n="inst.s1">Using Claude Desktop? One double-click.</h3>
         <p data-i18n="inst.p1">Download the installer bundle from the latest release and double-click it, or drag it into the Claude Desktop window. Desktop adds it as an extension and the sink is connected. Nothing to type, nothing to configure.</p>
-        <a class="go" href="https://github.com/nometalalchemist/KitchenSink4XL/releases/latest" data-i18n="inst.g1">Download the .mcpb bundle →</a>
+        <a class="go" href="https://github.com/KitchenSink4AI/KitchenSink4XL/releases/latest" data-i18n="inst.g1">Download the .mcpb bundle →</a>
         <p class="after" data-i18n="inst.p1b">One-time requirement: <a href="https://docs.astral.sh/uv/">uv</a> on your PATH, which the bundle uses to start the server.</p>
       </div>
       <div class="step">
@@ -902,7 +902,7 @@ footer a{color:var(--brass)}
       <div class="devbody">
         <p data-i18n="inst.dp1">Install the package and point any MCP client at the executable:</p>
         <div class="term"><div><span class="p">$</span> pip install kitchensink4xl</div></div>
-        <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"xl": {"command": "kitchensink4xl", "env": {"KS4XL_MODE": "lite"}}}}</code>, where the mode is "lite" (the default), "full", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href="https://github.com/nometalalchemist/KitchenSink4XL#install">README</a>.</p>
+        <p data-i18n="inst.dp2">Then in any client's config: <code>{"mcpServers": {"xl": {"command": "kitchensink4xl", "env": {"KS4XL_MODE": "lite"}}}}</code>, where the mode is "lite" (the default), "full", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href="https://github.com/KitchenSink4AI/KitchenSink4XL#install">README</a>.</p>
       </div>
     </details>
     <p class="foot-note" style="margin-top:18px" data-i18n="inst.note">Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.</p>
@@ -918,19 +918,19 @@ footer a{color:var(--brass)}
     </div>
     <span class="ticket" data-i18n="svc.ticket">NOW SERVING · TAKE A NUMBER · SAME DESK AS THE WORD AND POWERPOINT SINKS</span>
     <div class="service-grid">
-      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=bug_report.yml">
+      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=bug_report.yml">
         <span class="icon">🔧</span>
         <h3 data-i18n="svc1.t">Found a number you can't trust?</h3>
         <p data-i18n="svc1.p">A value labeled wrong, an error message that made no sense, a save that touched something it shouldn't have. File it at the counter: the form asks exactly what a fix needs. Never paste real spreadsheet data; describe the shape of the workbook instead.</p>
         <span class="go" data-i18n="svc1.g">File a bug report →</span>
       </a>
-      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=feature_request.yml">
+      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=feature_request.yml">
         <span class="icon">🔌</span>
         <h3 data-i18n="svc2.t">Missing an attachment?</h3>
         <p data-i18n="svc2.p">A spreadsheet capability the sink should also have. Describe the real task behind it and it goes on the workbench.</p>
         <span class="go" data-i18n="svc2.g">Request a feature →</span>
       </a>
-      <a class="counter" href="https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml">
+      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml">
         <span class="icon">💼</span>
         <h3 data-i18n="svc3.t">Commercial fitting?</h3>
         <p data-i18n="svc3.p">Free for individuals and personal use, and it stays that way. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.</p>
@@ -957,19 +957,19 @@ footer a{color:var(--brass)}
   <div class="wrap">
     <div class="sec-head"><span class="no" data-i18n="no7">DEPT. 07</span><h2 data-i18n="h2.fam">The other aisles</h2><span class="sparkrule" aria-hidden="true"><svg viewBox="0 0 200 24" preserveAspectRatio="none"><polyline class="trace" points="0,16 18,16 30,9 42,16 60,16 72,20 84,12 96,12 108,5 120,16 138,16 150,11 162,16 182,16 200,12"/></svg><i class="node"></i></span></div>
     <div class="service-grid">
-      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4Word/">
+      <a class="counter" href="https://kitchensink4ai.github.io/KitchenSink4Word/">
         <span class="icon">🚰</span>
         <h3>KitchenSink4Word</h3>
         <p data-i18n="fam1.p">The original fixture: everything plus the kitchen sink for Microsoft Word. 221 operations across 110 tools, live editing of open documents, citations, merge-aware table surgery, tracked changes, engineered not to corrupt.</p>
         <span class="go" data-i18n="fam1.g">Visit the plumbing aisle →</span>
       </a>
-      <a class="counter" href="https://nometalalchemist.github.io/KitchenSink4PPT/">
+      <a class="counter" href="https://kitchensink4ai.github.io/KitchenSink4PPT/">
         <span class="icon" id="lampCameo">🖌️</span>
         <h3>KitchenSink4PPT</h3>
         <p data-i18n="fam2.p">The paint aisle: everything plus the kitchen sink for Microsoft PowerPoint. 141 tools, diagrams that arrive as native shapes with connectors glued to them, so the box moves and the arrows follow.</p>
         <span class="go" data-i18n="fam2.g">Visit the paint aisle →</span>
       </a>
-      <a class="counter" href="https://nometalalchemist.github.io/">
+      <a class="counter" href="https://kitchensink4ai.github.io/">
         <span class="icon">🏪</span>
         <h3 data-i18n="fam3.t">The storefront</h3>
         <p data-i18n="fam3.p">The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.</p>
@@ -981,8 +981,8 @@ footer a{color:var(--brass)}
 
 <footer>
   <div class="wrap row">
-    <span data-i18n="f.left">&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.</span>
-    <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌</span>
+    <span data-i18n="f.left">&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.</span>
+    <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌</span>
   </div>
   <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px">Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel are trademarks of Microsoft Corporation.</div>
   <div class="wrap" style="text-align:center;padding:10px 0"><img src="https://visitor-badge.laobi.icu/badge?page_id=nometalalchemist.KitchenSink4XL&left_color=%231e3550&right_color=%23735413&left_text=views" alt="views" height="18" style="vertical-align:middle"></div>
@@ -1245,7 +1245,7 @@ en: {
 "inst.p2": "One line in a terminal and you are done. It fetches and runs the server for you, so there is nothing to install first.",
 "inst.dev": "For developers: pip, uvx, source, other MCP clients",
 "inst.dp1": "Install the package and point any MCP client at the executable:",
-"inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Then in any client's config: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, where the mode is \"lite\" (the default), \"full\", or a comma-separated pack list. Running from a clone works the same way; point the command at the <code>xl-mcp</code> executable in the clone's virtual environment. The COM pack is an optional extra, <code>pip install kitchensink4xl[com]</code>, and it is a no-op off Windows. On Windows the COM dependency often arrives transitively with the base install; installing with <code>[com]</code> is the guaranteed route either way, and harmless to repeat. Full setup in the <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Most of this server needs no Excel installed at all and runs on any computer. The parts that ask Excel to do the work want Windows with Excel on it, and they open their own private copy, so the workbook you have on screen is never touched.",
 "inst.tipt": "One tip that removes most permission pop-ups",
 "inst.tipp": "In Claude Desktop's <code>Tool permissions</code> for this server, set the <code>Read-only tools</code> group to <code>Always Allow</code>. Those tools cannot change anything, so approving them once is safe, and Claude stops asking about every read. Leave the acting tools on <code>Ask</code>, so anything that changes things still checks with you first.",
@@ -1275,8 +1275,8 @@ en: {
 "fam3.t": "The storefront",
 "fam3.p": "The whole hardware store on one page: every KitchenSink server, its fixture, and its counter, plus a shelf or two that are not empty by accident.",
 "fam3.g": "Browse the store →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌"
 },
 ko: {
 "pageTitle": "KitchenSink4XL: Microsoft Excel 도구라면 없는 게 없는 MCP 서버",
@@ -1413,7 +1413,7 @@ ko: {
 "inst.p2": "터미널에 한 줄이면 끝입니다. 서버를 알아서 받아서 실행하므로 미리 설치할 것이 없습니다.",
 "inst.dev": "개발자용: pip, uvx, 소스, 다른 MCP 클라이언트",
 "inst.dp1": "패키지를 설치하고 아무 MCP 클라이언트나 실행 파일을 가리키게 하세요.",
-"inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. Windows에서는 COM 의존성이 기본 설치만으로도 함께 딸려 오는 경우가 많습니다. 그래도 <code>[com]</code>으로 설치하는 쪽이 확실한 방법이고, 한 번 더 해도 아무 문제 없습니다. 전체 설정은 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>에 있습니다.",
+"inst.dp2": "그런 다음 클라이언트 설정에 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>를 넣습니다. 모드는 \"lite\"(기본값), \"full\", 또는 쉼표로 구분한 팩 목록입니다. 클론에서 바로 쓰실 때도 같습니다. 클론의 가상 환경에 있는 <code>xl-mcp</code> 실행 파일을 가리키면 됩니다. COM 팩은 선택 확장이며(<code>pip install kitchensink4xl[com]</code>), Windows가 아니면 아무 일도 하지 않습니다. Windows에서는 COM 의존성이 기본 설치만으로도 함께 딸려 오는 경우가 많습니다. 그래도 <code>[com]</code>으로 설치하는 쪽이 확실한 방법이고, 한 번 더 해도 아무 문제 없습니다. 전체 설정은 <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>에 있습니다.",
 "inst.note": "이 서버의 대부분은 Excel 설치가 전혀 필요 없고 어느 컴퓨터에서나 돌아갑니다. Excel에게 직접 일을 시키는 부분만 Excel이 설치된 Windows를 요구하며, 그때도 자기만의 숨겨진 사본을 열기 때문에 화면에 띄워 둔 통합 문서는 건드리지 않습니다.",
 "inst.tipt": "권한 팝업을 대부분 없애 주는 요령 하나",
 "inst.tipp": "Claude Desktop에서 이 서버의 <code>Tool permissions</code>를 열고, <code>Read-only tools</code> 그룹을 <code>Always Allow</code>로 바꾸세요. 이 도구들은 아무것도 바꾸지 못하므로 한 번 허용해도 안전하고, Claude가 읽을 때마다 묻는 일이 없어집니다. 실제로 작업하는 도구는 <code>Ask</code>로 그대로 두세요. 무언가를 바꾸는 일은 여전히 먼저 당신에게 확인합니다.",
@@ -1443,8 +1443,8 @@ ko: {
 "fam3.t": "본점",
 "fam3.p": "철물점 전체를 한 페이지에: 모든 KitchenSink 서버와 그 기구, 그 창구, 그리고 우연히 비어 있는 것이 아닌 선반 한둘까지.",
 "fam3.g": "매장 둘러보기 →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 개인과 개인적 사용에는 무료입니다.<br>자사 제품에 넣는 기업은 상업용 라이선스가 필요합니다. <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>이슈를 열어</a> 주시면 함께 이야기하겠습니다.",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>문제 신고</a><br>KitchenSink4Word의 안전 코어 위에 세우고, Claude Code로 시제품을 만들고, 숫자가 정직하게 돌아올 때까지 점검을 받으며 배선했습니다. 활선 주의. 🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 개인과 개인적 사용에는 무료입니다.<br>자사 제품에 넣는 기업은 상업용 라이선스가 필요합니다. <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>이슈를 열어</a> 주시면 함께 이야기하겠습니다.",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>문제 신고</a><br>KitchenSink4Word의 안전 코어 위에 세우고, Claude Code로 시제품을 만들고, 숫자가 정직하게 돌아올 때까지 점검을 받으며 배선했습니다. 활선 주의. 🔌"
 },
 ja: {
 "pageTitle": "KitchenSink4XL: Microsoft Excel のためのなんでも入り MCP サーバー",
@@ -1581,7 +1581,7 @@ ja: {
 "inst.p2": "端末に一行で完了です。サーバーは自動で取得して起動されるので、先に入れておくものはありません。",
 "inst.dev": "開発者向け: pip, uvx, ソース, ほかの MCP クライアント",
 "inst.dp1": "パッケージを入れて、任意の MCP クライアントから実行ファイルを指してください。",
-"inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。Windows では COM の依存パッケージが基本のインストールだけで一緒に入ってくることがよくあります。それでも <code>[com]</code> を付けて入れるほうが確実で、重ねて実行しても害はありません。設定の全体は <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a> にあります。",
+"inst.dp2": "そのうえでクライアントの設定に <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code> と書きます。モードは \"lite\"(既定)、\"full\"、またはカンマ区切りのパック一覧です。クローンから動かす場合も同じで、クローンの仮想環境にある <code>xl-mcp</code> を指してください。COM パックは任意の追加(<code>pip install kitchensink4xl[com]</code>)で、Windows 以外では何もしません。Windows では COM の依存パッケージが基本のインストールだけで一緒に入ってくることがよくあります。それでも <code>[com]</code> を付けて入れるほうが確実で、重ねて実行しても害はありません。設定の全体は <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a> にあります。",
 "inst.note": "このサーバーの大半は Excel のインストールをまったく必要とせず、どのパソコンでも動きます。Excel に仕事をさせる部分だけが Excel の入った Windows を求め、そのときも自分専用の隠れた一つを開くので、画面に出したままのブックには触れません。",
 "inst.tipt": "権限のポップアップをほとんど消せるコツが一つ",
 "inst.tipp": "Claude Desktop でこのサーバーの <code>Tool permissions</code> を開き、<code>Read-only tools</code> のグループを <code>Always Allow</code> にしてください。これらの道具は何も変更できないので、一度許可しても安全で、Claude が読み取りのたびに尋ねてくることがなくなります。手を加えるほうの道具は <code>Ask</code> のままにしておいてください。何かを変える操作は、これまでどおり先にあなたに確認します。",
@@ -1611,8 +1611,8 @@ ja: {
 "fam3.t": "本店",
 "fam3.p": "金物店まるごと一ページに: すべての KitchenSink サーバーと、その器具と、その窓口。それと、偶然空いているわけではない棚がいくつか。",
 "fam3.g": "店内を見る →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 個人および個人利用は無料です。<br>自社製品に組み込む企業には商用ライセンスが必要です。<a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>イシューを開いて</a>いただければご相談します。",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>不具合を報告</a><br>KitchenSink4Word の安全コアの上に建て、Claude Code で試作し、数字が正直に返ってくるまで点検を受けながら配線しました。通電部にご注意。🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 個人および個人利用は無料です。<br>自社製品に組み込む企業には商用ライセンスが必要です。<a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>イシューを開いて</a>いただければご相談します。",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>不具合を報告</a><br>KitchenSink4Word の安全コアの上に建て、Claude Code で試作し、数字が正直に返ってくるまで点検を受けながら配線しました。通電部にご注意。🔌"
 },
 zh: {
 "pageTitle": "KitchenSink4XL: 为 Microsoft Excel 备齐一切的 MCP 服务器",
@@ -1749,7 +1749,7 @@ zh: {
 "inst.p2": "终端里一行就完事。它会替你取回并运行服务器,不用先装什么。",
 "inst.dev": "面向开发者: pip、uvx、源码、其他 MCP 客户端",
 "inst.dp1": "装上这个包,然后让任意 MCP 客户端指向该可执行文件:",
-"inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。在 Windows 上,COM 依赖往往会随基础安装一起被带进来;不管怎样,用 <code>[com]</code> 安装都是稳妥的做法,重复装一次也无妨。完整设置见 <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>。",
+"inst.dp2": "接着在客户端配置里写 <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>,其中 mode 可为 \"lite\"(默认)、\"full\",或逗号分隔的包清单。从克隆目录运行也一样,把命令指向克隆里虚拟环境的 <code>xl-mcp</code> 即可。COM 包是可选附加项(<code>pip install kitchensink4xl[com]</code>),在非 Windows 上不做任何事。在 Windows 上,COM 依赖往往会随基础安装一起被带进来;不管怎样,用 <code>[com]</code> 安装都是稳妥的做法,重复装一次也无妨。完整设置见 <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>。",
 "inst.note": "这台服务器的大部分完全不需要装 Excel,在任何电脑上都能跑。只有请 Excel 亲自干活的那部分需要装有 Excel 的 Windows,而且它会另开一个自己的隐藏副本,你屏幕上开着的那个工作簿不会被碰。",
 "inst.tipt": "一个能让权限弹窗少掉大半的窍门",
 "inst.tipp": "在 Claude Desktop 里打开这个服务器的 <code>Tool permissions</code>,把 <code>Read-only tools</code> 那一组设成 <code>Always Allow</code>。这些工具什么都改不了,所以一次性批准是安全的,Claude 也就不会每读一次就问你一遍。会动手的那些工具保持在 <code>Ask</code>,这样任何会改变东西的操作,仍然会先来问过你。",
@@ -1779,8 +1779,8 @@ zh: {
 "fam3.t": "总店门面",
 "fam3.p": "整家五金店摆在一页上: 每一台 KitchenSink 服务器、它的器具、它的柜台,外加一两个不是碰巧空着的货架。",
 "fam3.g": "逛逛店里 →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 个人与个人用途免费。<br>把它做进自家产品的公司需要商用许可; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>开一个 issue</a>,我们细谈。",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>报告故障</a><br>建在 KitchenSink4Word 的安全内核之上,用 Claude Code 做出原型,一路带检验地接线,直到数字诚实为止。当心带电部位。🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: 个人与个人用途免费。<br>把它做进自家产品的公司需要商用许可; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>开一个 issue</a>,我们细谈。",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>报告故障</a><br>建在 KitchenSink4Word 的安全内核之上,用 Claude Code 做出原型,一路带检验地接线,直到数字诚实为止。当心带电部位。🔌"
 },
 de: {
 "pageTitle": "KitchenSink4XL: Alles und die Spüle dazu für Microsoft Excel",
@@ -1917,7 +1917,7 @@ de: {
 "inst.p2": "Eine Zeile im Terminal und Sie sind fertig. Der Server wird für Sie geholt und gestartet, vorher ist nichts zu installieren.",
 "inst.dev": "Für Entwickler: pip, uvx, Quelltext, andere MCP-Clients",
 "inst.dp1": "Paket installieren und einen beliebigen MCP-Client auf die ausführbare Datei zeigen lassen:",
-"inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Unter Windows kommt die COM-Abhängigkeit oft schon transitiv mit der Basisinstallation; die Installation mit <code>[com]</code> ist ohnehin der sichere Weg und schadet nicht, wenn man sie wiederholt. Die vollständige Einrichtung steht in der <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Dann in der Konfiguration eines beliebigen Clients: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, wobei der Modus \"lite\" (die Vorgabe), \"full\" oder eine kommagetrennte Paketliste ist. Aus einem Klon heraus läuft es genauso; zeigen Sie mit dem Befehl auf die Datei <code>xl-mcp</code> in der virtuellen Umgebung des Klons. Das COM-Paket ist ein optionaler Zusatz, <code>pip install kitchensink4xl[com]</code>, und tut außerhalb von Windows nichts. Unter Windows kommt die COM-Abhängigkeit oft schon transitiv mit der Basisinstallation; die Installation mit <code>[com]</code> ist ohnehin der sichere Weg und schadet nicht, wenn man sie wiederholt. Die vollständige Einrichtung steht in der <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>.",
 "inst.note": "Das meiste an diesem Server braucht überhaupt kein installiertes Excel und läuft auf jedem Rechner. Nur die Teile, die Excel selbst arbeiten lassen, wollen Windows mit Excel darauf, und sie öffnen dafür eine eigene, verborgene Ausgabe, sodass die Arbeitsmappe auf Ihrem Bildschirm unangetastet bleibt.",
 "inst.tipt": "Ein Tipp, der die meisten Berechtigungsabfragen beseitigt",
 "inst.tipp": "Öffnen Sie in Claude Desktop die <code>Tool permissions</code> für diesen Server und stellen Sie die Gruppe <code>Read-only tools</code> auf <code>Always Allow</code>. Diese Werkzeuge können nichts verändern, das einmalige Zulassen ist also sicher, und Claude fragt nicht mehr bei jedem Lesevorgang nach. Lassen Sie die handelnden Werkzeuge auf <code>Ask</code>, damit alles, was etwas verändert, weiterhin zuerst bei Ihnen nachfragt.",
@@ -1947,8 +1947,8 @@ de: {
 "fam3.t": "Das Ladengeschäft",
 "fam3.p": "Der ganze Baumarkt auf einer Seite: jeder KitchenSink-Server, seine Armatur und sein Tresen, dazu ein, zwei Regale, die nicht zufällig leer sind.",
 "fam3.g": "Den Laden durchstöbern →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: kostenlos für Privatpersonen und private Nutzung.<br>Firmen, die es in eigene Produkte einbauen, brauchen eine kommerzielle Lizenz; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>machen Sie ein Issue auf</a> und wir besprechen es.",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>Störung melden</a><br>Auf dem Sicherheitskern von KitchenSink4Word gebaut, mit Claude Code als Prototyp entstanden und unter Abnahme verkabelt, bis die Zahlen ehrlich zurückkamen. Vorsicht, spannungsführende Teile. 🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: kostenlos für Privatpersonen und private Nutzung.<br>Firmen, die es in eigene Produkte einbauen, brauchen eine kommerzielle Lizenz; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>machen Sie ein Issue auf</a> und wir besprechen es.",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>Störung melden</a><br>Auf dem Sicherheitskern von KitchenSink4Word gebaut, mit Claude Code als Prototyp entstanden und unter Abnahme verkabelt, bis die Zahlen ehrlich zurückkamen. Vorsicht, spannungsführende Teile. 🔌"
 },
 fr: {
 "pageTitle": "KitchenSink4XL : tout et l'évier avec, pour Microsoft Excel",
@@ -2085,7 +2085,7 @@ fr: {
 "inst.p2": "Une ligne dans un terminal et c'est fait. Le serveur est récupéré et lancé pour vous, il n'y a rien à installer avant.",
 "inst.dev": "Pour les développeurs : pip, uvx, source, autres clients MCP",
 "inst.dp1": "Installez le paquet et pointez n'importe quel client MCP vers l'exécutable :",
-"inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Sous Windows, la dépendance COM arrive souvent de façon transitive avec l'installation de base ; installer avec <code>[com]</code> reste la voie sûre dans tous les cas, et le répéter ne coûte rien. Installation complète dans le <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Puis dans la configuration de n'importe quel client : <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, où le mode vaut \"lite\" (par défaut), \"full\", ou une liste de packs séparés par des virgules. Depuis un clone, cela fonctionne pareil ; pointez la commande vers l'exécutable <code>xl-mcp</code> dans l'environnement virtuel du clone. Le pack COM est une option, <code>pip install kitchensink4xl[com]</code>, et il ne fait rien hors de Windows. Sous Windows, la dépendance COM arrive souvent de façon transitive avec l'installation de base ; installer avec <code>[com]</code> reste la voie sûre dans tous les cas, et le répéter ne coûte rien. Installation complète dans le <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>.",
 "inst.note": "L'essentiel de ce serveur n'a besoin d'aucun Excel installé et tourne sur n'importe quel ordinateur. Seules les parties qui font travailler Excel réclament Windows avec Excel dessus, et elles ouvrent leur propre exemplaire masqué, si bien que le classeur affiché à votre écran n'est jamais touché.",
 "inst.tipt": "Une astuce qui supprime la plupart des fenêtres d'autorisation",
 "inst.tipp": "Dans Claude Desktop, ouvrez les <code>Tool permissions</code> de ce serveur et réglez le groupe <code>Read-only tools</code> sur <code>Always Allow</code>. Ces outils ne peuvent rien modifier, les autoriser une fois est donc sans risque, et Claude cesse de demander à chaque lecture. Laissez sur <code>Ask</code> les outils qui agissent, pour que tout ce qui modifie quelque chose vous demande encore la permission d'abord.",
@@ -2115,8 +2115,8 @@ fr: {
 "fam3.t": "La devanture",
 "fam3.p": "Toute la quincaillerie sur une page : chaque serveur KitchenSink, sa robinetterie et son comptoir, plus une ou deux étagères qui ne sont pas vides par hasard.",
 "fam3.g": "Parcourir la boutique →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b> : gratuit pour les particuliers et l'usage personnel.<br>Les entreprises qui l'intègrent à leurs propres produits ont besoin d'une licence commerciale ; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>ouvrez un ticket</a> et nous en parlerons.",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>signaler une panne</a><br>Construit sur le noyau de sécurité de KitchenSink4Word, prototypé avec Claude Code et câblé sous contrôle jusqu'à ce que les chiffres reviennent honnêtes. Attention aux parties sous tension. 🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b> : gratuit pour les particuliers et l'usage personnel.<br>Les entreprises qui l'intègrent à leurs propres produits ont besoin d'une licence commerciale ; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>ouvrez un ticket</a> et nous en parlerons.",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>signaler une panne</a><br>Construit sur le noyau de sécurité de KitchenSink4Word, prototypé avec Claude Code et câblé sous contrôle jusqu'à ce que les chiffres reviennent honnêtes. Attention aux parties sous tension. 🔌"
 },
 es: {
 "pageTitle": "KitchenSink4XL: todo y el fregadero incluido, para Microsoft Excel",
@@ -2253,7 +2253,7 @@ es: {
 "inst.p2": "Una línea en el terminal y listo. Se encarga de traer y ejecutar el servidor, así que no hay nada que instalar antes.",
 "inst.dev": "Para desarrolladores: pip, uvx, código fuente, otros clientes MCP",
 "inst.dp1": "Instale el paquete y apunte cualquier cliente MCP al ejecutable:",
-"inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. En Windows la dependencia COM suele llegar de forma transitiva con la instalación base; instalar con <code>[com]</code> es la vía garantizada en cualquier caso, y repetirlo no hace daño. La instalación completa está en el <a href=\"https://github.com/nometalalchemist/KitchenSink4XL#install\">README</a>.",
+"inst.dp2": "Después, en la configuración de cualquier cliente: <code>{\"mcpServers\": {\"xl\": {\"command\": \"kitchensink4xl\", \"env\": {\"KS4XL_MODE\": \"lite\"}}}}</code>, donde el modo es \"lite\" (el valor por omisión), \"full\", o una lista de paquetes separados por comas. Desde un clon funciona igual; apunte el comando al ejecutable <code>xl-mcp</code> del entorno virtual del clon. El paquete COM es un añadido opcional, <code>pip install kitchensink4xl[com]</code>, y fuera de Windows no hace nada. En Windows la dependencia COM suele llegar de forma transitiva con la instalación base; instalar con <code>[com]</code> es la vía garantizada en cualquier caso, y repetirlo no hace daño. La instalación completa está en el <a href=\"https://github.com/KitchenSink4AI/KitchenSink4XL#install\">README</a>.",
 "inst.note": "La mayor parte de este servidor no necesita Excel instalado y funciona en cualquier ordenador. Solo las partes que le piden trabajo a Excel quieren Windows con Excel encima, y abren su propia copia oculta, así que el libro que tiene en pantalla no se toca nunca.",
 "inst.tipt": "Un consejo que elimina casi todas las ventanas de permisos",
 "inst.tipp": "En Claude Desktop, abra los <code>Tool permissions</code> de este servidor y ponga el grupo <code>Read-only tools</code> en <code>Always Allow</code>. Esas herramientas no pueden cambiar nada, así que autorizarlas una vez es seguro, y Claude deja de preguntar en cada lectura. Deje en <code>Ask</code> las herramientas que actúan, para que todo lo que cambie algo siga pidiéndole permiso antes.",
@@ -2283,8 +2283,8 @@ es: {
 "fam3.t": "La tienda",
 "fam3.p": "Toda la ferretería en una página: cada servidor KitchenSink, su accesorio y su mostrador, más un estante o dos que no están vacíos por casualidad.",
 "fam3.g": "Recorrer la tienda →",
-"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: gratis para particulares y uso personal.<br>Las empresas que lo integren en productos propios necesitan una licencia comercial; <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new?template=commercial_license.yml'>abra un issue</a> y lo hablamos.",
-"f.right": "<a href='https://github.com/nometalalchemist/KitchenSink4XL'>github.com/nometalalchemist/KitchenSink4XL</a> · <a href='https://github.com/nometalalchemist/KitchenSink4XL/issues/new/choose'>informar de un fallo</a><br>Construido sobre el núcleo de seguridad de KitchenSink4Word, prototipado con Claude Code y cableado bajo inspección hasta que los números volvieron honestos. Cuidado con las partes con tensión. 🔌"
+"f.left": "&copy; 2026 &middot; <b>AGPL-3.0</b>: gratis para particulares y uso personal.<br>Las empresas que lo integren en productos propios necesitan una licencia comercial; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>abra un issue</a> y lo hablamos.",
+"f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>informar de un fallo</a><br>Construido sobre el núcleo de seguridad de KitchenSink4Word, prototipado con Claude Code y cableado bajo inspección hasta que los números volvieron honestos. Cuidado con las partes con tensión. 🔌"
 }
 };
 /*I18N-END*/
