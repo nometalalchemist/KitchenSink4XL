@@ -1,6 +1,6 @@
 [project]
 name = "kitchensink4xl"
-version = "1.1.0"
+version = "1.2.0"
 description = "Everything plus the kitchen sink for Microsoft Excel - a .xlsx MCP server engineered not to corrupt: every value labeled calculated, cached or absent, structural edits that carry their formulas, Excel-exact sort, atomic validated saves, tiered loading"
 readme = "README.md"
 license = "AGPL-3.0-only"
