@@ -2,9 +2,9 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nometalalchemist/kitchensink4xl",
   "title": "KitchenSink4XL",
-  "description": "Everything plus the kitchen sink for Excel: never hands your AI a number it cannot back up.",
-  "version": "1.2.0",
-  "websiteUrl": "https://kitchensink4ai.github.io/KitchenSink4XL/",
+  "description": "Excel (.xlsx) MCP server: calculated/cached/missing labels on every value, formulas, verified writes. The kitchen sink.",
+  "version": "1.2.1",
+  "websiteUrl": "https://kitchensink4.ai/KitchenSink4XL/",
   "repository": {
     "url": "https://github.com/KitchenSink4AI/KitchenSink4XL",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4xl",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "transport": {
         "type": "stdio"
       }

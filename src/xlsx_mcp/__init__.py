@@ -9,4 +9,4 @@ Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel
 are trademarks of Microsoft Corporation.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"

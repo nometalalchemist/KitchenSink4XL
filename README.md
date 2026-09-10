@@ -6,12 +6,19 @@
 [![PyPI](https://img.shields.io/pypi/v/kitchensink4xl)](https://pypi.org/project/kitchensink4xl/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 
-[Landing page](https://kitchensink4ai.github.io/KitchenSink4XL/) · [llms.txt](https://kitchensink4ai.github.io/KitchenSink4XL/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
+[Landing page](https://kitchensink4.ai/KitchenSink4XL/) · [llms.txt](https://kitchensink4.ai/KitchenSink4XL/llms.txt) (machine-readable capability manifest for agents and LLM crawlers)
 
-**Everything plus the kitchen sink for Microsoft Excel: the .xlsx MCP server
-that never hands your AI a number it cannot back up.** 129 workbook
-operations across 67 tools, a lite core that opens at about 14,500 tokens,
-and a safety core that backs up before every change and verifies every save.
+An Excel (.xlsx) MCP server built against hallucination: every value your AI
+reads is labeled calculated, cached, or missing, so it never repeats a stale
+number as a fresh one. Cells and ranges, formulas, server-side query and
+aggregation, formatting, tables, sort and filter, CSV/JSON import and export,
+and verified writes that never corrupt a workbook. 129 workbook operations
+across 69 tools (67 workbook tools plus the two pack toggles). Works with
+Claude Code, Claude Desktop, Cursor, and any MCP client. Part of the
+KitchenSink4AI suite with [kitchensink4word](https://pypi.org/project/kitchensink4word/)
+(Word), [kitchensink4ppt](https://pypi.org/project/kitchensink4ppt/)
+(PowerPoint), and [kitchensink4web](https://pypi.org/project/kitchensink4web/)
+(browser).
 
 New here? Start with the [Quickstart](docs/QUICKSTART.md).
 

@@ -89,6 +89,12 @@ mcp = FastMCP(
     # carries the framework's number instead of this package's.
     version=__version__,
     instructions=(
+        # Self-identification, first line: an agent reading the injected
+        # instructions has to be able to say what it is talking to and what
+        # the rest of the suite is called. The 2026-09-10 discoverability
+        # audit found no brand string on any of the four servers here.
+        "KitchenSink4XL (kitchensink4xl on PyPI), part of the "
+        "KitchenSink4AI suite. "
         "Kitchen-sink Microsoft Excel (.xlsx) editor: cells and ranges, "
         "formulas with an honest cached-value story, server-side query and "
         "aggregation, formatting and styles, conditional formatting, data "
@@ -252,6 +258,14 @@ def get_server_info() -> dict:
     up and see which packs are loaded."""
     out = {
         "name": "kitchensink4xl",
+        # Self-identification for a connected agent: the brand, the
+        # distribution to pip install, where the docs live, and the three
+        # siblings. `name` stays the PyPI distribution for compatibility
+        # with anything already reading it.
+        "product": "KitchenSink4XL",
+        "package": "kitchensink4xl",
+        "homepage": "https://kitchensink4.ai/KitchenSink4XL/",
+        "family": ["kitchensink4word", "kitchensink4ppt", "kitchensink4web"],
         "version": __version__,
         "phase": "6 (consolidated: pack re-cut, anchors, tiered loading)",
         "surface": _packs.surface_report(),
