@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "kitchensink4xl",
   "display_name": "KitchenSink4XL",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Lets Claude work your Excel spreadsheets: cells, formulas, formatting, tables, and honest answers about which values are calculated, cached, or missing.",
   "long_description": "KitchenSink4XL connects Claude to your spreadsheets. Ask it to read and build tables, write formulas, format ranges, or import and export data. Every value it reports is labeled calculated, cached, or missing, every change lands after an automatic backup, and nothing about your workbooks leaves your machine. Part of the KitchenSink4 family (Word, PowerPoint, Excel, Web) from KitchenSink4AI (kitchensink4.ai).",
   "author": {
@@ -47,7 +47,7 @@
     "mcp_config": {
       "command": "uvx",
       "args": [
-        "kitchensink4xl[com]==1.2.1"
+        "kitchensink4xl[com]==1.2.2"
       ],
       "env": {
         "KS4XL_VERIFY_COM": "${user_config.verify_with_excel}",

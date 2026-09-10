@@ -3,7 +3,7 @@
   "name": "io.github.nometalalchemist/kitchensink4xl",
   "title": "KitchenSink4XL",
   "description": "Excel (.xlsx) MCP server: calculated/cached/missing labels on every value, formulas, verified writes",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "websiteUrl": "https://kitchensink4.ai/KitchenSink4XL/",
   "repository": {
     "url": "https://github.com/KitchenSink4AI/KitchenSink4XL",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "kitchensink4xl",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "transport": {
         "type": "stdio"
       }

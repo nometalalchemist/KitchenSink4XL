@@ -1,11 +1,11 @@
 [project]
 name = "kitchensink4xl"
-version = "1.2.1"
+version = "1.2.2"
 description = "Excel (.xlsx) MCP server: calculated/cached/missing labels on every value, formulas, verified writes. The kitchen sink."
 readme = "README.md"
 license = "AGPL-3.0-only"
 license-files = ["LICENSE", "NOTICE.md"]
-authors = [{ name = "nometalalchemist" }]
+authors = [{ name = "Alvut Consulting, LLC (KitchenSink4AI)" }]
 keywords = [
     "mcp", "excel", "xlsx", "ooxml", "spreadsheet", "claude",
     "model-context-protocol", "openpyxl", "pivot-tables",

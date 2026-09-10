@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!--
-  SHIPPED NUMBERS (re-verified 2026-09-10 for the 1.2.1 release):
+  SHIPPED NUMBERS (re-verified 2026-09-10 for the 1.2.2 release):
     129   distinct operations (.venv/Scripts/python.exe -X utf8 scripts/count_operations.py)
     69    registered tools (.venv/Scripts/python.exe -X utf8 scripts/measure_surface.py)
     1294  tests (.venv/Scripts/python.exe -X utf8 -m pytest tests/unit --co -q)
@@ -41,10 +41,18 @@
 <meta name="description" content="69-tool MCP server for Microsoft Excel that never hands your AI a number it cannot back up. Every value comes labeled: freshly calculated, remembered from the last save, or missing. Insert or delete rows and columns and everything that should move, moves, checked against Excel's own math. Sessions start light at 40 tools and unpack the rest on request. Engineered not to corrupt.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔌</text></svg>">
 <link rel="llms" href="llms.txt" type="text/plain">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,50&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* Self-hosted, first-party: no Google CDN request, so reading this page
+   tells nobody but this site that you read it. Latin and latin-ext
+   subsets, matching what the corporate homepage serves from /fonts/. */
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:300 900;font-display:swap;src:url("fonts/fraunces-300-900-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:300 900;font-display:swap;src:url("fonts/fraunces-300-900-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/plexmono-400-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/plexmono-400-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("fonts/plexmono-500-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("fonts/plexmono-500-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url("fonts/plexmono-600-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url("fonts/plexmono-600-latin.woff2") format("woff2");unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
 /* metric-matched local fallbacks: on a cold cache the swap to the webfonts cannot re-wrap text.
    Courier New shares IBM Plex Mono's exact 0.6em advance width (measured 100.0%);
    Georgia scaled 104% matches Fraunces at text weights (measured 104.9% regular, 103.4% italic). */
@@ -989,11 +997,11 @@ footer a{color:var(--brass)}
 
 <footer>
   <div class="wrap row">
-    <span data-i18n="f.left">&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.</span>
+    <span data-i18n="f.left">&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).</span>
     <span style="text-align:right" data-i18n="f.right"><a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌</span>
   </div>
   <div class="wrap" style="text-align:center;padding:6px 0;font-size:11px"><a href="https://kitchensink4.ai/" data-i18n="f.corp">The office upstairs: KitchenSink4AI →</a></div>
-  <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px">Not affiliated with or endorsed by Microsoft Corporation. Microsoft and Excel are trademarks of Microsoft Corporation.</div>
+  <div class="wrap" style="text-align:center;padding:6px 0;opacity:.5;font-size:11px">Not affiliated with, endorsed by, or sponsored by Microsoft Corporation. Microsoft and Excel are trademarks of Microsoft Corporation.</div>
   <div class="wrap" style="text-align:center;padding:10px 0"><img src="https://visitor-badge.laobi.icu/badge?page_id=nometalalchemist.KitchenSink4XL&left_color=%231e3550&right_color=%23735413&left_text=views" alt="views" height="18" style="vertical-align:middle"></div>
 <div class="wrap colophon">SET IN FRAUNCES &amp; IBM PLEX MONO · CATALOG № 69</div>
 </footer>
@@ -1286,7 +1294,7 @@ en: {
 "fam3.g": "Browse the store →",
 "fam4.p": "Everything plus the kitchen sink for the web: budgeted page reads that name what went unread, structured extraction with named evidence, and a consent ladder that cannot be talked into payments. Read-only out of the box.",
 "fam4.g": "Visit the garden aisle →",
-"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; <b>AGPL-3.0</b>: free for individuals and personal use.<br>Companies building it into their own products need a commercial license; <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml'>open an issue</a> and we will talk it through.",
+"f.left": "&copy; 2026 Alvut Consulting, LLC &middot; Licensed <b>AGPL-3.0</b>: free for any use that meets the AGPL's terms, including its source-sharing obligations.<br>Commercial licenses for organizations that need to ship these in closed products (<a href='mailto:licensing@kitchensink4.ai'>licensing@kitchensink4.ai</a>).",
 "f.corp": "The office upstairs: KitchenSink4AI →",
 "f.right": "<a href='https://github.com/KitchenSink4AI/KitchenSink4XL'>github.com/KitchenSink4AI/KitchenSink4XL</a> · <a href='https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new/choose'>report a glitch</a><br>Built on the KitchenSink4Word safety core, prototyped with Claude Code, and wired up under inspection until the numbers came back honest. Mind the live parts. 🔌"
 },

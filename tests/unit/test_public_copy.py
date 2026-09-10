@@ -287,11 +287,20 @@ def test_mcp_name_marker_survives():
     ), "README line 1 mcp-name marker was lost"
 
 
+#: The disclaimer as the 2026-09-10 canonical license block words it. It
+#: says one more thing than the wording it replaced ("or sponsored by"),
+#: so the guard moved with it rather than being loosened to a substring
+#: that both spellings happen to share.
+DISCLAIMER = (
+    "Not affiliated with, endorsed by, or sponsored by Microsoft "
+    "Corporation."
+)
+
+
 def test_non_affiliation_disclaimer_present():
     for path in _public_files():
-        assert "Not affiliated with or endorsed by Microsoft" in (
-            path.read_text(encoding="utf-8")
-        ), f"{path.name} is missing the non-affiliation disclaimer"
+        assert DISCLAIMER in path.read_text(encoding="utf-8"), (
+            f"{path.name} is missing the non-affiliation disclaimer")
 
 
 def test_version_is_consistent_across_manifests():

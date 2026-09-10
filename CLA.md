@@ -18,7 +18,7 @@ or otherwise).
 
 ## 2. Grant of Copyright License
 
-You hereby grant to the Maintainer a perpetual, worldwide,
+You hereby grant to Alvut Consulting, LLC (the Maintainer) a perpetual, worldwide,
 non-exclusive, royalty-free, irrevocable copyright license to
 reproduce, prepare derivative works of, publicly display, publicly
 perform, sublicense, and distribute your Contributions and such
@@ -30,7 +30,7 @@ own Contribution for any other purpose.
 
 ## 3. Grant of Patent License
 
-You hereby grant to the Maintainer and to recipients of software
+You hereby grant to Alvut Consulting, LLC (the Maintainer) and to recipients of software
 distributed by the Project a perpetual, worldwide, non-exclusive,
 royalty-free, irrevocable (except as stated in this section) patent
 license to make, have made, use, offer to sell, sell, import, and
