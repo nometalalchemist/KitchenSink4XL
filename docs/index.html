@@ -203,9 +203,9 @@ body.live .feeder .cond{stroke:var(--live);opacity:.95}
 
 /* ---------- sections ---------- */
 section{padding:64px 0;border-top:1px solid var(--rule)}
-.sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
-.sec-head h2{font-size:clamp(26px,4vw,40px);font-weight:800}
-.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:nowrap;
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 16px;margin-bottom:34px}
+.sec-head h2{min-width:0;overflow-wrap:anywhere;font-size:clamp(26px,4vw,40px);font-weight:800}
+.sec-head .no{font-size:12px;letter-spacing:.25em;color:var(--brass);white-space:normal;max-width:100%;overflow-wrap:anywhere;
   border:2px solid currentColor;border-radius:3px;padding:3px 10px;transform:rotate(-2deg);
   display:inline-block;opacity:.85;
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='white'/%3E%3Ccircle cx='2.5' cy='1.5' r='.3' fill='black'/%3E%3C/svg%3E")}
@@ -678,14 +678,12 @@ footer a{color:var(--brass)}
       <summary>
         <span class="tag" data-i18n="new.label">JUST IN</span>
         <span class="ttl" data-i18n="h2.new">New on the shelf</span>
-        <span class="hint" data-i18n="new.t">What version 1.2 just added</span>
+        <span class="hint">v1.2.0 &middot; <time datetime="2026-09-09">2026-09-09</time></span>
       </summary>
     <div class="newin">
-      <p class="sub" data-i18n="new.sub">The short version of the release, no changelog reading required.</p>
       <ul>
-        <li data-i18n="new1"><b>Schemas some AI clients need.</b> 39 tool parameters used to emit empty schemas, and some clients silently drop tools over that. All 500 parameters now carry real ones, verified over a live connection.</li>
-        <li data-i18n="new2"><b>Six more conditional formats, plus grouping.</b> Unique, duplicate, above and below average, time period, blanks, and errors join the rule set, and rows and columns can now be grouped, collapsed, and read back.</li>
-        <li data-i18n="new3"><b>Refusals name the real problem.</b> A read-only file is no longer confused with a file Excel is holding, a missing clipboard is named in plain words, and the hazard gate stops suggesting a route that could not help.</li>
+        <li data-i18n="new1">Read results use fewer tokens, and large cell reads no longer reopen the workbook for every cell.</li>
+        <li data-i18n="new2">A disclosed weekly update check can be turned off with KS4XL_UPDATE_CHECK=off.</li>
       </ul>
     </div>
     </details>
@@ -940,7 +938,7 @@ footer a{color:var(--brass)}
         <p data-i18n="svc2.p">A spreadsheet capability the sink should also have. Describe the real task behind it and it goes on the workbench.</p>
         <span class="go" data-i18n="svc2.g">Request a feature →</span>
       </a>
-      <a class="counter" href="https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml">
+      <a class="counter" href="https://kitchensink4.ai/contact/?category=licensing#cat-licensing">
         <span class="icon">💼</span>
         <h3 data-i18n="svc3.t">Commercial fitting?</h3>
         <p data-i18n="svc3.p">Free for any use that meets the AGPL's terms, including its source-sharing obligations. If your company wants to build it into a product of its own, that needs a commercial license, with terms worked out case by case. This counter is where you start that conversation.</p>
@@ -1150,11 +1148,9 @@ en: {
 "hero.invite": "↓ or start with the part nobody tells you: why the numbers an AI reads out of a spreadsheet might be wrong",
 "h2.new": "New on the shelf",
 "new.label": "JUST IN",
-"new.t": "What version 1.2 just added",
 "new.sub": "The short version of the release, no changelog reading required.",
-"new1": "<b>Schemas some AI clients need.</b> 39 tool parameters used to emit empty schemas, and some clients silently drop tools over that. All 500 parameters now carry real ones, verified over a live connection.",
-"new2": "<b>Six more conditional formats, plus grouping.</b> Unique, duplicate, above and below average, time period, blanks, and errors join the rule set, and rows and columns can now be grouped, collapsed, and read back.",
-"new3": "<b>Refusals name the real problem.</b> A read-only file is no longer confused with a file Excel is holding, a missing clipboard is named in plain words, and the hazard gate stops suggesting a route that could not help.",
+"new1": "Read results use fewer tokens, and large cell reads no longer reopen the workbook for every cell.",
+"new2": "A disclosed weekly update check can be turned off with KS4XL_UPDATE_CHECK=off.",
 "no0": "DEPT. 00", "no1": "DEPT. 01", "no2": "DEPT. 02", "no3": "DEPT. 03", "no4": "DEPT. 04", "no5": "DEPT. 05", "no6": "DEPT. 06", "no7": "DEPT. 07",
 "h2.demo": "The number that looks right and isn't",
 "demo.lead": "Here is the dirty secret of every tool that reads Excel files: a spreadsheet remembers its answers, not its thinking. When something changes upstream, the old answers just sit there, looking exactly like real numbers. Most AI tools will read one anyway and confidently report it, and you will make a decision based on it. This server refuses to bluff. Every number it hands your AI comes with the truth attached: freshly calculated, remembered from the last save, or missing, with the affected cells named. And when it really matters, it asks Excel itself to recalculate and prove it.",
@@ -1321,11 +1317,9 @@ ko: {
 "hero.invite": "↓ 아니면 아무도 말해 주지 않는 이야기부터: AI가 스프레드시트에서 읽어 온 숫자가 틀릴 수 있는 이유",
 "h2.new": "선반에 새로 올라온 것",
 "new.label": "신규 입고",
-"new.t": "버전 1.2가 방금 더한 것들",
 "new.sub": "이번 릴리스를 짧게 간추렸습니다. 변경 내역을 따로 읽지 않으셔도 됩니다.",
-"new1": "<b>일부 AI 클라이언트에 필요한 스키마.</b> 예전에는 도구 매개변수 39개가 빈 스키마를 내보냈고, 그것 때문에 도구를 조용히 빼 버리는 클라이언트가 있었습니다. 이제 매개변수 500개 전부가 제대로 된 스키마를 지니며, 실제 연결에서 확인했습니다.",
-"new2": "<b>조건부 서식 여섯 가지 추가, 그리고 그룹화.</b> 고유 값, 중복 값, 평균 초과와 평균 미만, 기간, 공백, 오류가 규칙에 더해졌고, 이제 행과 열을 그룹으로 묶고 접고 다시 읽어 올 수 있습니다.",
-"new3": "<b>거절이 진짜 원인을 짚습니다.</b> 읽기 전용 파일을 Excel이 붙잡고 있는 파일과 더는 혼동하지 않고, 클립보드가 없다는 사실을 쉬운 말로 알려 주며, 위험 관문은 도움이 될 수 없는 경로를 더 이상 권하지 않습니다.",
+"new1": "읽기 결과의 토큰 사용량을 줄였으며, 대량 셀 읽기에서 셀마다 통합 문서를 다시 열지 않습니다.",
+"new2": "주간 업데이트 확인은 사전에 고지되며 KS4XL_UPDATE_CHECK=off로 끌 수 있습니다.",
 "no0": "부문 00", "no1": "부문 01", "no2": "부문 02", "no3": "부문 03", "no4": "부문 04", "no5": "부문 05", "no6": "부문 06", "no7": "부문 07",
 "h2.demo": "맞아 보이지만 맞지 않는 숫자",
 "demo.lead": "Excel 파일을 읽는 모든 도구가 안고 있는 불편한 진실이 있습니다. 스프레드시트는 계산 과정이 아니라 계산 결과만 기억한다는 것입니다. 앞쪽에서 무언가가 바뀌어도 예전 답은 그 자리에 그대로 남아, 진짜 숫자와 똑같은 얼굴을 하고 있습니다. 대부분의 AI 도구는 그 값을 그대로 읽어 자신 있게 보고하고, 사용자는 그 숫자를 근거로 판단을 내리게 됩니다. 이 서버는 허세를 부리지 않습니다. AI에게 건네는 모든 숫자에는 사실이 함께 붙습니다. 방금 계산된 값인지, 마지막 저장 시점에 기억해 둔 값인지, 아니면 아예 없는 값인지, 그리고 해당하는 셀 주소까지 함께 알려 줍니다. 정말 중요한 순간에는 Excel 자신에게 다시 계산하게 하고 그 결과로 증명합니다.",
@@ -1492,11 +1486,9 @@ ja: {
 "hero.invite": "↓ それとも、誰も教えてくれない話から: AI が表計算から読み上げた数字が間違っていることがある理由",
 "h2.new": "棚に並んだ新入荷",
 "new.label": "新入荷",
-"new.t": "v1.2 で新しく加わったもの",
 "new.sub": "リリースの要点だけ。変更履歴を読む必要はありません。",
-"new1": "<b>一部の AI クライアントが必要とするスキーマ。</b> これまでツールの引数 39 個が空のスキーマを出しており、それを理由に黙ってツールを外すクライアントがありました。今は 500 個すべての引数が実体のあるスキーマを持ち、実際の接続で確かめてあります。",
-"new2": "<b>条件付き書式が六つ増え、グループ化も。</b> 一意の値、重複する値、平均より上と下、期間、空白、エラーが規則に加わりました。行と列はグループにまとめ、折りたたみ、読み返せるようになりました。",
-"new3": "<b>断るときは本当の原因を言います。</b> 読み取り専用のファイルを、Excel がつかんでいるファイルと取り違えなくなりました。クリップボードがないことは平たい言葉で伝えます。そして危険を見張る関門は、役に立たない道を勧めるのをやめました。",
+"new1": "読み取り結果のトークン数を削減し、大量のセルを読む際にセルごとにブックを開き直す処理を修正しました。",
+"new2": "週1回の更新確認は事前に明示され、KS4XL_UPDATE_CHECK=offで無効にできます。",
 "no0": "第00部", "no1": "第01部", "no2": "第02部", "no3": "第03部", "no4": "第04部", "no5": "第05部", "no6": "第06部", "no7": "第07部",
 "h2.demo": "正しく見えて、正しくない数字",
 "demo.lead": "Excel ファイルを読むツールすべてに共通する、あまり語られない事実があります。表計算が覚えているのは答えであって、考え方ではありません。どこか上流が変わっても、古い答えはそのまま残り、本物の数字とまったく同じ顔をしています。たいていの AI ツールはそれを読み、自信たっぷりに報告し、あなたはその数字をもとに判断してしまいます。このサーバーははったりを言いません。AI に渡すすべての数字に、事実が添えられます。いま計算した値なのか、前回の保存時に覚えていた値なのか、そもそも無いのか。該当するセルの位置も一緒に伝えます。そして本当に大事な場面では、Excel 自身に再計算させて証明します。",
@@ -1663,11 +1655,9 @@ zh: {
 "hero.invite": "↓ 或者从没人告诉你的那一段说起: 为什么 AI 从表格里念出来的数字可能是错的",
 "h2.new": "新上架",
 "new.label": "新到货",
-"new.t": "v1.2 刚刚添了什么",
 "new.sub": "这次发布的简短版,不用去翻更新日志。",
-"new1": "<b>有些 AI 客户端要的 schema。</b> 从前有 39 个工具参数交出空 schema，有的客户端会因此悄悄把工具撤下。现在 500 个参数全都带着实打实的 schema，并在真实连接上验过。",
-"new2": "<b>再添六种条件格式，外加分组。</b> 唯一值、重复值、高于与低于平均、时间段、空白、错误都进了规则集；行和列现在可以分组、折叠，也能读回来。",
-"new3": "<b>拒绝时说清真正的原因。</b> 只读文件不再被当成 Excel 占着的文件，剪贴板不在时会用大白话讲明白，危险关卡也不再指一条根本帮不上忙的路。",
+"new1": "读取结果使用更少的令牌，批量读取单元格时不再为每个单元格重新打开工作簿。",
+"new2": "每周更新检查会明确告知，可通过 KS4XL_UPDATE_CHECK=off 关闭。",
 "no0": "第00部", "no1": "第01部", "no2": "第02部", "no3": "第03部", "no4": "第04部", "no5": "第05部", "no6": "第06部", "no7": "第07部",
 "h2.demo": "那个看着对、其实不对的数字",
 "demo.lead": "所有读取 Excel 文件的工具都有一个不太有人说的实情: 表格记住的是答案,不是算法。上游一变,旧答案就那样留在原地,长得和真数字一模一样。多数 AI 工具照读不误,还讲得很有把握,而你会照着这个数字做决定。这台服务器不虚张声势。它交给 AI 的每一个数字都附带实情: 是刚算出来的,是上次保存时记下的,还是根本没有,并且点名受影响的单元格。真到关键处,它会请 Excel 亲自重算,拿结果作证。",
@@ -1834,11 +1824,9 @@ de: {
 "hero.invite": "↓ oder fangen Sie da an, wo es Ihnen sonst niemand sagt: warum die Zahlen, die eine KI aus einer Tabelle vorliest, falsch sein können",
 "h2.new": "Neu im Regal",
 "new.label": "NEU EINGETROFFEN",
-"new.t": "Was Version 1.2 gerade dazugelegt hat",
 "new.sub": "Die kurze Fassung des Releases, ganz ohne Changelog zu lesen.",
-"new1": "<b>Schemas, die manche KI-Clients brauchen.</b> 39 Werkzeugparameter gaben bisher leere Schemas heraus, und manche Clients werfen Werkzeuge deswegen stillschweigend hinaus. Jetzt tragen alle 500 Parameter richtige Schemas, über eine echte Verbindung geprüft.",
-"new2": "<b>Sechs bedingte Formate mehr, dazu Gruppierung.</b> Eindeutige Werte, Duplikate, über und unter dem Durchschnitt, Zeitraum, Leerzellen und Fehler kommen zum Regelsatz dazu, und Zeilen und Spalten lassen sich nun gruppieren, einklappen und wieder auslesen.",
-"new3": "<b>Absagen nennen das wirkliche Problem.</b> Eine schreibgeschützte Datei wird nicht mehr mit einer verwechselt, die Excel gerade hält, eine fehlende Zwischenablage wird in klaren Worten benannt, und das Gefahrentor schlägt keinen Weg mehr vor, der gar nicht helfen kann.",
+"new1": "Leseergebnisse brauchen weniger Tokens; beim Lesen vieler Zellen wird die Arbeitsmappe nicht mehr für jede Zelle neu geöffnet.",
+"new2": "Die offengelegte wöchentliche Updateprüfung lässt sich mit KS4XL_UPDATE_CHECK=off abschalten.",
 "no0": "ABT. 00", "no1": "ABT. 01", "no2": "ABT. 02", "no3": "ABT. 03", "no4": "ABT. 04", "no5": "ABT. 05", "no6": "ABT. 06", "no7": "ABT. 07",
 "h2.demo": "Die Zahl, die richtig aussieht und es nicht ist",
 "demo.lead": "Hier ist das offene Geheimnis jedes Werkzeugs, das Excel-Dateien liest: eine Tabelle merkt sich ihre Antworten, nicht ihren Rechenweg. Ändert sich weiter oben etwas, bleiben die alten Antworten einfach stehen und sehen dabei aus wie echte Zahlen. Die meisten KI-Werkzeuge lesen so eine Zahl trotzdem und melden sie voller Überzeugung, und Sie entscheiden danach. Dieser Server blufft nicht. Jede Zahl, die er Ihrer KI reicht, kommt mit der Wahrheit im Gepäck: frisch berechnet, aus dem letzten Speichern erinnert oder gar nicht vorhanden, samt Nennung der betroffenen Zellen. Und wenn es wirklich darauf ankommt, lässt er Excel selbst neu rechnen und den Beweis liefern.",
@@ -2005,11 +1993,9 @@ fr: {
 "hero.invite": "↓ ou commencez par ce que personne ne vous dit : pourquoi les chiffres qu'une IA lit dans un tableur peuvent être faux",
 "h2.new": "Nouveautés en rayon",
 "new.label": "ARRIVAGE",
-"new.t": "Ce que la version 1.2 vient d'ajouter",
 "new.sub": "La version courte de la mise à jour, sans lire les notes de version.",
-"new1": "<b>Les schémas dont certains clients d'IA ont besoin.</b> 39 paramètres d'outil renvoyaient un schéma vide, et certains clients retirent alors les outils sans rien dire. Les 500 paramètres portent désormais de vrais schémas, vérifiés sur une connexion réelle.",
-"new2": "<b>Six mises en forme conditionnelles de plus, et le groupement.</b> Valeurs uniques, doublons, au-dessus et en dessous de la moyenne, période, cellules vides et erreurs rejoignent le jeu de règles, et les lignes et colonnes se groupent, se replient et se relisent.",
-"new3": "<b>Les refus nomment le vrai problème.</b> Un fichier en lecture seule n'est plus confondu avec un fichier qu'Excel tient ouvert, l'absence de presse-papiers est dite en mots simples, et le garde-fou ne propose plus une voie qui ne pouvait pas aider.",
+"new1": "Les résultats de lecture utilisent moins de tokens ; la lecture de nombreuses cellules ne rouvre plus le classeur pour chaque cellule.",
+"new2": "La vérification hebdomadaire des mises à jour est signalée et peut être désactivée avec KS4XL_UPDATE_CHECK=off.",
 "no0": "RAYON 00", "no1": "RAYON 01", "no2": "RAYON 02", "no3": "RAYON 03", "no4": "RAYON 04", "no5": "RAYON 05", "no6": "RAYON 06", "no7": "RAYON 07",
 "h2.demo": "Le chiffre qui a l'air juste et ne l'est pas",
 "demo.lead": "Voici le secret de polichinelle de tout outil qui lit des fichiers Excel : un tableur retient ses réponses, pas son raisonnement. Dès que quelque chose change en amont, les anciennes réponses restent là, avec l'allure exacte de vrais chiffres. La plupart des outils d'IA en lisent un quand même, le rapportent avec aplomb, et vous décidez sur cette base. Ce serveur ne bluffe pas. Chaque chiffre qu'il remet à votre IA arrive avec la vérité attachée : fraîchement calculé, mémorisé depuis la dernière sauvegarde, ou absent, avec les cellules concernées nommées. Et quand cela compte vraiment, il demande à Excel lui-même de recalculer et de le prouver.",
@@ -2176,11 +2162,9 @@ es: {
 "hero.invite": "↓ o empiece por lo que nadie le cuenta: por qué los números que una IA lee de una hoja de cálculo pueden estar mal",
 "h2.new": "Recién puesto en el estante",
 "new.label": "RECIÉN LLEGADO",
-"new.t": "Lo que acaba de añadir la versión 1.2",
 "new.sub": "La versión corta de la entrega, sin tener que leer el registro de cambios.",
-"new1": "<b>Los esquemas que necesitan algunos clientes de IA.</b> Antes 39 parámetros de herramienta salían con el esquema vacío, y hay clientes que por eso retiran herramientas sin avisar. Ahora los 500 parámetros llevan esquemas de verdad, comprobados sobre una conexión real.",
-"new2": "<b>Seis formatos condicionales más, y agrupación.</b> Valores únicos, duplicados, por encima y por debajo de la media, periodo de tiempo, celdas en blanco y errores se suman al juego de reglas, y las filas y columnas ya se pueden agrupar, plegar y volver a leer.",
-"new3": "<b>Los rechazos nombran el problema real.</b> Un archivo de solo lectura ya no se confunde con uno que Excel tiene abierto, la falta de portapapeles se dice con palabras llanas, y la puerta de riesgos deja de sugerir una vía que no podía ayudar.",
+"new1": "Los resultados de lectura usan menos tokens; al leer muchas celdas, el libro ya no se vuelve a abrir para cada celda.",
+"new2": "La comprobación semanal de actualizaciones se comunica y puede desactivarse con KS4XL_UPDATE_CHECK=off.",
 "no0": "DEPTO. 00", "no1": "DEPTO. 01", "no2": "DEPTO. 02", "no3": "DEPTO. 03", "no4": "DEPTO. 04", "no5": "DEPTO. 05", "no6": "DEPTO. 06", "no7": "DEPTO. 07",
 "h2.demo": "El número que parece correcto y no lo es",
 "demo.lead": "He aquí el secreto a voces de toda herramienta que lee archivos de Excel: una hoja de cálculo recuerda sus respuestas, no su razonamiento. Cuando algo cambia aguas arriba, las respuestas viejas se quedan ahí, con el aspecto exacto de números de verdad. La mayoría de las herramientas de IA leen una igualmente y la reportan con aplomo, y usted decide a partir de ella. Este servidor no va de farol. Cada número que le entrega a su IA llega con la verdad adjunta: recién calculado, recordado desde el último guardado, o ausente, y con las celdas afectadas nombradas. Y cuando de verdad importa, le pide a Excel que recalcule y lo demuestre.",
