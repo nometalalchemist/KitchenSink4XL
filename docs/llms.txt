@@ -183,9 +183,10 @@ no network call, no cache file).
 
 ## 11. License
 
-AGPL-3.0. Free for individuals and personal use. A company building this into
-a product of its own needs a commercial license, with terms worked out case by
-case, arranged here:
+AGPL-3.0. Free for any use that meets the AGPL's terms, including its
+source-sharing obligations. A company shipping this in a closed product of its
+own needs a commercial license, with terms worked out case by case, arranged
+here:
 https://github.com/KitchenSink4AI/KitchenSink4XL/issues/new?template=commercial_license.yml
 
 ## 12. Trademarks
